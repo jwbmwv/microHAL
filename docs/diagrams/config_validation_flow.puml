@@ -1,0 +1,35 @@
+@startuml
+!include theme.puml
+title Config Validation Flow
+
+start
+:App code names facade and config\nexample uart::port backend cfg;
+
+if (Backend compiled in?\nbackend_registry and macros) then (yes)
+else (no)
+  :Fail at substitution\nunsupported backend for this build;
+  stop
+endif
+
+if (Predicate checks pass?\nSupportedPeripheralConcept\nIsrCapableConcept\nDmaCapableConcept) then (yes)
+else (no)
+  :Constraint fails cleanly\nbranch-safe false predicate;
+  stop
+endif
+
+:Diagnostic validators\nvalidate_capability and\nvalidate_*_config;
+
+if (Static assertions pass?) then (yes)
+else (no)
+  :Build stops with readable\nmisconfiguration message;
+  stop
+endif
+
+:Facade type is valid\nentry points become callable;
+:Call routes to alias\n*_api_t backend alias;
+:Backend implementation;
+:detail::as_status\nnormalizes void bool status;
+:microhal::status or result<T>;
+stop
+
+@enduml

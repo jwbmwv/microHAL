@@ -1,0 +1,42 @@
+@startuml
+!include theme.puml
+title Test Coverage Map
+left to right direction
+
+package "Compile-Time Contract Tests" {
+  rectangle "backend_selection_test.cpp\nbackend registry and selection scope" as C1
+  rectangle "backend_api_contract_test.cpp\nfacade and raw backend API shape" as C2
+  rectangle "preset_capability_expectations_test.cpp\nhost vs vendor macro-conditioned expectations" as C3
+  rectangle "compile_time_smoke.cpp\npublic facade instantiation coverage" as C4
+  rectangle "extended_peripherals_test.cpp\nconcept checks for extended peripherals" as C5
+  rectangle "multi_backend_validation.cpp\ncross-backend capability assumptions" as C6
+  rectangle "edge_cases_test.cpp\nvalidation edge conditions" as C7
+}
+
+package "Runtime Behavior" {
+  rectangle "mock_runtime_test.cpp\ncall sequencing data flow and error injection" as R1
+  rectangle "example C API consumers\nshim behavior and status mapping" as R2
+}
+
+package "Policy and Guardrails" {
+  rectangle "check_capability_claim_policy.sh\nclaimed support vs placeholder scans" as P1
+  rectangle "check_zero_overhead.sh\nfacade vs direct backend asm parity" as P2
+  rectangle "vendor matrix scripts\nreal SDK header compatibility" as P3
+}
+
+rectangle "Confidence in compile-time model" as G
+
+C1 --> G
+C2 --> G
+C3 --> G
+C4 --> G
+C5 --> G
+C6 --> G
+C7 --> G
+R1 --> G
+R2 --> G
+P1 --> G
+P2 --> G
+P3 --> G
+
+@enduml

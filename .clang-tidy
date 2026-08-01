@@ -1,0 +1,21 @@
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  performance-*,
+  readability-*,
+  -readability-magic-numbers,
+  -cppcoreguidelines-avoid-magic-numbers
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*(include|backends|tests)/.*'
+CheckOptions:
+  - key: cppcoreguidelines-avoid-c-arrays.AllowStringArrays
+    value: 'true'
+  - key: cppcoreguidelines-pro-type-member-init.HaltOnMissingCtorInit
+    value: 'false'
+  - key: modernize-use-trailing-return-type.TransformFunctions
+    value: 'false'

@@ -1,0 +1,81 @@
+// SPDX-License-Identifier: Apache-2.0
+/**
+ * @file rtc.hpp
+ * @brief microHAL source header for this module.
+ * @details Contains compile-time configuration and API surface used by microHAL consumers.
+ * @copyright Copyright (c) 2026 James Baldwin
+ */
+
+#pragma once
+
+#include <cstdint>
+
+#include "microhal/core/concepts.hpp"
+
+namespace microhal::rtc
+{
+
+/**
+ * @brief Unified calendar representation used by the RTC abstraction.
+ */
+struct date_time final
+{
+  std::uint16_t year{0U};
+  std::uint8_t month{0U};
+  std::uint8_t day{0U};
+  std::uint8_t hour{0U};
+  std::uint8_t minute{0U};
+  std::uint8_t second{0U};
+};
+
+/**
+ * @brief Compile-time RTC feature selection.
+ */
+template <bool EnablePeriodicIrq = false, bool EnableAlarmIrq = false> struct rtc_config final
+{
+  static constexpr bool enable_periodic_irq{EnablePeriodicIrq};
+  static constexpr bool enable_alarm_irq{EnableAlarmIrq};
+};
+
+/**
+ * @brief Zero-overhead RTC facade with compile-time alarm and periodic IRQ validation.
+ */
+template <typename Backend, typename Config>
+  requires RtcConcept<Backend, Config>
+struct controller final
+{
+  using backend_tag = Backend;
+  using config_type = Config;
+
+  static constexpr peripheral_kind kind{peripheral_kind::rtc};
+
+  [[nodiscard]] static inline status initialize() noexcept
+  {
+    return detail::as_status([] { return rtc_api_t<Backend>::template initialize<Config>(); });
+  }
+
+  [[nodiscard]] static inline status set(const date_time value) noexcept
+  {
+    return detail::as_status(
+        [value] { return rtc_api_t<Backend>::template set_time<Config>(value.hour, value.minute, value.second); });
+  }
+
+  [[nodiscard]] static inline date_time now() noexcept
+  {
+    std::uint8_t hours = 0U;
+    std::uint8_t minutes = 0U;
+    std::uint8_t seconds = 0U;
+    rtc_api_t<Backend>::template get_time<Config>(hours, minutes, seconds);
+    return {.hour = hours, .minute = minutes, .second = seconds};
+  }
+
+  template <auto Handler>
+  [[nodiscard]] static inline status enable_alarm(const date_time alarm_time) noexcept
+    requires IsrCapableConcept<Backend, peripheral_kind::rtc>
+  {
+    return detail::as_status([alarm_time]
+                             { return rtc_api_t<Backend>::template enable_alarm<Config, Handler>(alarm_time); });
+  }
+};
+
+} // namespace microhal::rtc

@@ -1,0 +1,79 @@
+# Build directories
+/build/
+/build-*/
+/build_*/
+/cmake-build-*/
+/out/
+
+# IDE and editor files
+/.vscode/
+/.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.cache/
+
+# CMake generated files
+/CMakeCache.txt
+/CMakeFiles/
+/cmake_install.cmake
+/install_manifest.txt
+/CTestTestfile.cmake
+/_deps/
+/Testing/
+/compile_commands.json
+
+# Compiled object files
+*.o
+*.obj
+*.elf
+
+# Precompiled headers
+*.gch
+*.pch
+
+# Compiled libraries
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+
+# Executables and firmware images
+*.exe
+*.out
+*.app
+*.bin
+*.hex
+*.map
+
+# Coverage and test artefacts
+*.gcov
+*.gcda
+*.gcno
+/coverage/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.py[cod]
+
+# Generated documentation
+/docs/doxygen/
+/docs/html/
+/docs/latex/
+/docs/xml/
+/Doxyfile.bak
+
+# Zephyr build artefacts
+/zephyr/.cache/
+twister*-out*/
+
+# Package manager directories
+/vcpkg/
+/conan/
+
+# Local vendor SDK mirrors for dev/test
+/vendor-support/

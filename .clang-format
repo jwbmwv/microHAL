@@ -1,0 +1,15 @@
+BasedOnStyle: LLVM
+IndentWidth: 2
+ContinuationIndentWidth: 4
+ColumnLimit: 120
+PointerAlignment: Left
+ReferenceAlignment: Left
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AllowShortFunctionsOnASingleLine: Empty
+BreakBeforeBraces: Allman
+Cpp11BracedListStyle: true
+NamespaceIndentation: None
+SortIncludes: true
+SpaceBeforeParens: ControlStatements
+Standard: c++20

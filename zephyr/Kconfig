@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+# Kconfig - microHAL Zephyr module configuration
+
+config MICRO_HAL
+	bool "microHAL Zephyr module"
+	default n
+	help
+	  Enables microHAL as a Zephyr module so applications can consume the
+	  Zephyr backend and board-binding examples through west/twister builds.
+
+if MICRO_HAL
+
+config MICRO_HAL_SUPPRESS_MISSING_MCU_WARNINGS
+	bool "Suppress non-selected backend preprocessor warnings"
+	default y
+	help
+	  Suppresses STM32 and Kinetis fallback preprocessor warnings when the
+	  Zephyr module build includes backend registration headers for other
+	  vendors.
+
+endif # MICRO_HAL

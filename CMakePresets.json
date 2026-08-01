@@ -1,0 +1,117 @@
+{
+  "version": 4,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "contractual-examples-ci",
+      "displayName": "Contractual Examples CI",
+      "description": "Build contractual examples against a concrete STM32 family when CI provides STM32 SDK include directories.",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/contractual-examples-ci",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MICROHAL_SUPPRESS_MISSING_MCU_WARNINGS": "ON",
+        "MICROHAL_VENDOR_VALIDATION": "ON",
+        "MICROHAL_VENDOR_VALIDATION_PROVIDER": "STM32",
+        "MICROHAL_VENDOR_VALIDATION_STM32_FAMILY": "STM32F4",
+        "MICROHAL_VENDOR_VALIDATION_STM32_DEVICE": "STM32F407xx",
+        "MICROHAL_VENDOR_VALIDATION_STM32_SUPPORT_ROOT": "$env{MICROHAL_STM32_SUPPORT_ROOT}",
+        "MICROHAL_VENDOR_VALIDATION_STM32_INCLUDE_DIRS": "$env{MICROHAL_STM32_SDK_INCLUDE_DIRS}"
+      }
+    },
+    {
+      "name": "zephyr-backend-ci",
+      "displayName": "Zephyr Backend CI",
+      "description": "Validate the Zephyr backend against concrete Zephyr headers when CI provides Zephyr include directories.",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/zephyr-backend-ci",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MICROHAL_SUPPRESS_MISSING_MCU_WARNINGS": "ON",
+        "MICROHAL_VENDOR_VALIDATION": "ON",
+        "MICROHAL_VENDOR_VALIDATION_PROVIDER": "ZEPHYR",
+        "MICROHAL_VENDOR_VALIDATION_ZEPHYR_INCLUDE_DIRS": "$env{MICROHAL_ZEPHYR_INCLUDE_DIRS}"
+      }
+    },
+    {
+      "name": "nordic-backend-ci",
+      "displayName": "Nordic Backend CI",
+      "description": "Validate the Nordic nrfx backend against concrete nrfx headers when CI provides include directories or a support root.",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/nordic-backend-ci",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MICROHAL_SUPPRESS_MISSING_MCU_WARNINGS": "ON",
+        "MICROHAL_VENDOR_VALIDATION": "ON",
+        "MICROHAL_VENDOR_VALIDATION_PROVIDER": "NORDIC",
+        "MICROHAL_VENDOR_VALIDATION_NORDIC_SUPPORT_ROOT": "$env{MICROHAL_NORDIC_SUPPORT_ROOT}",
+        "MICROHAL_VENDOR_VALIDATION_NORDIC_INCLUDE_DIRS": "$env{MICROHAL_NORDIC_INCLUDE_DIRS}",
+        "MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS": "$env{MICROHAL_NORDIC_DEFINITIONS}"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "contractual-examples-ci",
+      "configurePreset": "contractual-examples-ci",
+      "targets": [
+        "microhal_contractual_examples",
+        "microhal_compile_time_smoke",
+        "microhal_extended_peripherals",
+        "microhal_edge_cases",
+        "microhal_multi_backend"
+      ]
+    },
+    {
+      "name": "zephyr-backend-ci",
+      "configurePreset": "zephyr-backend-ci",
+      "targets": [
+        "microhal_compile_time_smoke",
+        "microhal_extended_peripherals",
+        "microhal_edge_cases",
+        "microhal_multi_backend"
+      ]
+    },
+    {
+      "name": "nordic-backend-ci",
+      "configurePreset": "nordic-backend-ci",
+      "targets": [
+        "microhal_backend_selection",
+        "microhal_backend_api_contract",
+        "microhal_preset_capability_expectations"
+      ]
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "contractual-examples-ci",
+      "configurePreset": "contractual-examples-ci",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "zephyr-backend-ci",
+      "configurePreset": "zephyr-backend-ci",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "nordic-backend-ci",
+      "configurePreset": "nordic-backend-ci",
+      "filter": {
+        "include": {
+          "name": "microhal_backend_selection|microhal_backend_api_contract|microhal_preset_capability_expectations|microhal_capability_claim_policy"
+        }
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

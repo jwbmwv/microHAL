@@ -1,0 +1,36 @@
+@startuml
+!include theme.puml
+title Binding Model Comparison
+left to right direction
+
+rectangle "Legacy Numeric Locator Model" as Legacy {
+  rectangle "Config fields\ninstance_index port_index\npin_index timer_index channel" as L1
+  rectangle "Backend infers resource identity\nfrom numeric locators" as L2
+  rectangle "Fast bring-up\nlimited board context" as L3
+  L1 --> L2
+  L2 --> L3
+}
+
+rectangle "Binding-Based Model Preferred" as Binding {
+  rectangle "Config owns policy\nbaud rate dma isr polarity" as B1
+  rectangle "Nested binding type owns identity\nbase_address node_id device\nmedia_interface af mux" as B2
+  rectangle "Board layer owns routing\nclocks dma mux irq priorities\npartition layout pin maps" as B3
+  rectangle "Portable facade callsite\nresource identity stays explicit" as B4
+  B1 --> B2
+  B2 --> B3
+  B3 --> B4
+}
+
+Legacy --> Binding : migration path
+
+rectangle "STM32 HAL LL\nbase_address and af mux" as S1
+rectangle "Zephyr\nnode_id device gpio_dt_spec spi_config" as S2
+rectangle "NuttX\ndevice paths and CONFIG feature gates" as S3
+rectangle "Nordic nrfx\nbase address or SoC-specific routing metadata" as S4
+
+Binding --> S1
+Binding --> S2
+Binding --> S3
+Binding --> S4
+
+@enduml

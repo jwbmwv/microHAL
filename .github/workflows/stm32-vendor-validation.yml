@@ -1,0 +1,34 @@
+name: STM32 vendor validation
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  vendor-header-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        family: [STM32C0, STM32F4, STM32G4]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore STM32 support cache
+        id: vendor-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor-support
+          key: stm32-vendor-support-v1
+
+      - name: Fetch STM32 support headers
+        if: steps.vendor-cache.outputs.cache-hit != 'true'
+        run: ./scripts/clone_vendor_support.sh
+
+      - name: Install Arm GNU toolchain
+        run: sudo apt-get update && sudo apt-get install --yes gcc-arm-none-eabi
+
+      - name: Compile vendor smoke target
+        env:
+          MICROHAL_STM32_SUPPORT_ROOT: ${{ github.workspace }}/vendor-support
+        run: bash ./scripts/validate_stm32_vendor_matrix.sh ${{ matrix.family }}

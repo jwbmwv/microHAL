@@ -1,0 +1,34 @@
+' Shared PlantUML styling for microHAL diagrams.
+skinparam shadowing false
+skinparam backgroundColor transparent
+
+skinparam defaultFontName "DejaVu Sans"
+skinparam defaultFontSize 13
+
+skinparam ArrowColor #2B5F91
+skinparam ArrowThickness 1
+
+skinparam Rectangle {
+  BackgroundColor #EEF5FF
+  BorderColor #2B5F91
+  FontColor #0F2740
+  RoundCorner 10
+}
+
+skinparam Package {
+  BackgroundColor #F8FBFF
+  BorderColor #5C7FA6
+  FontColor #0F2740
+}
+
+skinparam Note {
+  BackgroundColor #FFF7E6
+  BorderColor #D9A441
+  FontColor #5B3C00
+}
+
+skinparam Activity {
+  BackgroundColor #EEF5FF
+  BorderColor #2B5F91
+  FontColor #0F2740
+}

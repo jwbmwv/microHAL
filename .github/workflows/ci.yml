@@ -1,0 +1,175 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  host-build-and-test:
+    name: Host build and test (${{ matrix.compiler }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: g++
+            cc: gcc
+          - compiler: clang++
+            cc: clang
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install --yes ${{ matrix.cc }} cmake ninja-build
+
+      - name: Configure
+        env:
+          CXX: ${{ matrix.compiler }}
+        run: cmake -S . -B build -G Ninja
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  backend-selection-matrix:
+    name: Single-backend build (${{ matrix.backend }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [STM32_HAL, STM32_LL, KINETIS_ESPRESSO, ZEPHYR, NUTTX, NORDIC_NRFX, MOCK]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install --yes cmake ninja-build
+
+      # Compiling exactly one backend is the configuration real firmware uses. It also catches
+      # headers that only compile because some other backend happened to be included first.
+      - name: Configure with a single backend
+        run: cmake -S . -B build -G Ninja -DMICROHAL_BACKENDS=${{ matrix.backend }}
+
+      - name: Build the header surface
+        run: cmake --build build --target microhal_backend_selection microhal_backend_api_contract
+
+      - name: Verify the registry matches the selection
+        run: ctest --test-dir build --output-on-failure -R "microhal_backend_selection|microhal_backend_api_contract"
+
+  freestanding:
+    name: Freestanding compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Arm GNU toolchain
+        run: sudo apt-get update && sudo apt-get install --yes gcc-arm-none-eabi
+
+      # microHAL claims to be usable without a hosted C++ runtime. The backend-agnostic test source
+      # pulls in the whole core surface plus every peripheral facade, so compiling it with
+      # -ffreestanding proves the headers need no hosted runtime support.
+      - name: Compile the header surface with -ffreestanding
+        run: |
+          set -euo pipefail
+          arm-none-eabi-g++ -std=c++20 -ffreestanding -fno-exceptions -fno-rtti \
+            -Wall -Wextra -Wpedantic -Werror \
+            -mcpu=cortex-m4 -mthumb \
+            -DMICROHAL_SUPPRESS_MISSING_MCU_WARNINGS=1 \
+            -DMICROHAL_BACKENDS_EXPLICIT=1 -DMICROHAL_ENABLE_MOCK=1 \
+            -DMICROHAL_EXPECTED_BACKEND_COUNT=1 \
+            -I include -fsyntax-only tests/backend_selection_test.cpp
+
+  zero-overhead:
+    name: Zero-overhead evidence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchains
+        run: sudo apt-get update && sudo apt-get install --yes g++ gcc-arm-none-eabi binutils-arm-none-eabi
+
+      # Asserts that calling through the microHAL facades produces byte-identical machine code to
+      # calling the backend directly. This is the claim the whole design rests on.
+      - name: Compare generated code
+        run: |
+          set -euo pipefail
+          ./scripts/check_zero_overhead.sh g++
+          ./scripts/check_zero_overhead.sh arm-none-eabi-g++ -mcpu=cortex-m0plus -mthumb -Os
+          ./scripts/check_zero_overhead.sh arm-none-eabi-g++ -mcpu=cortex-m4 -mthumb
+          ./scripts/check_zero_overhead.sh arm-none-eabi-g++ -mcpu=cortex-m7 -mthumb -O3
+
+  formatting:
+    name: clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install --yes clang-format
+
+      - name: Check formatting
+        run: |
+          set -euo pipefail
+          files=$(git ls-files '*.hpp' '*.cpp' '*.h' '*.c')
+          clang-format --dry-run --Werror ${files}
+
+  diagrams:
+    name: Diagram artifacts are up to date
+    runs-on: ubuntu-latest
+    env:
+      PLANTUML_VERSION: "1.2025.10"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PlantUML tooling
+        run: sudo apt-get update && sudo apt-get install --yes default-jre-headless graphviz libbatik-java curl
+
+      - name: Download pinned PlantUML
+        run: |
+          set -euo pipefail
+          mkdir -p .tools
+          curl -fsSL -o .tools/plantuml.jar \
+            "https://github.com/plantuml/plantuml/releases/download/v${PLANTUML_VERSION}/plantuml-${PLANTUML_VERSION}.jar"
+
+      - name: Verify generated diagrams
+        env:
+          PLANTUML_JAR: ${{ github.workspace }}/.tools/plantuml.jar
+        run: bash ./scripts/check_diagrams_up_to_date.sh
+
+  static-analysis:
+    name: clang-tidy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-tidy
+        run: sudo apt-get update && sudo apt-get install --yes clang-tidy cmake ninja-build
+
+      - name: Configure with a compilation database
+        run: cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Run clang-tidy on the test and example sources
+        run: clang-tidy -p build $(git ls-files 'tests/*.cpp' 'examples/*.cpp')
+
+  nordic-vendor-validation:
+    name: Nordic vendor validation
+    runs-on: ubuntu-latest
+    if: ${{ vars.MICROHAL_NORDIC_INCLUDE_DIRS != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: sudo apt-get update && sudo apt-get install --yes cmake
+
+      - name: Configure Nordic vendor validation preset
+        env:
+          MICROHAL_NORDIC_INCLUDE_DIRS: ${{ vars.MICROHAL_NORDIC_INCLUDE_DIRS }}
+          MICROHAL_NORDIC_DEFINITIONS: ${{ vars.MICROHAL_NORDIC_DEFINITIONS }}
+        run: cmake --preset nordic-backend-ci
+
+      - name: Build Nordic backend validation targets
+        run: cmake --build --preset nordic-backend-ci
+
+      - name: Test Nordic backend validation targets
+        run: ctest --preset nordic-backend-ci --output-on-failure
