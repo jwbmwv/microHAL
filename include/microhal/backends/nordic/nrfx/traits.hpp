@@ -9,8 +9,8 @@
 #pragma once
 
 #include <array>
-#include <cstring>
 #include <cstdint>
+#include <cstring>
 #include <span>
 
 #if __has_include("nrfx.h")
@@ -185,7 +185,8 @@ struct spi_api final
   }
 
   template <typename Config>
-  static bool transfer(const std::span<const std::uint8_t> tx_payload, const std::span<std::uint8_t> rx_payload) noexcept
+  static bool transfer(const std::span<const std::uint8_t> tx_payload,
+                       const std::span<std::uint8_t> rx_payload) noexcept
   {
     const std::size_t count = (tx_payload.size() < rx_payload.size()) ? tx_payload.size() : rx_payload.size();
     for (std::size_t index = 0U; index < count; ++index)
@@ -244,7 +245,8 @@ struct uart_api final
     return read_blocking<Config>(payload);
   }
 
-  template <typename Config, auto Handler> static bool start_async_tx(const std::span<const std::uint8_t> payload) noexcept
+  template <typename Config, auto Handler>
+  static bool start_async_tx(const std::span<const std::uint8_t> payload) noexcept
   {
     (void)Handler;
     return write_blocking<Config>(payload);
@@ -462,7 +464,8 @@ struct can_api final
     return false;
   }
 
-  template <typename Config> static bool configure_filter(const std::uint32_t, const std::uint32_t, const std::uint32_t) noexcept
+  template <typename Config>
+  static bool configure_filter(const std::uint32_t, const std::uint32_t, const std::uint32_t) noexcept
   {
     (void)sizeof(Config);
     return false;

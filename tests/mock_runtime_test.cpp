@@ -11,6 +11,7 @@
 
 #include "microhal/adc/adc.hpp"
 #include "microhal/core/backend_selector.hpp"
+#include "microhal/crc/crc.hpp"
 #include "microhal/flash/flash.hpp"
 #include "microhal/gpio/gpio.hpp"
 #include "microhal/i2c/i2c.hpp"
@@ -21,21 +22,20 @@
 #include "microhal/timers/timer.hpp"
 #include "microhal/uart/uart.hpp"
 #include "microhal/watchdog/watchdog.hpp"
-#include "microhal/crc/crc.hpp"
 
 #include <array>
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 #include <span>
 
 namespace
 {
 
 using backend = microhal::mock_tag;
-using microhal::backends::mock::operation;
-using microhal::backends::mock::recorder;
 using microhal::peripheral_kind;
 using microhal::status;
+using microhal::backends::mock::operation;
+using microhal::backends::mock::recorder;
 
 int failures = 0;
 

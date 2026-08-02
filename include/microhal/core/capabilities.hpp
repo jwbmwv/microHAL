@@ -63,7 +63,7 @@ inline constexpr auto backend_registry = std::array{
     make_backend_descriptor<nuttx_tag>(),
 #endif
 #if MICROHAL_ENABLE_NORDIC_NRFX
-  make_backend_descriptor<nordic_nrf_tag>(),
+    make_backend_descriptor<nordic_nrf_tag>(),
 #endif
 #if MICROHAL_ENABLE_MOCK
     make_backend_descriptor<mock_tag>(),

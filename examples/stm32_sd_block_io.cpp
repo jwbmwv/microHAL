@@ -21,9 +21,9 @@ using backend = microhal::stm32_hal_tag;
 
 struct sd_binding final
 {
-  static constexpr std::uintptr_t base_address{0x40012C00U};
-  static constexpr std::uint32_t clock_divider{0U};
-  static constexpr bool hardware_flow_control{false};
+  [[maybe_unused]] static constexpr std::uintptr_t base_address{0x40012C00U};
+  [[maybe_unused]] static constexpr std::uint32_t clock_divider{0U};
+  [[maybe_unused]] static constexpr bool hardware_flow_control{false};
 };
 
 using sd_cfg = microhal::sd::bound_host_config<sd_binding, 25'000'000U, microhal::sd_bus_width::four,

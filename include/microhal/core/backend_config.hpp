@@ -71,5 +71,6 @@
 
 #if !(MICROHAL_ENABLE_STM32_HAL || MICROHAL_ENABLE_STM32_LL || MICROHAL_ENABLE_KINETIS_ESPRESSO ||                     \
       MICROHAL_ENABLE_ZEPHYR || MICROHAL_ENABLE_NUTTX || MICROHAL_ENABLE_NORDIC_NRFX || MICROHAL_ENABLE_MOCK)
-#error "microHAL: at least one backend must be enabled. Enable one of MICROHAL_ENABLE_* or unset MICROHAL_BACKENDS_EXPLICIT."
+#error                                                                                                                 \
+    "microHAL: at least one backend must be enabled. Enable one of MICROHAL_ENABLE_* or unset MICROHAL_BACKENDS_EXPLICIT."
 #endif

@@ -13,18 +13,18 @@
 
 // NuttX RTOS driver includes - conditional compilation when building for NuttX
 #ifdef __NUTTX__
-#include <fcntl.h>
 #include <arch/board/board.h>
+#include <fcntl.h>
 #include <nuttx/analog/adc.h>
 #include <nuttx/analog/dac.h>
 #include <nuttx/can/can.h>
 #include <nuttx/config.h>
 #include <nuttx/drivers/drivers.h>
+#include <nuttx/fs/ioctl.h>
 #include <nuttx/i2c/i2c_master.h>
 #include <nuttx/mtd/mtd.h>
 #include <nuttx/serial/serial.h>
 #include <nuttx/spi/spi.h>
-#include <nuttx/fs/ioctl.h>
 #include <nuttx/timers/pwm.h>
 #include <nuttx/timers/rtc.h>
 #include <nuttx/timers/timer.h>
@@ -286,7 +286,8 @@ struct spi_api final
   }
 
   template <typename Config>
-  static bool transfer(const std::span<const std::uint8_t> tx_payload, const std::span<std::uint8_t> rx_payload) noexcept
+  static bool transfer(const std::span<const std::uint8_t> tx_payload,
+                       const std::span<std::uint8_t> rx_payload) noexcept
   {
     return transfer<Config>(tx_payload.data(), rx_payload.data(),
                             (tx_payload.size() < rx_payload.size()) ? tx_payload.size() : rx_payload.size());

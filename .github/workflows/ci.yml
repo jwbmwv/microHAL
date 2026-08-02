@@ -150,7 +150,7 @@ jobs:
         run: cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       - name: Run clang-tidy on the test and example sources
-        run: clang-tidy -p build $(git ls-files 'tests/*.cpp' 'examples/*.cpp')
+          run: clang-tidy -p build $(git ls-files -- 'tests/*.cpp' 'examples/*.cpp' ':!tests/zephyr/**')
 
   nordic-vendor-validation:
     name: Nordic vendor validation

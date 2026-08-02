@@ -1691,8 +1691,8 @@ struct uart_api final
   {
 #if MICROHAL_STM32_HAL_HAS_UART
     auto& handle_storage = handle<Config>();
-    if (HAL_UART_Transmit_IT(&handle_storage, hal_tx_buffer(payload.data()), static_cast<std::uint16_t>(payload.size()))
-        == HAL_OK) [[likely]]
+    if (HAL_UART_Transmit_IT(&handle_storage, hal_tx_buffer(payload.data()),
+                             static_cast<std::uint16_t>(payload.size())) == HAL_OK) [[likely]]
     {
       return true;
     }

@@ -467,8 +467,8 @@ enum class dma_priority : std::uint8_t;
 #endif
 
 #if defined(STM32F1) || defined(STM32F2) || defined(STM32F4) || defined(STM32F7) || defined(STM32H5) ||                \
-  defined(STM32H7) || defined(STM32H7RS) || defined(STM32L1) || defined(STM32L4) || defined(STM32L5) ||              \
-  defined(STM32N6) || defined(STM32U3) || defined(STM32U5)
+    defined(STM32H7) || defined(STM32H7RS) || defined(STM32L1) || defined(STM32L4) || defined(STM32L5) ||              \
+    defined(STM32N6) || defined(STM32U3) || defined(STM32U5)
 #define MICROHAL_STM32_LL_SD_RUNTIME 1
 #else
 #define MICROHAL_STM32_LL_SD_RUNTIME 0
@@ -1271,8 +1271,7 @@ template <typename Config> constexpr auto stm32_sd_instance() noexcept -> declty
   }
   else if constexpr (requires { Config::instance_index; })
   {
-    static_assert(Config::instance_index == 0U,
-                  "microHAL: STM32 LL SD currently maps only instance_index 0 to SDIO.");
+    static_assert(Config::instance_index == 0U, "microHAL: STM32 LL SD currently maps only instance_index 0 to SDIO.");
     return SDIO;
   }
   else
@@ -2462,7 +2461,8 @@ struct adc_api final
   }
 
   template <typename Config, auto Handler>
-  static bool start_dma_scan(const std::span<const std::uint8_t> channels, const std::span<std::uint16_t> results) noexcept
+  static bool start_dma_scan(const std::span<const std::uint8_t> channels,
+                             const std::span<std::uint16_t> results) noexcept
   {
     if (channels.empty())
     {
@@ -2738,8 +2738,8 @@ struct sd_api final
     handle_storage.Init.ClockEdge = SDMMC_CLOCK_EDGE_RISING;
     handle_storage.Init.ClockBypass = SDMMC_CLOCK_BYPASS_DISABLE;
     handle_storage.Init.ClockPowerSave = SDMMC_CLOCK_POWER_SAVE_DISABLE;
-    handle_storage.Init.HardwareFlowControl = sd_hardware_flow_control<Config>() ? SDMMC_HARDWARE_FLOW_CONTROL_ENABLE
-                                                                                  : SDMMC_HARDWARE_FLOW_CONTROL_DISABLE;
+    handle_storage.Init.HardwareFlowControl =
+        sd_hardware_flow_control<Config>() ? SDMMC_HARDWARE_FLOW_CONTROL_ENABLE : SDMMC_HARDWARE_FLOW_CONTROL_DISABLE;
 #endif
     handle_storage.Init.BusWide = stm32_sd_bus_width<Config>();
     handle_storage.Init.ClockDiv = sd_clock_divider<Config>();
@@ -3309,12 +3309,12 @@ template <> struct backend_traits<stm32_ll_tag> final
 
   static consteval struct qspi_capability qspi_capability() noexcept
   {
-      return {.supported = (MICROHAL_STM32_LL_HAS_QSPI != 0),
+    return {.supported = (MICROHAL_STM32_LL_HAS_QSPI != 0),
             .blocking = true,
             .non_blocking = true,
             .isr = true,
             .dma = true,
-        .instance_count = (MICROHAL_STM32_LL_HAS_QSPI != 0) ? 1U : 0U,
+            .instance_count = (MICROHAL_STM32_LL_HAS_QSPI != 0) ? 1U : 0U,
             .max_frequency_hz = 133'000'000U,
             .quad_mode = true};
   }

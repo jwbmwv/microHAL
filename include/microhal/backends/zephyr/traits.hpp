@@ -16,6 +16,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/adc.h>
 #include <zephyr/drivers/can.h>
+#include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/counter.h>
 #include <zephyr/drivers/dac.h>
 #include <zephyr/drivers/dma.h>
@@ -29,7 +30,6 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/usb/usb_device.h>
 #include <zephyr/drivers/watchdog.h>
-#include <zephyr/drivers/clock_control.h>
 #include <zephyr/kernel.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_pkt.h>
@@ -1309,7 +1309,7 @@ struct usb_api final
 #if defined(CONFIG_USB_DEVICE_STACK)
     std::uint32_t written = 0U;
     return (usb_write(endpoint, data.data(), static_cast<std::uint32_t>(data.size()), &written) == 0) &&
-         (written == static_cast<std::uint32_t>(data.size()));
+           (written == static_cast<std::uint32_t>(data.size()));
 #else
     (void)endpoint;
     (void)data;
@@ -1340,8 +1340,8 @@ struct ethernet_api final
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(CONFIG_NET_L2_ETHERNET)
-  struct net_if* iface = ethernet_iface_from_config<Config>();
-  return iface != nullptr;
+    struct net_if* iface = ethernet_iface_from_config<Config>();
+    return iface != nullptr;
 #else
     return false;
 #endif

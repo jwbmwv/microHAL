@@ -275,7 +275,8 @@ struct spi_api final
   }
 
   template <typename Config>
-  static bool transfer(const std::span<const std::uint8_t> tx_payload, const std::span<std::uint8_t> rx_payload) noexcept
+  static bool transfer(const std::span<const std::uint8_t> tx_payload,
+                       const std::span<std::uint8_t> rx_payload) noexcept
   {
     for (std::uint8_t& byte : rx_payload)
     {
@@ -316,9 +317,9 @@ struct rtc_api final
     recorder::rtc_hours = hours;
     recorder::rtc_minutes = minutes;
     recorder::rtc_seconds = seconds;
-    return recorder::step(peripheral_kind::rtc, operation::write, (static_cast<std::uint32_t>(hours) << 16U) |
-                                                                  (static_cast<std::uint32_t>(minutes) << 8U) |
-                                                                  static_cast<std::uint32_t>(seconds));
+    return recorder::step(peripheral_kind::rtc, operation::write,
+                          (static_cast<std::uint32_t>(hours) << 16U) | (static_cast<std::uint32_t>(minutes) << 8U) |
+                              static_cast<std::uint32_t>(seconds));
   }
 
   template <typename Config>
@@ -330,8 +331,7 @@ struct rtc_api final
     return recorder::step(peripheral_kind::rtc, operation::read);
   }
 
-  template <typename Config, auto Handler, typename AlarmTime>
-  static bool enable_alarm(const AlarmTime&) noexcept
+  template <typename Config, auto Handler, typename AlarmTime> static bool enable_alarm(const AlarmTime&) noexcept
   {
     (void)Handler;
     return recorder::step(peripheral_kind::rtc, operation::enable_interrupt);
@@ -439,15 +439,13 @@ struct can_api final
     return recorder::step(peripheral_kind::can, operation::read, message.id, message.dlc);
   }
 
-  template <typename Config>
-  static bool transmit(const std::uint8_t* frame, const std::size_t length) noexcept
+  template <typename Config> static bool transmit(const std::uint8_t* frame, const std::size_t length) noexcept
   {
     (void)frame;
     return recorder::step(peripheral_kind::can, operation::write, 0U, length);
   }
 
-  template <typename Config>
-  static bool receive(std::uint8_t* frame, std::size_t& length) noexcept
+  template <typename Config> static bool receive(std::uint8_t* frame, std::size_t& length) noexcept
   {
     for (std::size_t index = 0U; index < length; ++index)
     {
@@ -460,8 +458,7 @@ struct can_api final
   static bool configure_filter(const std::uint32_t filter_id, const std::uint32_t mask,
                                const std::uint32_t fifo) noexcept
   {
-    return recorder::step(peripheral_kind::can, operation::set_filter,
-                          filter_id ^ mask ^ (fifo << 24U));
+    return recorder::step(peripheral_kind::can, operation::set_filter, filter_id ^ mask ^ (fifo << 24U));
   }
 
   template <typename Config, auto Handler> static bool enable_rx_interrupt() noexcept

@@ -21,11 +21,13 @@ using backend = microhal::stm32_hal_tag;
 
 struct ethernet_binding final
 {
-  static constexpr std::uintptr_t base_address{0x40028000U};
-  static constexpr microhal::ethernet_media_interface media_interface{microhal::ethernet_media_interface::rmii};
-  static constexpr std::array<std::uint8_t, 6U> mac_address{{0x02U, 0x00U, 0x00U, 0x00U, 0x00U, 0x01U}};
-  static constexpr std::uint32_t rx_buffer_size{1528U};
-  static constexpr std::uint32_t rx_buffer_count{8U};
+  [[maybe_unused]] static constexpr std::uintptr_t base_address{0x40028000U};
+  [[maybe_unused]] static constexpr microhal::ethernet_media_interface media_interface{
+      microhal::ethernet_media_interface::rmii};
+  [[maybe_unused]] static constexpr std::array<std::uint8_t, 6U> mac_address{
+      {0x02U, 0x00U, 0x00U, 0x00U, 0x00U, 0x01U}};
+  [[maybe_unused]] static constexpr std::uint32_t rx_buffer_size{1528U};
+  [[maybe_unused]] static constexpr std::uint32_t rx_buffer_count{8U};
 };
 
 using ethernet_cfg = microhal::ethernet::bound_mac_config<ethernet_binding, microhal::ethernet_link_speed::mbps100,

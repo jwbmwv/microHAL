@@ -20,201 +20,203 @@ constexpr auto null_handler = nullptr;
 
 struct gpio_cfg final
 {
-  static constexpr std::uint8_t port_index{0U};
-  static constexpr std::uint8_t pin_index{0U};
-  static constexpr microhal::gpio_mode mode{microhal::gpio_mode::output};
-  static constexpr microhal::gpio_pull pull{microhal::gpio_pull::none};
-  static constexpr microhal::gpio_speed speed{microhal::gpio_speed::low};
-  static constexpr std::uint8_t alternate_function{microhal::gpio_no_alternate};
-  static constexpr microhal::gpio_interrupt_trigger interrupt_trigger{microhal::gpio_interrupt_trigger::none};
+  [[maybe_unused]] static constexpr std::uint8_t port_index{0U};
+  [[maybe_unused]] static constexpr std::uint8_t pin_index{0U};
+  [[maybe_unused]] static constexpr microhal::gpio_mode mode{microhal::gpio_mode::output};
+  [[maybe_unused]] static constexpr microhal::gpio_pull pull{microhal::gpio_pull::none};
+  [[maybe_unused]] static constexpr microhal::gpio_speed speed{microhal::gpio_speed::low};
+  [[maybe_unused]] static constexpr std::uint8_t alternate_function{microhal::gpio_no_alternate};
+  [[maybe_unused]] static constexpr microhal::gpio_interrupt_trigger interrupt_trigger{
+      microhal::gpio_interrupt_trigger::none};
 };
 
 struct i2c_cfg final
 {
-  static constexpr std::uint8_t instance_index{0U};
-  static constexpr std::uint32_t clock_hz{100000U};
-  static constexpr microhal::i2c_address_mode address_mode{microhal::i2c_address_mode::seven_bit};
-  static constexpr bool enable_dma{false};
-  static constexpr bool enable_interrupts{false};
+  [[maybe_unused]] static constexpr std::uint8_t instance_index{0U};
+  [[maybe_unused]] static constexpr std::uint32_t clock_hz{100000U};
+  [[maybe_unused]] static constexpr microhal::i2c_address_mode address_mode{microhal::i2c_address_mode::seven_bit};
+  [[maybe_unused]] static constexpr bool enable_dma{false};
+  [[maybe_unused]] static constexpr bool enable_interrupts{false};
 };
 
 struct spi_cfg final
 {
-  static constexpr std::uint8_t instance_index{0U};
-  static constexpr std::uint32_t clock_hz{1000000U};
-  static constexpr microhal::spi_duplex_mode duplex_mode{microhal::spi_duplex_mode::full};
-  static constexpr microhal::spi_clock_polarity clock_polarity{microhal::spi_clock_polarity::idle_low};
-  static constexpr microhal::spi_clock_phase clock_phase{microhal::spi_clock_phase::first_edge};
-  static constexpr microhal::spi_bit_order bit_order{microhal::spi_bit_order::msb_first};
-  static constexpr bool enable_dma{false};
-  static constexpr bool enable_interrupts{false};
+  [[maybe_unused]] static constexpr std::uint8_t instance_index{0U};
+  [[maybe_unused]] static constexpr std::uint32_t clock_hz{1000000U};
+  [[maybe_unused]] static constexpr microhal::spi_duplex_mode duplex_mode{microhal::spi_duplex_mode::full};
+  [[maybe_unused]] static constexpr microhal::spi_clock_polarity clock_polarity{microhal::spi_clock_polarity::idle_low};
+  [[maybe_unused]] static constexpr microhal::spi_clock_phase clock_phase{microhal::spi_clock_phase::first_edge};
+  [[maybe_unused]] static constexpr microhal::spi_bit_order bit_order{microhal::spi_bit_order::msb_first};
+  [[maybe_unused]] static constexpr bool enable_dma{false};
+  [[maybe_unused]] static constexpr bool enable_interrupts{false};
 };
 
 struct qspi_cfg final
 {
-  static constexpr std::uint32_t clock_hz{1000000U};
-  static constexpr bool enable_dma{false};
-  static constexpr bool enable_interrupts{false};
+  [[maybe_unused]] static constexpr std::uint32_t clock_hz{1000000U};
+  [[maybe_unused]] static constexpr bool enable_dma{false};
+  [[maybe_unused]] static constexpr bool enable_interrupts{false};
 };
 
 struct uart_cfg final
 {
-  static constexpr std::uint8_t instance_index{0U};
-  static constexpr std::uint32_t baud_rate{115200U};
-  static constexpr microhal::uart_parity parity{microhal::uart_parity::none};
-  static constexpr microhal::uart_stop_bits stop_bits{microhal::uart_stop_bits::one};
-  static constexpr bool enable_dma{false};
-  static constexpr bool enable_interrupts{false};
-  static constexpr bool require_lpuart{false};
+  [[maybe_unused]] static constexpr std::uint8_t instance_index{0U};
+  [[maybe_unused]] static constexpr std::uint32_t baud_rate{115200U};
+  [[maybe_unused]] static constexpr microhal::uart_parity parity{microhal::uart_parity::none};
+  [[maybe_unused]] static constexpr microhal::uart_stop_bits stop_bits{microhal::uart_stop_bits::one};
+  [[maybe_unused]] static constexpr bool enable_dma{false};
+  [[maybe_unused]] static constexpr bool enable_interrupts{false};
+  [[maybe_unused]] static constexpr bool require_lpuart{false};
 };
 
 struct timer_cfg final
 {
-  static constexpr std::uint8_t instance_index{0U};
-  static constexpr std::uint32_t clock_hz{1000000U};
-  static constexpr microhal::timer_counter_mode counter_mode{microhal::timer_counter_mode::up};
-  static constexpr microhal::timer_clock_source clock_source{microhal::timer_clock_source::internal};
-  static constexpr bool enable_dma{false};
-  static constexpr bool enable_interrupts{false};
+  [[maybe_unused]] static constexpr std::uint8_t instance_index{0U};
+  [[maybe_unused]] static constexpr std::uint32_t clock_hz{1000000U};
+  [[maybe_unused]] static constexpr microhal::timer_counter_mode counter_mode{microhal::timer_counter_mode::up};
+  [[maybe_unused]] static constexpr microhal::timer_clock_source clock_source{microhal::timer_clock_source::internal};
+  [[maybe_unused]] static constexpr bool enable_dma{false};
+  [[maybe_unused]] static constexpr bool enable_interrupts{false};
 
   // Legacy fields still read by some backend implementations.
-  static constexpr std::uint16_t prescaler{0U};
-  static constexpr std::uint32_t period{1000U};
+  [[maybe_unused]] static constexpr std::uint16_t prescaler{0U};
+  [[maybe_unused]] static constexpr std::uint32_t period{1000U};
 };
 
 struct rtc_cfg final
 {
-  static constexpr bool enable_periodic_irq{false};
-  static constexpr bool enable_alarm_irq{false};
+  [[maybe_unused]] static constexpr bool enable_periodic_irq{false};
+  [[maybe_unused]] static constexpr bool enable_alarm_irq{false};
 };
 
 struct flash_cfg final
 {
-  static constexpr std::uint32_t program_alignment_bytes{8U};
-  static constexpr std::uint32_t erase_size_bytes{4096U};
-  static constexpr bool enable_dma{false};
-  static constexpr bool enable_interrupts{false};
+  [[maybe_unused]] static constexpr std::uint32_t program_alignment_bytes{8U};
+  [[maybe_unused]] static constexpr std::uint32_t erase_size_bytes{4096U};
+  [[maybe_unused]] static constexpr bool enable_dma{false};
+  [[maybe_unused]] static constexpr bool enable_interrupts{false};
 };
 
 struct adc_cfg final
 {
-  static constexpr std::uint8_t instance_index{0U};
-  static constexpr microhal::adc_resolution resolution{microhal::adc_resolution::bits_12};
-  static constexpr microhal::adc_sample_time sample_time{microhal::adc_sample_time::cycles_84};
-  static constexpr bool enable_dma{false};
-  static constexpr bool enable_interrupts{false};
-  static constexpr bool differential_mode{false};
+  [[maybe_unused]] static constexpr std::uint8_t instance_index{0U};
+  [[maybe_unused]] static constexpr microhal::adc_resolution resolution{microhal::adc_resolution::bits_12};
+  [[maybe_unused]] static constexpr microhal::adc_sample_time sample_time{microhal::adc_sample_time::cycles_84};
+  [[maybe_unused]] static constexpr bool enable_dma{false};
+  [[maybe_unused]] static constexpr bool enable_interrupts{false};
+  [[maybe_unused]] static constexpr bool differential_mode{false};
 };
 
 struct dac_cfg final
 {
-  static constexpr std::uint8_t instance_index{0U};
-  static constexpr std::uint8_t channel{1U};
-  static constexpr microhal::dac_resolution resolution{microhal::dac_resolution::bits_12};
-  static constexpr bool enable_dma{false};
-  static constexpr bool enable_waveform{false};
+  [[maybe_unused]] static constexpr std::uint8_t instance_index{0U};
+  [[maybe_unused]] static constexpr std::uint8_t channel{1U};
+  [[maybe_unused]] static constexpr microhal::dac_resolution resolution{microhal::dac_resolution::bits_12};
+  [[maybe_unused]] static constexpr bool enable_dma{false};
+  [[maybe_unused]] static constexpr bool enable_waveform{false};
 };
 
 struct can_cfg final
 {
-  static constexpr std::uint8_t instance_index{0U};
-  static constexpr std::uint32_t baudrate{500000U};
-  static constexpr microhal::can_mode mode{microhal::can_mode::normal};
-  static constexpr bool enable_can_fd{false};
-  static constexpr bool enable_interrupts{false};
+  [[maybe_unused]] static constexpr std::uint8_t instance_index{0U};
+  [[maybe_unused]] static constexpr std::uint32_t baudrate{500000U};
+  [[maybe_unused]] static constexpr microhal::can_mode mode{microhal::can_mode::normal};
+  [[maybe_unused]] static constexpr bool enable_can_fd{false};
+  [[maybe_unused]] static constexpr bool enable_interrupts{false};
 };
 
 struct usb_cfg final
 {
-  static constexpr std::uint8_t instance_index{0U};
-  static constexpr microhal::usb_speed speed{microhal::usb_speed::full};
-  static constexpr bool device_mode{true};
-  static constexpr bool host_mode{false};
-  static constexpr bool otg_mode{false};
+  [[maybe_unused]] static constexpr std::uint8_t instance_index{0U};
+  [[maybe_unused]] static constexpr microhal::usb_speed speed{microhal::usb_speed::full};
+  [[maybe_unused]] static constexpr bool device_mode{true};
+  [[maybe_unused]] static constexpr bool host_mode{false};
+  [[maybe_unused]] static constexpr bool otg_mode{false};
 };
 
 struct ethernet_cfg final
 {
-  static constexpr std::uint8_t instance_index{0U};
-  static constexpr microhal::ethernet_link_speed link_speed{microhal::ethernet_link_speed::mbps100};
-  static constexpr microhal::ethernet_duplex duplex{microhal::ethernet_duplex::full};
-  static constexpr bool enable_checksum_offload{false};
-  static constexpr bool enable_dma{false};
-  static constexpr bool enable_interrupts{false};
+  [[maybe_unused]] static constexpr std::uint8_t instance_index{0U};
+  [[maybe_unused]] static constexpr microhal::ethernet_link_speed link_speed{microhal::ethernet_link_speed::mbps100};
+  [[maybe_unused]] static constexpr microhal::ethernet_duplex duplex{microhal::ethernet_duplex::full};
+  [[maybe_unused]] static constexpr bool enable_checksum_offload{false};
+  [[maybe_unused]] static constexpr bool enable_dma{false};
+  [[maybe_unused]] static constexpr bool enable_interrupts{false};
 };
 
 struct sd_cfg final
 {
-  static constexpr std::uint8_t instance_index{0U};
-  static constexpr std::uint32_t clock_hz{25000000U};
-  static constexpr microhal::sd_bus_width bus_width{microhal::sd_bus_width::one};
-  static constexpr microhal::sd_timing_mode timing_mode{microhal::sd_timing_mode::default_speed};
-  static constexpr bool enable_dma{false};
-  static constexpr bool enable_interrupts{false};
+  [[maybe_unused]] static constexpr std::uint8_t instance_index{0U};
+  [[maybe_unused]] static constexpr std::uint32_t clock_hz{25000000U};
+  [[maybe_unused]] static constexpr microhal::sd_bus_width bus_width{microhal::sd_bus_width::one};
+  [[maybe_unused]] static constexpr microhal::sd_timing_mode timing_mode{microhal::sd_timing_mode::default_speed};
+  [[maybe_unused]] static constexpr bool enable_dma{false};
+  [[maybe_unused]] static constexpr bool enable_interrupts{false};
 };
 
 struct dma_cfg final
 {
-  static constexpr std::uint8_t instance_index{0U};
-  static constexpr std::uint8_t stream{0U};
-  static constexpr std::uint8_t channel{0U};
-  static constexpr microhal::dma::dma_direction direction{microhal::dma::dma_direction::periph_to_memory};
-  static constexpr microhal::dma::dma_priority priority{microhal::dma::dma_priority::medium};
-  static constexpr bool circular_mode{false};
-  static constexpr bool double_buffer{false};
+  [[maybe_unused]] static constexpr std::uint8_t instance_index{0U};
+  [[maybe_unused]] static constexpr std::uint8_t stream{0U};
+  [[maybe_unused]] static constexpr std::uint8_t channel{0U};
+  [[maybe_unused]] static constexpr microhal::dma::dma_direction direction{
+      microhal::dma::dma_direction::periph_to_memory};
+  [[maybe_unused]] static constexpr microhal::dma::dma_priority priority{microhal::dma::dma_priority::medium};
+  [[maybe_unused]] static constexpr bool circular_mode{false};
+  [[maybe_unused]] static constexpr bool double_buffer{false};
 };
 
 struct pwm_cfg final
 {
-  static constexpr std::uint8_t timer_index{0U};
-  static constexpr std::uint8_t channel{1U};
-  static constexpr std::uint32_t frequency_hz{1000U};
-  static constexpr microhal::pwm_polarity polarity{microhal::pwm_polarity::active_high};
-  static constexpr bool enable_dead_time{false};
+  [[maybe_unused]] static constexpr std::uint8_t timer_index{0U};
+  [[maybe_unused]] static constexpr std::uint8_t channel{1U};
+  [[maybe_unused]] static constexpr std::uint32_t frequency_hz{1000U};
+  [[maybe_unused]] static constexpr microhal::pwm_polarity polarity{microhal::pwm_polarity::active_high};
+  [[maybe_unused]] static constexpr bool enable_dead_time{false};
 
   // Legacy fields still read by some backend implementations.
-  static constexpr std::uint16_t prescaler{0U};
-  static constexpr std::uint32_t period{1000U};
+  [[maybe_unused]] static constexpr std::uint16_t prescaler{0U};
+  [[maybe_unused]] static constexpr std::uint32_t period{1000U};
 };
 
 struct watchdog_cfg final
 {
-  static constexpr std::uint8_t instance_index{0U};
-  static constexpr std::uint32_t timeout_ms{1000U};
-  static constexpr bool independent_mode{true};
-  static constexpr bool window_mode{false};
+  [[maybe_unused]] static constexpr std::uint8_t instance_index{0U};
+  [[maybe_unused]] static constexpr std::uint32_t timeout_ms{1000U};
+  [[maybe_unused]] static constexpr bool independent_mode{true};
+  [[maybe_unused]] static constexpr bool window_mode{false};
 };
 
 struct i2s_cfg final
 {
-  static constexpr std::uint8_t instance_index{0U};
-  static constexpr microhal::i2s_mode mode{microhal::i2s_mode::master_tx};
-  static constexpr microhal::i2s_standard standard{microhal::i2s_standard::philips};
-  static constexpr std::uint32_t sample_rate{48000U};
-  static constexpr bool enable_master_clock{false};
-  static constexpr bool enable_dma{false};
+  [[maybe_unused]] static constexpr std::uint8_t instance_index{0U};
+  [[maybe_unused]] static constexpr microhal::i2s_mode mode{microhal::i2s_mode::master_tx};
+  [[maybe_unused]] static constexpr microhal::i2s_standard standard{microhal::i2s_standard::philips};
+  [[maybe_unused]] static constexpr std::uint32_t sample_rate{48000U};
+  [[maybe_unused]] static constexpr bool enable_master_clock{false};
+  [[maybe_unused]] static constexpr bool enable_dma{false};
 };
 
 struct rcc_cfg final
 {
-  static constexpr microhal::rcc::clock_source source{microhal::rcc::clock_source::hsi};
-  static constexpr std::uint32_t system_clock_hz{16000000U};
-  static constexpr bool enable_pll{false};
+  [[maybe_unused]] static constexpr microhal::rcc::clock_source source{microhal::rcc::clock_source::hsi};
+  [[maybe_unused]] static constexpr std::uint32_t system_clock_hz{16000000U};
+  [[maybe_unused]] static constexpr bool enable_pll{false};
 };
 
 struct crc_cfg final
 {
-  static constexpr std::uint8_t instance_index{0U};
-  static constexpr bool enable_rng{false};
-  static constexpr std::uint32_t polynomial{0x04C11DB7U};
+  [[maybe_unused]] static constexpr std::uint8_t instance_index{0U};
+  [[maybe_unused]] static constexpr bool enable_rng{false};
+  [[maybe_unused]] static constexpr std::uint32_t polynomial{0x04C11DB7U};
 };
 
 struct autobaud_cfg final
 {
   using timer_config = timer_cfg;
   using gpio_pin = gpio_cfg;
-  static constexpr std::uint32_t min_baud{9600U};
-  static constexpr std::uint32_t max_baud{115200U};
+  [[maybe_unused]] static constexpr std::uint32_t min_baud{9600U};
+  [[maybe_unused]] static constexpr std::uint32_t max_baud{115200U};
 };
 
 template <typename Backend, microhal::peripheral_kind Peripheral> consteval bool peripheral_is_supported() noexcept
@@ -610,8 +612,7 @@ template <typename Backend> consteval bool backend_raw_contract_holds() noexcept
     if constexpr (!(requires {
                     raw_rtc::template initialize<rtc_cfg>();
                     raw_rtc::template set_time<rtc_cfg>(0U, 0U, 0U);
-                    raw_rtc::template get_time<rtc_cfg>(std::declval<std::uint8_t&>(),
-                                                        std::declval<std::uint8_t&>(),
+                    raw_rtc::template get_time<rtc_cfg>(std::declval<std::uint8_t&>(), std::declval<std::uint8_t&>(),
                                                         std::declval<std::uint8_t&>());
                     raw_rtc::template enable_alarm<rtc_cfg, null_handler>(
                         microhal::rtc::date_time{.hour = 0U, .minute = 0U, .second = 0U});
@@ -683,17 +684,16 @@ template <typename Backend> consteval bool backend_raw_contract_holds() noexcept
     {
       return false;
     }
-    if constexpr (!(requires {
-                    raw_can::template transmit<can_cfg>(std::declval<const microhal::can::message&>());
-                  }) && !(requires {
-                    raw_can::template transmit<can_cfg>(std::declval<const std::uint8_t*>(), std::declval<std::size_t>());
+    if constexpr (!(requires { raw_can::template transmit<can_cfg>(std::declval<const microhal::can::message&>()); }) &&
+                  !(requires {
+                    raw_can::template transmit<can_cfg>(std::declval<const std::uint8_t*>(),
+                                                        std::declval<std::size_t>());
                   }))
     {
       return false;
     }
-    if constexpr (!(requires {
-                    raw_can::template receive<can_cfg>(std::declval<microhal::can::message&>());
-                  }) && !(requires {
+    if constexpr (!(requires { raw_can::template receive<can_cfg>(std::declval<microhal::can::message&>()); }) &&
+                  !(requires {
                     raw_can::template receive<can_cfg>(std::declval<std::uint8_t*>(), std::declval<std::size_t&>());
                   }))
     {
@@ -860,8 +860,10 @@ template <typename Backend> consteval bool backend_capability_claims_hold() noex
     {
       return false;
     }
-    if constexpr (capability.blocking &&
-                  !(requires { raw_gpio::template write<gpio_cfg>(true); raw_gpio::template read<gpio_cfg>(); }))
+    if constexpr (capability.blocking && !(requires {
+                    raw_gpio::template write<gpio_cfg>(true);
+                    raw_gpio::template read<gpio_cfg>();
+                  }))
     {
       return false;
     }
@@ -880,16 +882,14 @@ template <typename Backend> consteval bool backend_capability_claims_hold() noex
     {
       return false;
     }
-    if constexpr (capability.blocking &&
-                  !(requires {
+    if constexpr (capability.blocking && !(requires {
                     raw_i2c::template write_blocking<i2c_cfg>(std::span<const std::uint8_t>{}, 0U);
                     raw_i2c::template read_blocking<i2c_cfg>(std::span<std::uint8_t>{}, 0U);
                   }))
     {
       return false;
     }
-    if constexpr ((capability.non_blocking || capability.isr || capability.dma) &&
-                  !(requires {
+    if constexpr ((capability.non_blocking || capability.isr || capability.dma) && !(requires {
                     raw_i2c::template start_transfer<i2c_cfg, null_handler>(std::span<std::uint8_t>{}, 0U);
                   }))
     {
@@ -905,15 +905,13 @@ template <typename Backend> consteval bool backend_capability_claims_hold() noex
     {
       return false;
     }
-    if constexpr (capability.blocking &&
-                  !(requires {
+    if constexpr (capability.blocking && !(requires {
                     raw_spi::template transfer<spi_cfg>(std::span<const std::uint8_t>{}, std::span<std::uint8_t>{});
                   }))
     {
       return false;
     }
-    if constexpr ((capability.non_blocking || capability.isr || capability.dma) &&
-                  !(requires {
+    if constexpr ((capability.non_blocking || capability.isr || capability.dma) && !(requires {
                     raw_spi::template transfer_async<spi_cfg, null_handler>(std::span<const std::uint8_t>{},
                                                                             std::span<std::uint8_t>{});
                   }))
@@ -930,16 +928,14 @@ template <typename Backend> consteval bool backend_capability_claims_hold() noex
     {
       return false;
     }
-    if constexpr (capability.blocking &&
-                  !(requires {
+    if constexpr (capability.blocking && !(requires {
                     raw_uart::template write_blocking<uart_cfg>(std::span<const std::uint8_t>{});
                     raw_uart::template read_blocking<uart_cfg>(std::span<std::uint8_t>{});
                   }))
     {
       return false;
     }
-    if constexpr ((capability.non_blocking || capability.isr) &&
-                  !(requires {
+    if constexpr ((capability.non_blocking || capability.isr) && !(requires {
                     raw_uart::template start_async_rx<uart_cfg, null_handler>(std::span<std::uint8_t>{});
                     raw_uart::template start_async_tx<uart_cfg, null_handler>(std::span<const std::uint8_t>{});
                   }))
@@ -965,8 +961,7 @@ template <typename Backend> consteval bool backend_capability_claims_hold() noex
     {
       return false;
     }
-    if constexpr (capability.dma &&
-                  !(requires {
+    if constexpr (capability.dma && !(requires {
                     raw_adc::template start_dma_scan<adc_cfg, null_handler>(std::span<const std::uint8_t>{},
                                                                             std::span<std::uint16_t>{});
                   }))
@@ -987,8 +982,7 @@ template <typename Backend> consteval bool backend_capability_claims_hold() noex
     {
       return false;
     }
-    if constexpr ((capability.non_blocking || capability.isr || capability.dma) &&
-                  !(requires {
+    if constexpr ((capability.non_blocking || capability.isr || capability.dma) && !(requires {
                     raw_dac::template start_dma_waveform<dac_cfg, null_handler>(std::span<const std::uint16_t>{});
                   }))
     {
@@ -1005,9 +999,14 @@ template <typename Backend> consteval bool backend_capability_claims_hold() noex
       return false;
     }
     if constexpr (capability.blocking &&
-                  !(requires { raw_can::template transmit<can_cfg>(std::declval<const microhal::can::message&>()); } ||
-                    requires { raw_can::template transmit<can_cfg>(std::declval<const std::uint8_t*>(),
-                                                                  std::declval<std::size_t>()); }))
+                  !(
+                      requires {
+                        raw_can::template transmit<can_cfg>(std::declval<const microhal::can::message&>());
+                      } ||
+                      requires {
+                        raw_can::template transmit<can_cfg>(std::declval<const std::uint8_t*>(),
+                                                            std::declval<std::size_t>());
+                      }))
     {
       return false;
     }
@@ -1027,9 +1026,7 @@ template <typename Backend> consteval bool backend_capability_claims_hold() noex
       return false;
     }
     if constexpr ((capability.non_blocking || capability.isr || capability.dma) &&
-                  !(requires {
-                    raw_dma::template start_transfer<dma_cfg, null_handler>(0U, 0U, 0U);
-                  }))
+                  !(requires { raw_dma::template start_transfer<dma_cfg, null_handler>(0U, 0U, 0U); }))
     {
       return false;
     }
@@ -1043,16 +1040,14 @@ template <typename Backend> consteval bool backend_capability_claims_hold() noex
     {
       return false;
     }
-    if constexpr (capability.blocking &&
-                  !(requires {
+    if constexpr (capability.blocking && !(requires {
                     raw_i2s::template transmit_blocking<i2s_cfg>(std::span<const std::uint16_t>{});
                     raw_i2s::template receive_blocking<i2s_cfg>(std::span<std::uint16_t>{});
                   }))
     {
       return false;
     }
-    if constexpr ((capability.non_blocking || capability.isr || capability.dma) &&
-                  !(requires {
+    if constexpr ((capability.non_blocking || capability.isr || capability.dma) && !(requires {
                     raw_i2s::template start_dma_tx<i2s_cfg, null_handler>(std::span<const std::uint16_t>{});
                   }))
     {

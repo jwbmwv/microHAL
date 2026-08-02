@@ -42,7 +42,7 @@ struct alignas(8) log_entry
   std::array<std::uint8_t, 28U> data; // Event-specific data (28 bytes)
   std::uint32_t crc;                  // CRC32 checksum
 
-  static constexpr std::uint32_t magic = 0xDEADBEEFU;
+  [[maybe_unused]] static constexpr std::uint32_t magic = 0xDEADBEEFU;
   static constexpr std::size_t size_bytes = 40U; // Total size: 4+2+2+28+4 = 40 bytes
 };
 
@@ -207,8 +207,6 @@ bool write_log_entry(const std::uint16_t event_id, const std::span<const std::ui
 // Read log entries (for debugging/analysis)
 void read_all_logs() noexcept
 {
-  std::uint32_t count = 0U;
-
   for (std::uint32_t addr = log_sector_0_addr; addr < log_sector_0_addr + log_total_size; addr += log_entry::size_bytes)
   {
     const auto* entry = reinterpret_cast<const log_entry*>(addr);
@@ -224,11 +222,8 @@ void read_all_logs() noexcept
     if (calc_crc == entry->crc)
     {
       // Valid entry - process it (e.g., send via UART, store to SD card, etc.)
-      count++;
     }
   }
-
-  // Total valid entries: count
 }
 
 // Initialize logger
