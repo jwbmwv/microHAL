@@ -20,9 +20,10 @@ The CI diagram job uses this rendering toolchain baseline:
 - PlantUML `1.2025.10` (downloaded as a pinned jar)
 - Graphviz `dot` from `graphviz` package
 - Java Runtime from `default-jre-headless`
-- `rsvg-convert` from the `librsvg2-bin` package for PDF artifacts
+- `rsvg-convert` from the `librsvg2-bin` package for PNG and PDF artifacts
+- DejaVu fonts from `fonts-dejavu-core`
 
-PDF generation defaults `SOURCE_DATE_EPOCH` to `0`, making the committed PDF artifacts reproducible. Set that variable to a different epoch when a consuming build requires it.
+Raster generation defaults `SOURCE_DATE_EPOCH` to `0`, making the committed PNG and PDF artifacts reproducible. Set that variable to a different epoch when a consuming build requires it.
 
 ## Generated Artifacts
 

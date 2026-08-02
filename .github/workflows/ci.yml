@@ -111,22 +111,21 @@ jobs:
         run: |
           set -euo pipefail
           files=$(git ls-files '*.hpp' '*.cpp' '*.h' '*.c')
-            clang-format-18 --dry-run --Werror ${files}
+          clang-format-18 --dry-run --Werror ${files}
 
   diagrams:
+    runs-on: ubuntu-24.04
     name: Diagram artifacts are up to date
-    runs-on: ubuntu-latest
     env:
       PLANTUML_VERSION: "1.2025.10"
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install PlantUML tooling
-        run: sudo apt-get update && sudo apt-get install --yes default-jre-headless graphviz librsvg2-bin curl
-
       - name: Download pinned PlantUML
         run: |
           set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes default-jre-headless graphviz librsvg2-bin fonts-dejavu-core curl
           mkdir -p .tools
           curl -fsSL -o .tools/plantuml.jar \
             "https://github.com/plantuml/plantuml/releases/download/v${PLANTUML_VERSION}/plantuml-${PLANTUML_VERSION}.jar"

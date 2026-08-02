@@ -73,6 +73,15 @@ render_svg_pdf() {
   assert_fresh_nonempty "$out_pdf"
 }
 
+render_svg_png() {
+  local svg="$1"
+  local out_png="$2"
+
+  rm -f "$out_png"
+  SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-0}" rsvg-convert --format=png --output "$out_png" "$svg"
+  assert_fresh_nonempty "$out_png"
+}
+
 render_plantuml() {
   local src="$1"
   local stem
@@ -88,8 +97,7 @@ render_plantuml() {
   assert_fresh_nonempty "$out_svg"
 
   echo "Generating ${stem}.png"
-  "${PLANTUML[@]}" -tpng -o "$out_dir" "$src"
-  assert_fresh_nonempty "$out_png"
+  render_svg_png "$out_svg" "$out_png"
 
   echo "Generating ${stem}.pdf"
   render_svg_pdf "$out_svg" "$out_pdf"
