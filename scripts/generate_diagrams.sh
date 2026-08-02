@@ -30,6 +30,16 @@ EOF
   exit 1
 fi
 
+if ! command -v rsvg-convert >/dev/null 2>&1; then
+  cat <<'EOF'
+rsvg-convert is required to render PDF diagram artifacts.
+
+Install the librsvg2-bin package, then re-run:
+  bash ./scripts/generate_diagrams.sh
+EOF
+  exit 1
+fi
+
 mkdir -p "$out_dir"
 run_epoch="$(date +%s)"
 
@@ -54,87 +64,13 @@ assert_fresh_nonempty() {
   fi
 }
 
-build_system_pdf_classpath() {
-  local plantuml_jar=""
-
-  if [[ -n "${PLANTUML_JAR:-}" ]] && [[ -f "${PLANTUML_JAR}" ]]; then
-    plantuml_jar="$PLANTUML_JAR"
-  elif [[ -f "/usr/share/plantuml/plantuml.jar" ]]; then
-    plantuml_jar="/usr/share/plantuml/plantuml.jar"
-  else
-    local plantuml_bin
-    plantuml_bin="$(command -v plantuml || true)"
-    if [[ -n "$plantuml_bin" ]] && [[ -f "$plantuml_bin" ]]; then
-      plantuml_jar="$(sed -n 's|.*-jar[[:space:]]\([^[:space:]]\+\.jar\).*|\1|p' "$plantuml_bin" | head -n 1)"
-      if [[ -n "$plantuml_jar" ]]; then
-        plantuml_jar="$(eval echo "$plantuml_jar")"
-      fi
-    fi
-  fi
-
-  shopt -s nullglob
-  local jars=(
-    "$plantuml_jar"
-    /opt/plantuml*/plantuml*.jar
-    /usr/share/java/plantuml*.jar
-    /usr/share/java/batik*.jar
-    /usr/share/java/xml-apis*.jar
-    /usr/share/java/xmlgraphics-commons*.jar
-  )
-  shopt -u nullglob
-
-  if [[ "${#jars[@]}" -eq 0 ]]; then
-    return 1
-  fi
-
-  local cp
-  cp="$(IFS=:; echo "${jars[*]}")"
-  printf '%s' "$cp"
-}
-
-render_pdf_with_system_classpath() {
-  local src="$1"
+render_svg_pdf() {
+  local svg="$1"
   local out_pdf="$2"
 
-  if ! command -v java >/dev/null 2>&1; then
-    return 1
-  fi
-
-  local classpath
-  classpath="$(build_system_pdf_classpath)" || return 1
-
   rm -f "$out_pdf"
-  set +e
-  java -cp "$classpath" net.sourceforge.plantuml.Run -tpdf -o "$out_dir" "$src"
-  local rc=$?
-  set -e
-  if [[ $rc -ne 0 ]]; then
-    return 1
-  fi
-
+  SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-0}" rsvg-convert --format=pdf --output "$out_pdf" "$svg"
   assert_fresh_nonempty "$out_pdf"
-}
-
-render_plantuml_pdf() {
-  local src="$1"
-  local out_pdf="$2"
-
-  if render_pdf_with_system_classpath "$src" "$out_pdf"; then
-    return 0
-  fi
-
-  rm -f "$out_pdf"
-  set +e
-  "${PLANTUML[@]}" -tpdf -o "$out_dir" "$src"
-  local fallback_rc=$?
-  set -e
-
-  if [[ $fallback_rc -eq 0 ]] && assert_fresh_nonempty "$out_pdf"; then
-    return 0
-  fi
-
-  echo "Failed to generate PDF for $src" >&2
-  return 1
 }
 
 render_plantuml() {
@@ -156,7 +92,7 @@ render_plantuml() {
   assert_fresh_nonempty "$out_png"
 
   echo "Generating ${stem}.pdf"
-  render_plantuml_pdf "$src" "$out_pdf"
+  render_svg_pdf "$out_svg" "$out_pdf"
 }
 
 found=0

@@ -934,7 +934,9 @@ struct adc_api final
     }
 
     std::uint16_t sample = 0U;
-    struct adc_sequence sequence{};
+    struct adc_sequence sequence
+    {
+    };
     sequence.channels = BIT(channel);
     sequence.buffer = &sample;
     sequence.buffer_size = sizeof(sample);
@@ -966,7 +968,9 @@ struct adc_api final
     static struct k_poll_signal signal;
     k_poll_signal_init(&signal);
 
-    struct adc_sequence sequence{};
+    struct adc_sequence sequence
+    {
+    };
     sequence.channels = BIT(channel);
     sequence.buffer = &sample;
     sequence.buffer_size = sizeof(sample);
@@ -1039,7 +1043,9 @@ struct dac_api final
       return false;
     }
 
-    struct dac_channel_cfg channel_cfg{};
+    struct dac_channel_cfg channel_cfg
+    {
+    };
     channel_cfg.channel_id = dac_channel_index<Config>();
 #if defined(CONFIG_DAC_INIT_PRIORITY)
     channel_cfg.resolution = 12U;
@@ -1127,7 +1133,9 @@ struct can_api final
       return false;
     }
 
-    struct can_frame frame{};
+    struct can_frame frame
+    {
+    };
     frame.id = msg.id;
     frame.dlc = static_cast<std::uint8_t>((msg.dlc > 8U) ? 8U : msg.dlc);
 #if defined(CAN_FRAME_IDE)
@@ -1164,7 +1172,9 @@ struct can_api final
       return false;
     }
 
-    struct can_frame frame{};
+    struct can_frame frame
+    {
+    };
     if (k_msgq_get(rx_msgq, &frame, K_NO_WAIT) != 0)
     {
       return false;
@@ -1231,7 +1241,9 @@ struct can_api final
       return false;
     }
 
-    struct can_filter filter{};
+    struct can_filter filter
+    {
+    };
     filter.id = id;
     filter.mask = mask;
     (void)fifo;
@@ -1524,12 +1536,16 @@ struct dma_api final
       return false;
     }
 
-    struct dma_block_config block_cfg{};
+    struct dma_block_config block_cfg
+    {
+    };
     block_cfg.source_address = src_addr;
     block_cfg.dest_address = dst_addr;
     block_cfg.block_size = length;
 
-    struct dma_config dma_cfg{};
+    struct dma_config dma_cfg
+    {
+    };
     dma_cfg.channel_direction = MEMORY_TO_MEMORY;
     dma_cfg.source_data_size = 1U;
     dma_cfg.dest_data_size = 1U;
@@ -1629,7 +1645,9 @@ struct watchdog_api final
       return false;
     }
 
-    struct wdt_timeout_cfg timeout_cfg{};
+    struct wdt_timeout_cfg timeout_cfg
+    {
+    };
     timeout_cfg.window.min = Config::window_mode ? (Config::timeout_ms / 2U) : 0U;
     timeout_cfg.window.max = Config::timeout_ms;
     timeout_cfg.callback = nullptr;

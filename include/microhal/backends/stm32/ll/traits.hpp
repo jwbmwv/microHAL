@@ -1706,8 +1706,8 @@ template <typename Config> consteval std::uint32_t dma_destination_increment_mod
 }
 
 template <typename Config>
-static auto dma_init(std::uint32_t src_addr, std::uint32_t dst_addr, std::uint32_t length) noexcept
-    -> LL_DMA_InitTypeDef
+static auto dma_init(std::uint32_t src_addr, std::uint32_t dst_addr,
+                     std::uint32_t length) noexcept -> LL_DMA_InitTypeDef
 {
 #if MICROHAL_STM32_LL_DMA_RUNTIME == 0
   (void)src_addr;

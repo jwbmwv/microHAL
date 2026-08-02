@@ -18,9 +18,11 @@ All source diagrams include `theme.puml` to enforce consistent colors, typograph
 The CI diagram job uses this rendering toolchain baseline:
 
 - PlantUML `1.2025.10` (downloaded as a pinned jar)
-- Batik `1.17` (`libbatik-java`)
 - Graphviz `dot` from `graphviz` package
 - Java Runtime from `default-jre-headless`
+- `rsvg-convert` from the `librsvg2-bin` package for PDF artifacts
+
+PDF generation defaults `SOURCE_DATE_EPOCH` to `0`, making the committed PDF artifacts reproducible. Set that variable to a different epoch when a consuming build requires it.
 
 ## Generated Artifacts
 
