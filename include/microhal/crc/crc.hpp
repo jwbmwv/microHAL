@@ -52,6 +52,26 @@ struct accelerator final
     return crc_api_t<Backend>::template calculate<Config>(data);
   }
 
+  /**
+   * @brief Computes a non-reflected CRC using the configured 32-bit polynomial.
+   * @details This portable fallback uses the caller-supplied initial and final XOR values.
+   */
+  [[nodiscard]] static constexpr std::uint32_t
+  calculate_software(const std::span<const std::uint8_t> data, const std::uint32_t initial = 0xFFFF'FFFFU,
+                     const std::uint32_t final_xor = 0U) noexcept
+  {
+    std::uint32_t crc = initial;
+    for (const std::uint8_t byte : data)
+    {
+      crc ^= static_cast<std::uint32_t>(byte) << 24U;
+      for (std::uint8_t bit = 0U; bit < 8U; ++bit)
+      {
+        crc = ((crc & 0x8000'0000U) != 0U) ? ((crc << 1U) ^ Config::polynomial) : (crc << 1U);
+      }
+    }
+    return crc ^ final_xor;
+  }
+
   static inline void reset() noexcept
   {
     crc_api_t<Backend>::template reset<Config>();

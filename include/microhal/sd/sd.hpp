@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <limits>
 #include <span>
 
 #include "microhal/core/concepts.hpp"
@@ -64,6 +65,19 @@ struct card final
   [[nodiscard]] static inline status read_blocks(const std::uint32_t start_block,
                                                  const std::span<std::uint8_t> buffer) noexcept
   {
+    const std::uint32_t block_size = block_size_bytes;
+    if ((block_size == 0U) || buffer.empty() || ((buffer.size() % block_size) != 0U))
+    {
+      return status::invalid_argument;
+    }
+
+    const std::size_t blocks = buffer.size() / block_size;
+    if ((blocks > std::numeric_limits<std::uint32_t>::max()) ||
+        (static_cast<std::uint32_t>(blocks) > (std::numeric_limits<std::uint32_t>::max() - start_block)))
+    {
+      return status::invalid_argument;
+    }
+
     return detail::as_status([start_block, buffer]
                              { return sd_api_t<Backend>::template read_blocks<Config>(start_block, buffer); });
   }
@@ -71,6 +85,19 @@ struct card final
   [[nodiscard]] static inline status write_blocks(const std::uint32_t start_block,
                                                   const std::span<const std::uint8_t> buffer) noexcept
   {
+    const std::uint32_t block_size = block_size_bytes;
+    if ((block_size == 0U) || buffer.empty() || ((buffer.size() % block_size) != 0U))
+    {
+      return status::invalid_argument;
+    }
+
+    const std::size_t blocks = buffer.size() / block_size;
+    if ((blocks > std::numeric_limits<std::uint32_t>::max()) ||
+        (static_cast<std::uint32_t>(blocks) > (std::numeric_limits<std::uint32_t>::max() - start_block)))
+    {
+      return status::invalid_argument;
+    }
+
     return detail::as_status([start_block, buffer]
                              { return sd_api_t<Backend>::template write_blocks<Config>(start_block, buffer); });
   }
@@ -78,6 +105,15 @@ struct card final
   [[nodiscard]] static inline status erase_blocks(const std::uint32_t start_block,
                                                   const std::uint32_t block_count) noexcept
   {
+    if ((block_count == 0U) || (block_count > (std::numeric_limits<std::uint32_t>::max() - start_block)))
+    {
+      return status::invalid_argument;
+    }
+    if (!backend_traits<Backend>::sd_capability().erase)
+    {
+      return status::unsupported;
+    }
+
     return detail::as_status([start_block, block_count]
                              { return sd_api_t<Backend>::template erase_blocks<Config>(start_block, block_count); });
   }
@@ -85,6 +121,30 @@ struct card final
   [[nodiscard]] static inline result<std::uint32_t> capacity_blocks() noexcept
   {
     return detail::as_result<std::uint32_t>([] { return sd_api_t<Backend>::template capacity_blocks<Config>(); });
+  }
+
+  [[nodiscard]] static inline bool is_valid_range(const std::uint32_t start_block,
+                                                  const std::uint32_t block_count) noexcept
+  {
+    if ((block_count == 0U) || (block_count > (std::numeric_limits<std::uint32_t>::max() - start_block)))
+    {
+      return false;
+    }
+
+    const result<std::uint32_t> capacity = capacity_blocks();
+    return capacity && (start_block <= capacity.value()) && (block_count <= (capacity.value() - start_block));
+  }
+
+  [[nodiscard]] static inline status read_block(const std::uint32_t block,
+                                               const std::span<std::uint8_t> buffer) noexcept
+  {
+    return (buffer.size() == block_size_bytes) ? read_blocks(block, buffer) : status::invalid_argument;
+  }
+
+  [[nodiscard]] static inline status write_block(const std::uint32_t block,
+                                                const std::span<const std::uint8_t> buffer) noexcept
+  {
+    return (buffer.size() == block_size_bytes) ? write_blocks(block, buffer) : status::invalid_argument;
   }
 };
 

@@ -10,8 +10,10 @@
 // Tests: All 5 backends with identical configurations to ensure portability
 
 #include <array>
+#include <type_traits>
 
 #include "microhal/adc/adc.hpp"
+#include "microhal/dac/dac.hpp"
 #include "microhal/ethernet/ethernet.hpp"
 #include "microhal/flash/flash.hpp"
 #include "microhal/gpio/gpio.hpp"
@@ -29,6 +31,7 @@ using backend_stm32_ll = microhal::stm32_ll_tag;
 using backend_kinetis = microhal::kinetis_espresso_tag;
 using backend_zephyr = microhal::zephyr_tag;
 using backend_nuttx = microhal::nuttx_tag;
+using backend_nordic = microhal::nordic_nrf_tag;
 
 // Common configurations (portable across backends)
 using gpio_led = microhal::gpio::pin_config<0U, 5U, microhal::gpio_mode::output>;
@@ -43,6 +46,7 @@ using timer_common = microhal::timers::timer_config<1U, 1000000U, microhal::time
                                                     microhal::timer_clock_source::internal>;
 using adc_common =
     microhal::adc::adc_config<1U, microhal::adc_resolution::bits_12, microhal::adc_sample_time::cycles_84>;
+using dac_common = microhal::dac::dac_config<1U, 1U, microhal::dac_resolution::bits_12>;
 using pwm_common = microhal::pwm::pwm_config<1U, 1U, 1000U>;
 
 struct stm32_ethernet_binding final
@@ -82,10 +86,8 @@ template <typename Backend> struct backend_validator
 
   // Storage and timing
   static_assert(microhal::RtcConcept<Backend, rtc_common>);
-  static_assert(microhal::TimerConcept<Backend, timer_common>);
 
   // Analog and control
-  static_assert(microhal::AdcConcept<Backend, adc_common>);
   static_assert(microhal::PwmConcept<Backend, pwm_common>);
 
   // Capability queries
@@ -95,8 +97,10 @@ template <typename Backend> struct backend_validator
   static_assert(microhal::backend_traits<Backend>::uart_capability().supported);
   static_assert(microhal::backend_traits<Backend>::rtc_capability().supported);
   static_assert(microhal::backend_traits<Backend>::flash_capability().supported);
-  static_assert(microhal::backend_traits<Backend>::timer_capability().supported);
-  static_assert(microhal::backend_traits<Backend>::adc_capability().supported);
+  static_assert(microhal::peripheral_available<Backend, microhal::peripheral_kind::timer>() ==
+                !std::is_same_v<Backend, backend_nuttx>);
+  static_assert(microhal::peripheral_available<Backend, microhal::peripheral_kind::adc>() ==
+                !std::is_same_v<Backend, backend_nuttx>);
   static_assert(microhal::backend_traits<Backend>::pwm_capability().supported);
 
   // Backend metadata
@@ -112,46 +116,83 @@ using validator_kinetis = backend_validator<backend_kinetis>;
 using validator_zephyr = backend_validator<backend_zephyr>;
 using validator_nuttx = backend_validator<backend_nuttx>;
 
+static_assert(microhal::TimerConcept<backend_stm32_hal, timer_common>);
+static_assert(microhal::TimerConcept<backend_stm32_ll, timer_common>);
+static_assert(microhal::TimerConcept<backend_kinetis, timer_common>);
+static_assert(microhal::TimerConcept<backend_zephyr, timer_common>);
+static_assert(microhal::TimerConcept<microhal::mock_tag, timer_common>);
+static_assert(microhal::AdcConcept<backend_stm32_hal, adc_common>);
+static_assert(microhal::AdcConcept<backend_stm32_ll, adc_common>);
+static_assert(microhal::AdcConcept<backend_kinetis, adc_common>);
+static_assert(microhal::AdcConcept<backend_zephyr, adc_common>);
+static_assert(microhal::AdcConcept<microhal::mock_tag, adc_common>);
+static_assert(microhal::DacConcept<backend_stm32_hal, dac_common>);
+static_assert(microhal::DacConcept<backend_stm32_ll, dac_common>);
+static_assert(microhal::DacConcept<backend_kinetis, dac_common>);
+static_assert(microhal::DacConcept<backend_zephyr, dac_common>);
+static_assert(microhal::DacConcept<microhal::mock_tag, dac_common>);
+static_assert(!microhal::peripheral_available<backend_nuttx, microhal::peripheral_kind::timer>());
+static_assert(!microhal::peripheral_available<backend_nuttx, microhal::peripheral_kind::dac>());
+static_assert(!microhal::peripheral_available<backend_nordic, microhal::peripheral_kind::timer>());
+static_assert(!microhal::peripheral_available<backend_nordic, microhal::peripheral_kind::adc>());
+static_assert(!microhal::peripheral_available<backend_nordic, microhal::peripheral_kind::dac>());
+
 // Cross-backend capability comparison
 static_assert(microhal::backend_traits<backend_stm32_hal>::gpio_capability().alternate_function);
 static_assert(microhal::backend_traits<backend_stm32_ll>::gpio_capability().alternate_function);
 static_assert(microhal::backend_traits<backend_kinetis>::gpio_capability().alternate_function);
 static_assert(microhal::backend_traits<backend_zephyr>::gpio_capability().alternate_function);
-static_assert(microhal::backend_traits<backend_nuttx>::gpio_capability().alternate_function);
+static_assert(!microhal::backend_traits<backend_nuttx>::gpio_capability().alternate_function);
 
 // Verify ISR support across backends
 static_assert(microhal::backend_traits<backend_stm32_hal>::gpio_capability().isr);
 static_assert(microhal::backend_traits<backend_stm32_ll>::gpio_capability().isr);
 static_assert(microhal::backend_traits<backend_kinetis>::gpio_capability().isr);
 static_assert(microhal::backend_traits<backend_zephyr>::gpio_capability().isr);
-static_assert(microhal::backend_traits<backend_nuttx>::gpio_capability().isr);
+static_assert(!microhal::backend_traits<backend_nuttx>::gpio_capability().isr);
 
 // Verify DMA support across backends
 static_assert(microhal::backend_traits<backend_stm32_hal>::uart_capability().dma);
 static_assert(microhal::backend_traits<backend_stm32_ll>::uart_capability().dma);
 static_assert(!microhal::backend_traits<backend_kinetis>::uart_capability().dma);
 static_assert(microhal::backend_traits<backend_zephyr>::uart_capability().dma);
-static_assert(microhal::backend_traits<backend_nuttx>::uart_capability().dma);
+static_assert(!microhal::backend_traits<backend_nuttx>::uart_capability().dma);
 
 // Verify blocking support (should be universal)
 static_assert(microhal::backend_traits<backend_stm32_hal>::i2c_capability().blocking);
 static_assert(microhal::backend_traits<backend_stm32_ll>::i2c_capability().blocking);
+#if MICROHAL_KINETIS_SDK_PRESENT &&                                                                                    \
+    ((MICROHAL_KINETIS_HAS_I2C_DRIVER && defined(I2C0)) || (MICROHAL_KINETIS_HAS_LPI2C_DRIVER && defined(LPI2C1)))
 static_assert(microhal::backend_traits<backend_kinetis>::i2c_capability().blocking);
+#else
+static_assert(!microhal::backend_traits<backend_kinetis>::i2c_capability().blocking);
+#endif
 static_assert(microhal::backend_traits<backend_zephyr>::i2c_capability().blocking);
 static_assert(!microhal::backend_traits<backend_nuttx>::i2c_capability().supported);
 static_assert(!microhal::backend_traits<backend_nuttx>::spi_capability().supported);
 
-// These backend APIs are intentionally unavailable until their runtime paths
-// use real vendor or RTOS operations.
+// QSPI and USB availability follows each backend's concrete hardware/SDK path.
 #if MICROHAL_STM32_LL_HAS_QSPI
 static_assert(microhal::backend_traits<backend_stm32_ll>::qspi_capability().supported);
 #else
 static_assert(!microhal::backend_traits<backend_stm32_ll>::qspi_capability().supported);
 #endif
 static_assert(!microhal::backend_traits<backend_stm32_ll>::can_capability().supported);
+#if MICROHAL_STM32_LL_FAMILY_SELECTED != 0
+static_assert(microhal::backend_traits<backend_stm32_ll>::usb_capability().supported);
+#else
 static_assert(!microhal::backend_traits<backend_stm32_ll>::usb_capability().supported);
+#endif
+#if MICROHAL_KINETIS_SDK_PRESENT && (defined(USB0) || defined(USBHS) || defined(USB))
+static_assert(microhal::backend_traits<backend_kinetis>::usb_capability().supported);
+#else
 static_assert(!microhal::backend_traits<backend_kinetis>::usb_capability().supported);
+#endif
+#if defined(CONFIG_FLASH)
+static_assert(microhal::backend_traits<backend_zephyr>::qspi_capability().supported);
+#else
 static_assert(!microhal::backend_traits<backend_zephyr>::qspi_capability().supported);
+#endif
 
 // Backend kind verification
 static_assert(microhal::backend_traits<backend_stm32_hal>::kind == microhal::backend_kind::stm32_cube_hal);
@@ -198,9 +239,17 @@ static_assert(microhal::backend_traits<backend_stm32_ll>::sd_capability().suppor
 static_assert(!microhal::backend_traits<backend_stm32_ll>::sd_capability().supported);
 #endif
 static_assert(!microhal::backend_traits<backend_kinetis>::ethernet_capability().supported);
+#if MICROHAL_KINETIS_SDK_PRESENT && (defined(SDHC) || defined(USDHC1))
 static_assert(microhal::backend_traits<backend_kinetis>::sd_capability().supported);
+#else
+static_assert(!microhal::backend_traits<backend_kinetis>::sd_capability().supported);
+#endif
 static_assert(microhal::backend_traits<backend_zephyr>::ethernet_capability().supported);
+#if defined(CONFIG_SDHC) || defined(CONFIG_DISK_ACCESS)
 static_assert(microhal::backend_traits<backend_zephyr>::sd_capability().supported);
+#else
+static_assert(!microhal::backend_traits<backend_zephyr>::sd_capability().supported);
+#endif
 static_assert(!microhal::backend_traits<backend_nuttx>::ethernet_capability().supported);
 static_assert(!microhal::backend_traits<backend_nuttx>::sd_capability().supported);
 

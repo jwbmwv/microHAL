@@ -72,6 +72,15 @@ struct pin final
   }
 
   /**
+   * @brief Toggles the output latch using a backend-native operation.
+   * @details Backends without a native toggle primitive report @ref status::unsupported.
+   */
+  [[nodiscard]] static inline status toggle() noexcept
+  {
+    return detail::as_status([] { return gpio_api_t<Backend>::template toggle<PinConfig>(); });
+  }
+
+  /**
    * @brief Enables the backend interrupt route for this pin.
    * @tparam Handler ISR callback invoked by the backend when the configured edge/level occurs.
    */

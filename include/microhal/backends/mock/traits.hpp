@@ -31,9 +31,12 @@ namespace microhal::backends::mock
 enum class operation : std::uint8_t
 {
   configure,
+  toggle,
   initialize,
   write,
   read,
+  probe,
+  write_read,
   transfer,
   erase,
   program,
@@ -45,7 +48,13 @@ enum class operation : std::uint8_t
   abort,
   set_filter,
   enable_interrupt,
-  set_duty_cycle
+  set_duty_cycle,
+  memory_map,
+  set_period,
+  capture,
+  query,
+  reset_counter,
+  period_read
 };
 
 /// @brief One recorded backend call.
@@ -76,12 +85,18 @@ struct recorder final
 
   /// @brief Byte pattern handed back by read-style operations.
   inline static std::uint8_t read_fill{0xA5U};
+  inline static status i2c_result{status::ok};
 
   /// @brief Level reported by @ref gpio_api::read.
   inline static bool gpio_level{false};
 
   /// @brief Monotonic counter returned by @ref timer_api::counter.
   inline static std::uint32_t timer_count{0U};
+  inline static std::uint32_t timer_capture{0U};
+  inline static std::uint32_t timer_period{0U};
+
+  inline static bool qspi_memory_mapped{false};
+  inline static dma_transfer_state dma_state{dma_transfer_state::idle};
 
   /// @brief Synthetic RTC state used by @ref rtc_api.
   inline static std::uint8_t rtc_hours{0U};
@@ -103,8 +118,13 @@ struct recorder final
     fail_after = 0U;
     failure_armed = false;
     read_fill = 0xA5U;
+    i2c_result = status::ok;
     gpio_level = false;
     timer_count = 0U;
+    timer_capture = 0U;
+    timer_period = 0U;
+    qspi_memory_mapped = false;
+    dma_state = dma_transfer_state::idle;
     rtc_hours = 0U;
     rtc_minutes = 0U;
     rtc_seconds = 0U;
@@ -184,6 +204,16 @@ struct gpio_api final
     return recorder::gpio_level;
   }
 
+  template <typename PinConfig> static status toggle() noexcept
+  {
+    if (!recorder::step(peripheral_kind::gpio, operation::toggle, PinConfig::pin_index))
+    {
+      return status::error;
+    }
+    recorder::gpio_level = !recorder::gpio_level;
+    return status::ok;
+  }
+
   template <typename PinConfig, auto Handler> static bool enable_interrupt() noexcept
   {
     return recorder::step(peripheral_kind::gpio, operation::enable_interrupt, PinConfig::pin_index);
@@ -260,6 +290,48 @@ struct i2c_api final
     return recorder::step(peripheral_kind::i2c, operation::read, address, payload.size());
   }
 
+  template <typename Config> static status probe(const std::uint16_t address) noexcept
+  {
+    (void)sizeof(Config);
+    if (!recorder::step(peripheral_kind::i2c, operation::probe, address))
+    {
+      return status::error;
+    }
+    return recorder::i2c_result;
+  }
+
+  template <typename Config>
+  static status write_read_blocking(const std::span<const std::uint8_t> tx_payload,
+                                    const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
+  {
+    for (std::uint8_t& byte : rx_payload)
+    {
+      byte = recorder::read_fill;
+    }
+
+    if (!recorder::step(peripheral_kind::i2c, operation::write_read, address, tx_payload.size() + rx_payload.size()))
+    {
+      return status::error;
+    }
+    return recorder::i2c_result;
+  }
+
+  template <typename Config, auto Handler>
+  static status write_read_async(const std::span<const std::uint8_t> tx_payload,
+                                 const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
+  {
+    const status result = write_read_blocking<Config>(tx_payload, rx_payload, address);
+    if constexpr (requires { Handler(result); })
+    {
+      Handler(result);
+    }
+    else if constexpr (requires { Handler(); })
+    {
+      Handler();
+    }
+    return result;
+  }
+
   template <typename Config, auto Handler>
   static bool start_transfer(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
   {
@@ -285,6 +357,20 @@ struct spi_api final
     return recorder::step(peripheral_kind::spi, operation::transfer, Config::instance_index, tx_payload.size());
   }
 
+  template <typename Config> static bool write_blocking(const std::span<const std::uint8_t> payload) noexcept
+  {
+    return recorder::step(peripheral_kind::spi, operation::write, Config::instance_index, payload.size());
+  }
+
+  template <typename Config> static bool read_blocking(const std::span<std::uint8_t> payload) noexcept
+  {
+    for (std::uint8_t& byte : payload)
+    {
+      byte = 0xFFU;
+    }
+    return recorder::step(peripheral_kind::spi, operation::read, Config::instance_index, payload.size());
+  }
+
   template <typename Config, auto Handler>
   static bool transfer_async(const std::span<const std::uint8_t> tx_payload,
                              const std::span<std::uint8_t> rx_payload) noexcept
@@ -300,6 +386,45 @@ struct qspi_api final
   {
     (void)sizeof(Config);
     return recorder::step(peripheral_kind::qspi, operation::initialize);
+  }
+
+  template <typename Config>
+  static bool command_write(const qspi_command& request, const std::span<const std::uint8_t> payload) noexcept
+  {
+    (void)sizeof(Config);
+    return recorder::step(peripheral_kind::qspi, operation::write, request.instruction, payload.size());
+  }
+
+  template <typename Config>
+  static bool command_read(const qspi_command& request, const std::span<std::uint8_t> payload) noexcept
+  {
+    (void)sizeof(Config);
+    if (!recorder::step(peripheral_kind::qspi, operation::read, request.instruction, payload.size()))
+    {
+      return false;
+    }
+    for (std::uint8_t& byte : payload)
+    {
+      byte = recorder::read_fill;
+    }
+    return true;
+  }
+
+  template <typename Config> static bool enter_memory_mapped(const qspi_command& request) noexcept
+  {
+    (void)sizeof(Config);
+    (void)request;
+    const bool success = recorder::step(peripheral_kind::qspi, operation::memory_map, 1U);
+    recorder::qspi_memory_mapped = success;
+    return success;
+  }
+
+  template <typename Config> static bool exit_memory_mapped() noexcept
+  {
+    (void)sizeof(Config);
+    const bool success = recorder::step(peripheral_kind::qspi, operation::memory_map, 0U);
+    recorder::qspi_memory_mapped = !success;
+    return success;
   }
 };
 
@@ -343,13 +468,72 @@ struct timer_api final
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
-    return recorder::step(peripheral_kind::timer, operation::initialize);
+    if (!recorder::step(peripheral_kind::timer, operation::initialize))
+    {
+      return false;
+    }
+    recorder::timer_period = Config::period;
+    return true;
+  }
+
+  template <typename Config> static bool start() noexcept
+  {
+    (void)sizeof(Config);
+    return recorder::step(peripheral_kind::timer, operation::start);
+  }
+
+  template <typename Config> static bool stop() noexcept
+  {
+    (void)sizeof(Config);
+    return recorder::step(peripheral_kind::timer, operation::stop);
+  }
+
+  template <typename Config> static bool set_period(const std::uint32_t period) noexcept
+  {
+    (void)sizeof(Config);
+    if (!recorder::step(peripheral_kind::timer, operation::set_period, period))
+    {
+      return false;
+    }
+    recorder::timer_period = period;
+    return true;
+  }
+
+  template <typename Config> static bool reset_counter() noexcept
+  {
+    (void)sizeof(Config);
+    if (!recorder::step(peripheral_kind::timer, operation::reset_counter))
+    {
+      return false;
+    }
+    recorder::timer_count = 0U;
+    return true;
+  }
+
+  template <typename Config> static result<std::uint32_t> period() noexcept
+  {
+    (void)sizeof(Config);
+    if (!recorder::step(peripheral_kind::timer, operation::period_read))
+    {
+      return status::error;
+    }
+    return recorder::timer_period;
   }
 
   template <typename Config> static std::uint32_t counter() noexcept
   {
     recorder::record(peripheral_kind::timer, operation::read);
     return recorder::timer_count++;
+  }
+
+  template <typename Config, typename ChannelConfig> static result<std::uint32_t> capture_value() noexcept
+  {
+    (void)sizeof(Config);
+    if (!recorder::step(peripheral_kind::timer, operation::capture, ChannelConfig::channel_index))
+    {
+      return status::error;
+    }
+    return recorder::timer_capture;
   }
 };
 
@@ -363,9 +547,12 @@ struct adc_api final
     return recorder::step(peripheral_kind::adc, operation::initialize, Config::instance_index);
   }
 
-  template <typename Config> static std::uint16_t read_blocking(const std::uint8_t channel) noexcept
+  template <typename Config> static result<std::uint16_t> read_blocking(const std::uint8_t channel) noexcept
   {
-    recorder::record(peripheral_kind::adc, operation::read, channel);
+    if (!recorder::step(peripheral_kind::adc, operation::read, channel))
+    {
+      return status::error;
+    }
     return sample;
   }
 
@@ -640,14 +827,37 @@ struct dma_api final
   static bool start_transfer(const std::uint32_t src_addr, const std::uint32_t dst_addr,
                              const std::uint32_t length) noexcept
   {
-    (void)Handler;
-    return recorder::step(peripheral_kind::dma, operation::transfer, src_addr ^ dst_addr, length);
+    const bool success = recorder::step(peripheral_kind::dma, operation::transfer, src_addr ^ dst_addr, length);
+    recorder::dma_state = success ? dma_transfer_state::complete : dma_transfer_state::error;
+    if constexpr (requires { Handler(); })
+    {
+      if (success)
+      {
+        Handler();
+      }
+    }
+    return success;
   }
 
   template <typename Config> static bool abort() noexcept
   {
     (void)sizeof(Config);
-    return recorder::step(peripheral_kind::dma, operation::abort);
+    const bool success = recorder::step(peripheral_kind::dma, operation::abort);
+    if (success)
+    {
+      recorder::dma_state = dma_transfer_state::idle;
+    }
+    return success;
+  }
+
+  template <typename Config> static result<dma_transfer_state> transfer_status() noexcept
+  {
+    (void)sizeof(Config);
+    if (!recorder::step(peripheral_kind::dma, operation::query))
+    {
+      return status::error;
+    }
+    return recorder::dma_state;
   }
 };
 
@@ -671,6 +881,13 @@ struct flash_api final
       byte = recorder::read_fill;
     }
     return recorder::step(peripheral_kind::flash, operation::read, address, data.size());
+  }
+
+  template <typename Config> static result<flash_erase_region> erase_region(const std::uint32_t address) noexcept
+  {
+    constexpr std::uint32_t erase_size = Config::erase_size_bytes;
+    const std::uint32_t start_address = address - (address % erase_size);
+    return flash_erase_region{.start_address = start_address, .size_bytes = erase_size};
   }
 };
 
@@ -740,8 +957,15 @@ struct i2s_api final
   template <typename Config, auto Handler>
   static bool start_dma_tx(const std::span<const std::uint16_t> samples) noexcept
   {
-    (void)Handler;
-    return recorder::step(peripheral_kind::i2s, operation::start, 0U, samples.size());
+    const bool completed = recorder::step(peripheral_kind::i2s, operation::start, 0U, samples.size());
+    if (completed)
+    {
+      if constexpr (requires { Handler(); })
+      {
+        Handler();
+      }
+    }
+    return completed;
   }
 };
 
@@ -869,7 +1093,8 @@ template <> struct backend_traits<mock_tag> final
             .alternate_function = true,
             .alternate_function_count = gpio_alternate_function_count,
             .port_count = gpio_port_count,
-            .pins_per_port = gpio_pins_per_port};
+            .pins_per_port = gpio_pins_per_port,
+            .output_toggle = true};
   }
 
   static consteval struct i2c_capability i2c_capability() noexcept
@@ -880,7 +1105,10 @@ template <> struct backend_traits<mock_tag> final
             .isr = true,
             .dma = false,
             .instance_count = 4U,
-            .max_frequency_hz = 1'000'000U};
+            .max_frequency_hz = 1'000'000U,
+            .ten_bit_addressing = true,
+            .repeated_start = true,
+            .address_probe = true};
   }
 
   static consteval struct spi_capability spi_capability() noexcept
@@ -891,7 +1119,10 @@ template <> struct backend_traits<mock_tag> final
             .isr = true,
             .dma = false,
             .instance_count = 4U,
-            .max_frequency_hz = 50'000'000U};
+            .max_frequency_hz = 50'000'000U,
+            .transmit_only = true,
+            .receive_only = true,
+            .async_transfer = true};
   }
 
   static consteval struct qspi_capability qspi_capability() noexcept
@@ -904,8 +1135,12 @@ template <> struct backend_traits<mock_tag> final
             .instance_count = 1U,
             .max_frequency_hz = 80'000'000U,
             .quad_mode = true,
+            .dual_mode = true,
             .octo_mode = false,
-            .ddr_mode = false};
+            .ddr_mode = false,
+            .command_transfer = true,
+            .memory_mapped = true,
+            .max_address_bytes = 4U};
   }
 
   static consteval struct uart_capability uart_capability() noexcept
@@ -920,7 +1155,12 @@ template <> struct backend_traits<mock_tag> final
             .fifo = true,
             .lpuart = false,
             .autobaud = false,
-            .fifo_depth = 16U};
+            .fifo_depth = 16U,
+            .parity = true,
+            .two_stop_bits = true,
+            .one_and_half_stop_bits = true,
+            .hardware_flow_control = false,
+            .max_baud_rate = 10'000'000U};
   }
 
   static consteval struct rtc_capability rtc_capability() noexcept
@@ -933,7 +1173,9 @@ template <> struct backend_traits<mock_tag> final
             .instance_count = 1U,
             .max_frequency_hz = 0U,
             .periodic = true,
-            .alarm = true};
+            .alarm = true,
+            .calendar = false,
+            .subsecond = false};
   }
 
   static consteval struct flash_capability flash_capability() noexcept
@@ -946,7 +1188,9 @@ template <> struct backend_traits<mock_tag> final
             .instance_count = 1U,
             .max_frequency_hz = 0U,
             .alignment_bytes = 4U,
-            .erase_bytes = 2'048U};
+            .erase_bytes = 2'048U,
+            .erase_region_query = true,
+            .program_readback = true};
   }
 
   static consteval struct timer_capability timer_capability() noexcept
@@ -961,7 +1205,9 @@ template <> struct backend_traits<mock_tag> final
             .capture_compare = true,
             .periodic = true,
             .pwm = true,
-            .channel_count = 4U};
+            .channel_count = 4U,
+            .period_readback = true,
+            .counter_reset = true};
   }
 
   static consteval struct adc_capability adc_capability() noexcept
@@ -976,7 +1222,9 @@ template <> struct backend_traits<mock_tag> final
             .resolution_bits = 12U,
             .channel_count = 16U,
             .differential = false,
-            .oversampling = false};
+            .oversampling = false,
+            .sequential_scan = true,
+            .voltage_conversion = true};
   }
 
   static consteval struct dac_capability dac_capability() noexcept
@@ -991,7 +1239,10 @@ template <> struct backend_traits<mock_tag> final
             .resolution_bits = 12U,
             .channel_count = 2U,
             .dual_mode = true,
-            .waveform_generation = true};
+            .waveform_generation = true,
+            .output_buffer = true,
+            .voltage_conversion = true,
+            .sequence_write = true};
   }
 
   static consteval struct can_capability can_capability() noexcept
@@ -1006,7 +1257,10 @@ template <> struct backend_traits<mock_tag> final
             .can_fd = true,
             .time_triggered = true,
             .mailbox_count = 8U,
-            .filter_banks = 8U};
+            .filter_banks = 8U,
+            .extended_ids = true,
+            .remote_frames = true,
+            .rx_interrupt = true};
   }
 
   static consteval struct usb_capability usb_capability() noexcept
@@ -1022,7 +1276,10 @@ template <> struct backend_traits<mock_tag> final
             .host = true,
             .otg = true,
             .high_speed = true,
-            .endpoint_count = 8U};
+            .endpoint_count = 8U,
+            .endpoint_transfer = true,
+            .endpoint_stall = false,
+            .max_packet_size_bytes = 64U};
   }
 
   static consteval struct ethernet_capability ethernet_capability() noexcept
@@ -1054,7 +1311,11 @@ template <> struct backend_traits<mock_tag> final
             .uhs = true,
             .bus_width_4 = true,
             .bus_width_8 = true,
-            .block_size_bytes = 512U};
+            .block_size_bytes = 512U,
+            .block_io = true,
+            .erase = true,
+            .capacity_query = true,
+            .bus_width_1 = true};
   }
 
   static consteval struct dma_capability dma_capability() noexcept
@@ -1070,7 +1331,11 @@ template <> struct backend_traits<mock_tag> final
             .channel_count = 8U,
             .mem_to_mem = true,
             .fifo = true,
-            .double_buffer = true};
+            .double_buffer = true,
+            .transfer_status = true,
+            .abort = true,
+            .completion_callback = true,
+            .address_width_bits = 32U};
   }
 
   static consteval struct pwm_capability pwm_capability() noexcept
@@ -1084,7 +1349,9 @@ template <> struct backend_traits<mock_tag> final
             .max_frequency_hz = 1'000'000U,
             .channel_count = 4U,
             .complementary_output = false,
-            .dead_time = false};
+            .dead_time = false,
+            .runtime_duty_update = true,
+            .runtime_start_stop = true};
   }
 
   static consteval struct watchdog_capability watchdog_capability() noexcept
@@ -1099,7 +1366,9 @@ template <> struct backend_traits<mock_tag> final
             .independent = true,
             .window = false,
             .min_timeout_ms = 1U,
-            .max_timeout_ms = 32'000U};
+            .max_timeout_ms = 32'000U,
+            .runtime_refresh = true,
+            .reset_on_timeout = true};
   }
 
   static consteval struct i2s_capability i2s_capability() noexcept
@@ -1112,8 +1381,13 @@ template <> struct backend_traits<mock_tag> final
             .instance_count = 2U,
             .max_frequency_hz = 24'000'000U,
             .full_duplex = true,
+            .master_mode = true,
+            .slave_mode = true,
             .master_clock_output = true,
-            .max_sample_rate = 192'000U};
+            .max_sample_rate = 192'000U,
+            .transmit_dma = true,
+            .receive_dma = false,
+            .sample_bits = 16U};
   }
 
   static consteval struct rcc_capability rcc_capability() noexcept
@@ -1128,7 +1402,10 @@ template <> struct backend_traits<mock_tag> final
             .pll_config = true,
             .hse = true,
             .lse = true,
-            .max_system_clock_hz = 100'000'000U};
+            .max_system_clock_hz = 100'000'000U,
+            .clock_configuration = true,
+            .peripheral_clock_gating = true,
+            .system_clock_readback = true};
   }
 
   static consteval struct crc_capability crc_capability() noexcept
@@ -1142,7 +1419,10 @@ template <> struct backend_traits<mock_tag> final
             .max_frequency_hz = 100'000'000U,
             .hardware_crc32 = true,
             .programmable_polynomial = true,
-            .random_number_generator = true};
+            .random_number_generator = true,
+            .seed_configurable = false,
+            .output_xor_configurable = false,
+            .checksum_width_bits = 32U};
   }
 
   template <typename PinConfig> static consteval bool is_valid_gpio_pin() noexcept

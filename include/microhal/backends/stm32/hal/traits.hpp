@@ -414,6 +414,40 @@ constexpr std::uint32_t flash_sector_span(const std::uint32_t address, const std
 #endif
 }
 
+constexpr result<flash_erase_region> flash_erase_region_at(const std::uint32_t address) noexcept
+{
+#if defined(FLASH_TYPEERASE_PAGES)
+#if defined(FLASH_PAGE_SIZE)
+  constexpr std::uint32_t page_size = FLASH_PAGE_SIZE;
+#else
+  constexpr std::uint32_t page_size = 2048U;
+#endif
+  if (address < FLASH_BASE)
+  {
+    return status::invalid_argument;
+  }
+  const std::uint32_t offset = address - FLASH_BASE;
+  const std::uint32_t start = FLASH_BASE + (offset / page_size) * page_size;
+  return flash_erase_region{.start_address = start, .size_bytes = page_size};
+#elif defined(FLASH_TYPEERASE_SECTORS) && defined(FLASH_SECTOR_0)
+  constexpr std::array<std::uint32_t, 13U> boundaries{0x08000000U, 0x08004000U, 0x08008000U, 0x0800C000U, 0x08010000U,
+                                                      0x08020000U, 0x08040000U, 0x08060000U, 0x08080000U, 0x080A0000U,
+                                                      0x080C0000U, 0x080E0000U, 0x08100000U};
+  for (std::size_t index = 0U; index + 1U < boundaries.size(); ++index)
+  {
+    if ((address >= boundaries[index]) && (address < boundaries[index + 1U]))
+    {
+      return flash_erase_region{.start_address = boundaries[index],
+                                .size_bytes = boundaries[index + 1U] - boundaries[index]};
+    }
+  }
+  return status::invalid_argument;
+#else
+  (void)address;
+  return status::unsupported;
+#endif
+}
+
 inline constexpr std::uint32_t uart_instance_count =
 #if defined(USART1)
     1U +
@@ -1368,6 +1402,17 @@ struct gpio_api final
 #endif
   }
 
+  template <typename PinConfig> static status toggle() noexcept
+  {
+#if defined(GPIOA)
+    HAL_GPIO_TogglePin(gpio_port<gpio_port_index<PinConfig>()>(), (1U << gpio_pin_index<PinConfig>()));
+    return status::ok;
+#else
+    (void)sizeof(PinConfig);
+    return status::unsupported;
+#endif
+  }
+
   template <typename PinConfig, auto Handler> static void enable_interrupt() noexcept
   {
 #if defined(GPIOA)
@@ -1400,11 +1445,186 @@ struct gpio_api final
 struct i2c_api final
 {
 #if MICROHAL_STM32_HAL_HAS_I2C
+  static status error_status(I2C_HandleTypeDef& handle_storage) noexcept
+  {
+    const std::uint32_t error = HAL_I2C_GetError(&handle_storage);
+#if defined(HAL_I2C_ERROR_AF)
+    if ((error & HAL_I2C_ERROR_AF) != 0U)
+    {
+      return status::io_error;
+    }
+#endif
+#if defined(HAL_I2C_ERROR_TIMEOUT)
+    if ((error & HAL_I2C_ERROR_TIMEOUT) != 0U)
+    {
+      return status::timeout;
+    }
+#endif
+#if defined(HAL_I2C_ERROR_BERR) || defined(HAL_I2C_ERROR_ARLO) || defined(HAL_I2C_ERROR_OVR)
+    if (
+#if defined(HAL_I2C_ERROR_BERR)
+        ((error & HAL_I2C_ERROR_BERR) != 0U) ||
+#endif
+#if defined(HAL_I2C_ERROR_ARLO)
+        ((error & HAL_I2C_ERROR_ARLO) != 0U) ||
+#endif
+#if defined(HAL_I2C_ERROR_OVR)
+        ((error & HAL_I2C_ERROR_OVR) != 0U) ||
+#endif
+        false)
+    {
+      return status::io_error;
+    }
+#endif
+    return (error == HAL_I2C_ERROR_NONE) ? status::ok : status::error;
+  }
+
+  static status transfer_status(const HAL_StatusTypeDef result, I2C_HandleTypeDef& handle_storage) noexcept
+  {
+    if (result == HAL_OK)
+    {
+      return status::ok;
+    }
+    if (result == HAL_TIMEOUT)
+    {
+      return status::timeout;
+    }
+    if (result == HAL_BUSY)
+    {
+      return status::busy;
+    }
+    const status error = error_status(handle_storage);
+    return (error == status::ok) ? status::error : error;
+  }
+
   template <typename Config> static auto& handle() noexcept
   {
     static I2C_HandleTypeDef handle_storage{};
     return handle_storage;
   }
+
+#if defined(I2C_FIRST_FRAME) && defined(I2C_LAST_FRAME)
+  static void abort_and_wait(I2C_HandleTypeDef& handle_storage, const std::uint16_t device_address,
+                             const std::uint32_t timeout_ms) noexcept
+  {
+    if (HAL_I2C_Master_Abort_IT(&handle_storage, device_address) != HAL_OK)
+    {
+      return;
+    }
+
+    const std::uint32_t start = HAL_GetTick();
+    while ((HAL_I2C_GetState(&handle_storage) != HAL_I2C_STATE_READY) &&
+           ((HAL_GetTick() - start) < timeout_ms))
+    {
+    }
+  }
+#endif
+
+#if defined(I2C_FIRST_FRAME) && defined(I2C_LAST_FRAME) && defined(USE_HAL_I2C_REGISTER_CALLBACKS) &&               \
+    (USE_HAL_I2C_REGISTER_CALLBACKS == 1)
+  template <typename Config, auto Handler> struct async_sequence_state final
+  {
+    std::span<const std::uint8_t> tx_payload{};
+    std::span<std::uint8_t> rx_payload{};
+    std::uint16_t device_address{0U};
+    bool active{false};
+    void (*previous_tx_callback)(I2C_HandleTypeDef*){nullptr};
+    void (*previous_rx_callback)(I2C_HandleTypeDef*){nullptr};
+    void (*previous_error_callback)(I2C_HandleTypeDef*){nullptr};
+  };
+
+  template <typename Config, auto Handler> static auto& async_state() noexcept
+  {
+    static async_sequence_state<Config, Handler> state{};
+    return state;
+  }
+
+  template <typename Config, auto Handler> static void notify_completion(const status result) noexcept
+  {
+    if constexpr (requires { Handler(result); })
+    {
+      Handler(result);
+    }
+    else if constexpr (requires { Handler(); })
+    {
+      Handler();
+    }
+  }
+
+  template <typename Config, auto Handler> static void restore_callbacks() noexcept
+  {
+    auto& state = async_state<Config, Handler>();
+    auto& handle_storage = handle<Config>();
+    handle_storage.MasterTxCpltCallback = state.previous_tx_callback;
+    handle_storage.MasterRxCpltCallback = state.previous_rx_callback;
+    handle_storage.ErrorCallback = state.previous_error_callback;
+    state.active = false;
+  }
+
+  template <typename Config, auto Handler>
+  static void async_read_complete(I2C_HandleTypeDef* const handle_storage) noexcept
+  {
+    auto& state = async_state<Config, Handler>();
+    if (!state.active || (handle_storage != &handle<Config>()))
+    {
+      return;
+    }
+
+    const auto previous_callback = state.previous_rx_callback;
+    const status result = error_status(*handle_storage);
+    restore_callbacks<Config, Handler>();
+    if (previous_callback != nullptr)
+    {
+      previous_callback(handle_storage);
+    }
+    notify_completion<Config, Handler>(result);
+  }
+
+  template <typename Config, auto Handler>
+  static void async_error(I2C_HandleTypeDef* const handle_storage) noexcept
+  {
+    auto& state = async_state<Config, Handler>();
+    if (!state.active || (handle_storage != &handle<Config>()))
+    {
+      return;
+    }
+
+    const auto previous_callback = state.previous_error_callback;
+    const status error = error_status(*handle_storage);
+    const status result = (error == status::ok) ? status::error : error;
+    restore_callbacks<Config, Handler>();
+    if (previous_callback != nullptr)
+    {
+      previous_callback(handle_storage);
+    }
+    notify_completion<Config, Handler>(result);
+  }
+
+  template <typename Config, auto Handler>
+  static void async_write_complete(I2C_HandleTypeDef* const handle_storage) noexcept
+  {
+    auto& state = async_state<Config, Handler>();
+    if (!state.active || (handle_storage != &handle<Config>()))
+    {
+      return;
+    }
+
+    const auto previous_callback = state.previous_tx_callback;
+    const HAL_StatusTypeDef receive_status =
+        HAL_I2C_Master_Seq_Receive_IT(handle_storage, state.device_address, state.rx_payload.data(),
+                                      static_cast<std::uint16_t>(state.rx_payload.size()), I2C_LAST_FRAME);
+    if (previous_callback != nullptr)
+    {
+      previous_callback(handle_storage);
+    }
+    if (receive_status != HAL_OK)
+    {
+      const status result = transfer_status(receive_status, *handle_storage);
+      restore_callbacks<Config, Handler>();
+      notify_completion<Config, Handler>(result);
+    }
+  }
+#endif
 #endif
 
   template <typename Config> static bool initialize() noexcept
@@ -1442,41 +1662,178 @@ struct i2c_api final
   }
 
   template <typename Config>
-  static bool write_blocking(std::span<const std::uint8_t> payload, const std::uint16_t address) noexcept
+  static status write_blocking(std::span<const std::uint8_t> payload, const std::uint16_t address) noexcept
   {
 #if MICROHAL_STM32_HAL_HAS_I2C
     auto& handle_storage = handle<Config>();
     constexpr std::uint32_t timeout_ms = timeout_for<Config>();
-    if (HAL_I2C_Master_Transmit(&handle_storage, static_cast<std::uint16_t>(address << 1U),
-                                hal_tx_buffer(payload.data()), static_cast<std::uint16_t>(payload.size()),
-                                timeout_ms) == HAL_OK) [[likely]]
-    {
-      return true;
-    }
-    return false;
+    const std::uint16_t device_address =
+        (Config::address_mode == i2c_address_mode::seven_bit) ? static_cast<std::uint16_t>(address << 1U) : address;
+    return transfer_status(HAL_I2C_Master_Transmit(&handle_storage, device_address,
+                                                   hal_tx_buffer(payload.data()),
+                                                   static_cast<std::uint16_t>(payload.size()), timeout_ms),
+                           handle_storage);
 #else
     (void)payload;
     (void)address;
-    return false;
+    return status::unsupported;
 #endif
   }
 
   template <typename Config>
-  static bool read_blocking(std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
+  static status read_blocking(std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
   {
 #if MICROHAL_STM32_HAL_HAS_I2C
     auto& handle_storage = handle<Config>();
     constexpr std::uint32_t timeout_ms = timeout_for<Config>();
-    if (HAL_I2C_Master_Receive(&handle_storage, static_cast<std::uint16_t>(address << 1U), payload.data(),
-                               static_cast<std::uint16_t>(payload.size()), timeout_ms) == HAL_OK) [[likely]]
-    {
-      return true;
-    }
-    return false;
+    const std::uint16_t device_address =
+        (Config::address_mode == i2c_address_mode::seven_bit) ? static_cast<std::uint16_t>(address << 1U) : address;
+    return transfer_status(HAL_I2C_Master_Receive(&handle_storage, device_address, payload.data(),
+                                                  static_cast<std::uint16_t>(payload.size()), timeout_ms),
+                           handle_storage);
 #else
     (void)payload;
     (void)address;
-    return false;
+    return status::unsupported;
+#endif
+  }
+
+  template <typename Config> static status probe(const std::uint16_t address) noexcept
+  {
+#if MICROHAL_STM32_HAL_HAS_I2C
+    auto& handle_storage = handle<Config>();
+    constexpr std::uint32_t timeout_ms = timeout_for<Config>();
+    const std::uint16_t device_address =
+        (Config::address_mode == i2c_address_mode::seven_bit) ? static_cast<std::uint16_t>(address << 1U) : address;
+    return transfer_status(HAL_I2C_IsDeviceReady(&handle_storage, device_address, 1U, timeout_ms), handle_storage);
+#else
+    (void)address;
+    return status::unsupported;
+#endif
+  }
+
+  template <typename Config>
+  static status write_read_blocking(const std::span<const std::uint8_t> tx_payload,
+                                    const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
+  {
+#if MICROHAL_STM32_HAL_HAS_I2C && defined(I2C_FIRST_FRAME) && defined(I2C_LAST_FRAME)
+    if ((tx_payload.size() > UINT16_MAX) || (rx_payload.size() > UINT16_MAX))
+    {
+      return status::invalid_argument;
+    }
+
+    auto& handle_storage = handle<Config>();
+    if (HAL_I2C_GetState(&handle_storage) != HAL_I2C_STATE_READY)
+    {
+      return status::busy;
+    }
+
+    const std::uint16_t device_address =
+        (Config::address_mode == i2c_address_mode::seven_bit) ? static_cast<std::uint16_t>(address << 1U) : address;
+    const std::uint32_t timeout_ms = timeout_for<Config>();
+    const std::uint32_t operation_start = HAL_GetTick();
+    handle_storage.ErrorCode = HAL_I2C_ERROR_NONE;
+
+    const HAL_StatusTypeDef transmit_status =
+        HAL_I2C_Master_Seq_Transmit_IT(&handle_storage, device_address, hal_tx_buffer(tx_payload.data()),
+                                       static_cast<std::uint16_t>(tx_payload.size()), I2C_FIRST_FRAME);
+    const status transmit_result = transfer_status(transmit_status, handle_storage);
+    if (transmit_result != status::ok)
+    {
+      return transmit_result;
+    }
+
+    while (handle_storage.XferCount != 0U)
+    {
+      const status error = error_status(handle_storage);
+      if (error != status::ok)
+      {
+        return error;
+      }
+      if ((HAL_GetTick() - operation_start) >= timeout_ms)
+      {
+        abort_and_wait(handle_storage, device_address, timeout_ms);
+        return status::timeout;
+      }
+    }
+
+    const HAL_StatusTypeDef receive_status =
+        HAL_I2C_Master_Seq_Receive_IT(&handle_storage, device_address, rx_payload.data(),
+                                      static_cast<std::uint16_t>(rx_payload.size()), I2C_LAST_FRAME);
+    const status receive_result = transfer_status(receive_status, handle_storage);
+    if (receive_result != status::ok)
+    {
+      return receive_result;
+    }
+
+    while (handle_storage.XferCount != 0U)
+    {
+      const status error = error_status(handle_storage);
+      if (error != status::ok)
+      {
+        return error;
+      }
+      if ((HAL_GetTick() - operation_start) >= timeout_ms)
+      {
+        abort_and_wait(handle_storage, device_address, timeout_ms);
+        return status::timeout;
+      }
+    }
+    return error_status(handle_storage);
+#else
+    (void)tx_payload;
+    (void)rx_payload;
+    (void)address;
+    return status::unsupported;
+#endif
+  }
+
+  template <typename Config, auto Handler>
+  static status write_read_async(const std::span<const std::uint8_t> tx_payload,
+                                 const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
+  {
+#if MICROHAL_STM32_HAL_HAS_I2C && defined(I2C_FIRST_FRAME) && defined(I2C_LAST_FRAME) &&                         \
+    defined(USE_HAL_I2C_REGISTER_CALLBACKS) && (USE_HAL_I2C_REGISTER_CALLBACKS == 1)
+    if ((tx_payload.size() > UINT16_MAX) || (rx_payload.size() > UINT16_MAX))
+    {
+      return status::invalid_argument;
+    }
+
+    auto& state = async_state<Config, Handler>();
+    if (state.active)
+    {
+      return status::busy;
+    }
+
+    auto& handle_storage = handle<Config>();
+    state.tx_payload = tx_payload;
+    state.rx_payload = rx_payload;
+    state.device_address =
+        (Config::address_mode == i2c_address_mode::seven_bit) ? static_cast<std::uint16_t>(address << 1U) : address;
+    state.previous_tx_callback = handle_storage.MasterTxCpltCallback;
+    state.previous_rx_callback = handle_storage.MasterRxCpltCallback;
+    state.previous_error_callback = handle_storage.ErrorCallback;
+    state.active = true;
+
+    handle_storage.MasterTxCpltCallback = async_write_complete<Config, Handler>;
+    handle_storage.MasterRxCpltCallback = async_read_complete<Config, Handler>;
+    handle_storage.ErrorCallback = async_error<Config, Handler>;
+
+    const HAL_StatusTypeDef result =
+        HAL_I2C_Master_Seq_Transmit_IT(&handle_storage, state.device_address, hal_tx_buffer(tx_payload.data()),
+                                       static_cast<std::uint16_t>(tx_payload.size()), I2C_FIRST_FRAME);
+    if (result != HAL_OK)
+    {
+      restore_callbacks<Config, Handler>();
+      return transfer_status(result, handle_storage);
+    }
+    return status::ok;
+#else
+    (void)tx_payload;
+    (void)rx_payload;
+    (void)address;
+    (void)Handler;
+    return status::unsupported;
 #endif
   }
 
@@ -1503,11 +1860,101 @@ struct i2c_api final
 struct spi_api final
 {
 #if MICROHAL_STM32_HAL_HAS_SPI
+  static status transfer_status(const HAL_StatusTypeDef result) noexcept
+  {
+    if (result == HAL_OK)
+    {
+      return status::ok;
+    }
+    if (result == HAL_TIMEOUT)
+    {
+      return status::timeout;
+    }
+    if (result == HAL_BUSY)
+    {
+      return status::busy;
+    }
+    return status::error;
+  }
+
   template <typename Config> static auto& handle() noexcept
   {
     static SPI_HandleTypeDef handle_storage{};
     return handle_storage;
   }
+
+#if defined(USE_HAL_SPI_REGISTER_CALLBACKS) && (USE_HAL_SPI_REGISTER_CALLBACKS == 1)
+  template <typename Config, auto Handler> struct async_state final
+  {
+    bool active{false};
+    void (*previous_complete_callback)(SPI_HandleTypeDef*){nullptr};
+    void (*previous_error_callback)(SPI_HandleTypeDef*){nullptr};
+  };
+
+  template <typename Config, auto Handler> static auto& state() noexcept
+  {
+    static async_state<Config, Handler> transfer_state{};
+    return transfer_state;
+  }
+
+  template <typename Config, auto Handler> static void notify_completion(const status result) noexcept
+  {
+    if constexpr (requires { Handler(result); })
+    {
+      Handler(result);
+    }
+    else if constexpr (requires { Handler(); })
+    {
+      Handler();
+    }
+  }
+
+  template <typename Config, auto Handler> static void restore_callbacks() noexcept
+  {
+    auto& transfer_state = state<Config, Handler>();
+    auto& handle_storage = handle<Config>();
+    handle_storage.TxRxCpltCallback = transfer_state.previous_complete_callback;
+    handle_storage.ErrorCallback = transfer_state.previous_error_callback;
+    transfer_state.active = false;
+  }
+
+  template <typename Config, auto Handler>
+  static void async_complete(SPI_HandleTypeDef* const handle_storage) noexcept
+  {
+    auto& transfer_state = state<Config, Handler>();
+    if (!transfer_state.active || (handle_storage != &handle<Config>()))
+    {
+      return;
+    }
+
+    const auto previous_callback = transfer_state.previous_complete_callback;
+    restore_callbacks<Config, Handler>();
+    if (previous_callback != nullptr)
+    {
+      previous_callback(handle_storage);
+    }
+    notify_completion<Config, Handler>(status::ok);
+  }
+
+  template <typename Config, auto Handler>
+  static void async_error(SPI_HandleTypeDef* const handle_storage) noexcept
+  {
+    auto& transfer_state = state<Config, Handler>();
+    if (!transfer_state.active || (handle_storage != &handle<Config>()))
+    {
+      return;
+    }
+
+    const auto previous_callback = transfer_state.previous_error_callback;
+    const status result = (HAL_SPI_GetError(handle_storage) == HAL_SPI_ERROR_NONE) ? status::error : status::io_error;
+    restore_callbacks<Config, Handler>();
+    if (previous_callback != nullptr)
+    {
+      previous_callback(handle_storage);
+    }
+    notify_completion<Config, Handler>(result);
+  }
+#endif
 #endif
 
   template <typename Config> static bool initialize() noexcept
@@ -1555,22 +2002,74 @@ struct spi_api final
 #endif
   }
 
-  template <typename Config, auto Handler>
-  static bool transfer_async(std::span<const std::uint8_t> tx_payload, std::span<std::uint8_t> rx_payload) noexcept
+  template <typename Config> static status write_blocking(const std::span<const std::uint8_t> payload) noexcept
   {
 #if MICROHAL_STM32_HAL_HAS_SPI
-    auto& handle_storage = handle<Config>();
-    if (HAL_SPI_TransmitReceive_IT(&handle_storage, hal_tx_buffer(tx_payload.data()), rx_payload.data(),
-                                   static_cast<std::uint16_t>(tx_payload.size())) == HAL_OK) [[likely]]
+    if (payload.size() > UINT16_MAX)
     {
-      return true;
+      return status::invalid_argument;
     }
-    return false;
+    auto& handle_storage = handle<Config>();
+    return transfer_status(HAL_SPI_Transmit(&handle_storage, hal_tx_buffer(payload.data()),
+                                            static_cast<std::uint16_t>(payload.size()), timeout_for<Config>()));
+#else
+    (void)payload;
+    return status::unsupported;
+#endif
+  }
+
+  template <typename Config> static status read_blocking(const std::span<std::uint8_t> payload) noexcept
+  {
+#if MICROHAL_STM32_HAL_HAS_SPI
+    if (payload.size() > UINT16_MAX)
+    {
+      return status::invalid_argument;
+    }
+    auto& handle_storage = handle<Config>();
+    return transfer_status(
+        HAL_SPI_Receive(&handle_storage, payload.data(), static_cast<std::uint16_t>(payload.size()), timeout_for<Config>()));
+#else
+    (void)payload;
+    return status::unsupported;
+#endif
+  }
+
+  template <typename Config, auto Handler>
+  static status transfer_async(std::span<const std::uint8_t> tx_payload, std::span<std::uint8_t> rx_payload) noexcept
+  {
+#if MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_SPI_REGISTER_CALLBACKS) &&                                    \
+    (USE_HAL_SPI_REGISTER_CALLBACKS == 1)
+    if ((tx_payload.size() > UINT16_MAX) || (rx_payload.size() > UINT16_MAX))
+    {
+      return status::invalid_argument;
+    }
+
+    auto& transfer_state = state<Config, Handler>();
+    if (transfer_state.active)
+    {
+      return status::busy;
+    }
+
+    auto& handle_storage = handle<Config>();
+    transfer_state.previous_complete_callback = handle_storage.TxRxCpltCallback;
+    transfer_state.previous_error_callback = handle_storage.ErrorCallback;
+    transfer_state.active = true;
+    handle_storage.TxRxCpltCallback = async_complete<Config, Handler>;
+    handle_storage.ErrorCallback = async_error<Config, Handler>;
+
+    const HAL_StatusTypeDef result = HAL_SPI_TransmitReceive_IT(
+        &handle_storage, hal_tx_buffer(tx_payload.data()), rx_payload.data(), static_cast<std::uint16_t>(tx_payload.size()));
+    if (result == HAL_OK) [[likely]]
+    {
+      return status::ok;
+    }
+    restore_callbacks<Config, Handler>();
+    return transfer_status(result);
 #else
     (void)tx_payload;
     (void)rx_payload;
     (void)Handler;
-    return false;
+    return status::unsupported;
 #endif
   }
 };
@@ -1578,12 +2077,131 @@ struct spi_api final
 struct qspi_api final
 {
 #if defined(QUADSPI)
-  static inline QSPI_HandleTypeDef handle_storage{};
+  template <typename Config> static auto& handle() noexcept
+  {
+    static QSPI_HandleTypeDef handle_storage{};
+    return handle_storage;
+  }
+
+  static bool instruction_mode(const qspi_io_mode mode, std::uint32_t& hal_mode) noexcept
+  {
+    switch (mode)
+    {
+    case qspi_io_mode::none:
+      hal_mode = QSPI_INSTRUCTION_NONE;
+      return true;
+    case qspi_io_mode::single:
+      hal_mode = QSPI_INSTRUCTION_1_LINE;
+      return true;
+    case qspi_io_mode::dual:
+      hal_mode = QSPI_INSTRUCTION_2_LINES;
+      return true;
+    case qspi_io_mode::quad:
+      hal_mode = QSPI_INSTRUCTION_4_LINES;
+      return true;
+    case qspi_io_mode::octo:
+      return false;
+    }
+    return false;
+  }
+
+  static bool address_mode(const qspi_io_mode mode, std::uint32_t& hal_mode) noexcept
+  {
+    switch (mode)
+    {
+    case qspi_io_mode::none:
+      hal_mode = QSPI_ADDRESS_NONE;
+      return true;
+    case qspi_io_mode::single:
+      hal_mode = QSPI_ADDRESS_1_LINE;
+      return true;
+    case qspi_io_mode::dual:
+      hal_mode = QSPI_ADDRESS_2_LINES;
+      return true;
+    case qspi_io_mode::quad:
+      hal_mode = QSPI_ADDRESS_4_LINES;
+      return true;
+    case qspi_io_mode::octo:
+      return false;
+    }
+    return false;
+  }
+
+  static bool data_mode(const qspi_io_mode mode, std::uint32_t& hal_mode) noexcept
+  {
+    switch (mode)
+    {
+    case qspi_io_mode::none:
+      hal_mode = QSPI_DATA_NONE;
+      return true;
+    case qspi_io_mode::single:
+      hal_mode = QSPI_DATA_1_LINE;
+      return true;
+    case qspi_io_mode::dual:
+      hal_mode = QSPI_DATA_2_LINES;
+      return true;
+    case qspi_io_mode::quad:
+      hal_mode = QSPI_DATA_4_LINES;
+      return true;
+    case qspi_io_mode::octo:
+      return false;
+    }
+    return false;
+  }
+
+  static bool address_size(const std::uint8_t bytes, std::uint32_t& hal_size) noexcept
+  {
+    switch (bytes)
+    {
+    case 0U:
+      hal_size = QSPI_ADDRESS_NONE;
+      return true;
+    case 1U:
+      hal_size = QSPI_ADDRESS_8_BITS;
+      return true;
+    case 2U:
+      hal_size = QSPI_ADDRESS_16_BITS;
+      return true;
+    case 3U:
+      hal_size = QSPI_ADDRESS_24_BITS;
+      return true;
+    case 4U:
+      hal_size = QSPI_ADDRESS_32_BITS;
+      return true;
+    default:
+      return false;
+    }
+  }
+
+  static bool prepare_command(const qspi_command& request, const std::uint32_t data_length,
+                              QSPI_CommandTypeDef& hal_command) noexcept
+  {
+    if (!instruction_mode(request.instruction_mode, hal_command.InstructionMode) ||
+        !address_mode(request.address_mode, hal_command.AddressMode) ||
+        !data_mode(request.data_mode, hal_command.DataMode) ||
+        !address_size(request.address_size_bytes, hal_command.AddressSize))
+    {
+      return false;
+    }
+
+    hal_command.Instruction = request.instruction;
+    hal_command.Address = request.address;
+    hal_command.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE;
+    hal_command.AlternateBytes = 0U;
+    hal_command.AlternateBytesSize = QSPI_ALTERNATE_BYTES_8_BITS;
+    hal_command.DummyCycles = request.dummy_cycles;
+    hal_command.NbData = data_length;
+    hal_command.DdrMode = QSPI_DDR_MODE_DISABLE;
+    hal_command.DdrHoldHalfCycle = QSPI_DDR_HHC_ANALOG_DELAY;
+    hal_command.SIOOMode = QSPI_SIOO_INST_EVERY_CMD;
+    return true;
+  }
 #endif
 
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(QUADSPI)
+    auto& handle_storage = handle<Config>();
     handle_storage.Instance = QUADSPI;
     handle_storage.Init.ClockPrescaler = 1U;
     handle_storage.Init.FifoThreshold = 4U;
@@ -1599,6 +2217,89 @@ struct qspi_api final
     return false;
 #else
     return false;
+#endif
+  }
+
+  template <typename Config>
+  static status command_write(const qspi_command& request, const std::span<const std::uint8_t> payload) noexcept
+  {
+#if defined(QUADSPI)
+    auto& handle_storage = handle<Config>();
+    QSPI_CommandTypeDef hal_command{};
+    if (!prepare_command(request, static_cast<std::uint32_t>(payload.size()), hal_command))
+    {
+      return status::unsupported;
+    }
+    if (HAL_QSPI_Command(&handle_storage, &hal_command, timeout_for<Config>()) != HAL_OK)
+    {
+      return status::error;
+    }
+    if (payload.empty() || (HAL_QSPI_Transmit(&handle_storage, const_cast<std::uint8_t*>(payload.data()),
+                                              timeout_for<Config>()) == HAL_OK))
+    {
+      return status::ok;
+    }
+    return status::error;
+#else
+    (void)request;
+    (void)payload;
+    return status::unsupported;
+#endif
+  }
+
+  template <typename Config>
+  static status command_read(const qspi_command& request, const std::span<std::uint8_t> payload) noexcept
+  {
+#if defined(QUADSPI)
+    auto& handle_storage = handle<Config>();
+    QSPI_CommandTypeDef hal_command{};
+    if (!prepare_command(request, static_cast<std::uint32_t>(payload.size()), hal_command))
+    {
+      return status::unsupported;
+    }
+    if (HAL_QSPI_Command(&handle_storage, &hal_command, timeout_for<Config>()) != HAL_OK)
+    {
+      return status::error;
+    }
+    if (payload.empty() || (HAL_QSPI_Receive(&handle_storage, payload.data(), timeout_for<Config>()) == HAL_OK))
+    {
+      return status::ok;
+    }
+    return status::error;
+#else
+    (void)request;
+    (void)payload;
+    return status::unsupported;
+#endif
+  }
+
+  template <typename Config> static status enter_memory_mapped(const qspi_command& request) noexcept
+  {
+#if defined(QUADSPI)
+    auto& handle_storage = handle<Config>();
+    QSPI_CommandTypeDef hal_command{};
+    if (!prepare_command(request, 0U, hal_command))
+    {
+      return status::unsupported;
+    }
+
+    QSPI_MemoryMappedTypeDef memory_mapped{};
+    memory_mapped.TimeOutActivation = QSPI_TIMEOUT_COUNTER_DISABLE;
+    memory_mapped.TimeOutPeriod = 0U;
+    return (HAL_QSPI_MemoryMapped(&handle_storage, &hal_command, &memory_mapped) == HAL_OK) ? status::ok
+                                                                                            : status::error;
+#else
+    (void)request;
+    return status::unsupported;
+#endif
+  }
+
+  template <typename Config> static status exit_memory_mapped() noexcept
+  {
+#if defined(QUADSPI)
+    return (HAL_QSPI_Abort(&handle<Config>()) == HAL_OK) ? status::ok : status::error;
+#else
+    return status::unsupported;
 #endif
   }
 };
@@ -1619,9 +2320,38 @@ struct uart_api final
     auto& handle_storage = handle<Config>();
     handle_storage.Instance = peripheral_instance<USART_TypeDef, Config>();
     handle_storage.Init.BaudRate = Config::baud_rate;
-    handle_storage.Init.WordLength = UART_WORDLENGTH_8B;
-    handle_storage.Init.StopBits = UART_STOPBITS_1;
-    handle_storage.Init.Parity = UART_PARITY_NONE;
+    if constexpr (Config::parity == uart_parity::none)
+    {
+      handle_storage.Init.WordLength = UART_WORDLENGTH_8B;
+      handle_storage.Init.Parity = UART_PARITY_NONE;
+    }
+    else if constexpr (Config::parity == uart_parity::even)
+    {
+      handle_storage.Init.WordLength = UART_WORDLENGTH_9B;
+      handle_storage.Init.Parity = UART_PARITY_EVEN;
+    }
+    else
+    {
+      handle_storage.Init.WordLength = UART_WORDLENGTH_9B;
+      handle_storage.Init.Parity = UART_PARITY_ODD;
+    }
+
+    if constexpr (Config::stop_bits == uart_stop_bits::one)
+    {
+      handle_storage.Init.StopBits = UART_STOPBITS_1;
+    }
+    else if constexpr (Config::stop_bits == uart_stop_bits::two)
+    {
+      handle_storage.Init.StopBits = UART_STOPBITS_2;
+    }
+    else
+    {
+#if defined(UART_STOPBITS_1_5)
+      handle_storage.Init.StopBits = UART_STOPBITS_1_5;
+#else
+      return false;
+#endif
+    }
     handle_storage.Init.Mode = UART_MODE_TX_RX;
     handle_storage.Init.HwFlowCtl = UART_HWCONTROL_NONE;
     handle_storage.Init.OverSampling = UART_OVERSAMPLING_16;
@@ -1831,9 +2561,39 @@ struct flash_api final
   }
 #endif
 
+  template <typename Config> static result<flash_erase_region> erase_region(const std::uint32_t address) noexcept
+  {
+#if defined(FLASH)
+    (void)sizeof(Config);
+    return flash_erase_region_at(address);
+#else
+    (void)sizeof(Config);
+    (void)address;
+    return status::unsupported;
+#endif
+  }
+
   template <typename Config> static bool erase(const std::uint32_t address, const std::uint32_t bytes) noexcept
   {
 #if defined(FLASH)
+    std::uint64_t cursor = address;
+    std::uint64_t remaining = bytes;
+    while (remaining > 0U)
+    {
+      if (cursor > UINT32_MAX)
+      {
+        return false;
+      }
+      const auto region = erase_region<Config>(static_cast<std::uint32_t>(cursor));
+      if (!region.has_value() || (region.value().start_address != cursor) || (region.value().size_bytes == 0U) ||
+          (region.value().size_bytes > remaining))
+      {
+        return false;
+      }
+      cursor += region.value().size_bytes;
+      remaining -= region.value().size_bytes;
+    }
+
     HAL_FLASH_Unlock();
 
     FLASH_EraseInitTypeDef erase_init{};
@@ -1870,9 +2630,19 @@ struct flash_api final
   static bool program(const std::uint32_t address, const std::span<const std::uint8_t> data) noexcept
   {
 #if defined(FLASH)
+    if (data.empty())
+    {
+      return false;
+    }
+
     HAL_FLASH_Unlock();
 
 #if defined(FLASH_TYPEPROGRAM_WORD)
+    if (((address % sizeof(std::uint32_t)) != 0U) || ((data.size() % sizeof(std::uint32_t)) != 0U))
+    {
+      HAL_FLASH_Lock();
+      return false;
+    }
     for (std::size_t i = 0U; i < data.size(); i += 4U)
     {
       std::uint32_t word = 0U;
@@ -1888,6 +2658,11 @@ struct flash_api final
       }
     }
 #elif defined(FLASH_TYPEPROGRAM_DOUBLEWORD)
+    if (((address % sizeof(std::uint64_t)) != 0U) || ((data.size() % sizeof(std::uint64_t)) != 0U))
+    {
+      HAL_FLASH_Lock();
+      return false;
+    }
     for (std::size_t i = 0U; i < data.size(); i += 8U)
     {
       std::uint64_t double_word = 0U;
@@ -1952,7 +2727,7 @@ struct timer_api final
     handle_storage.Instance = peripheral_instance<TIM_TypeDef, Config>();
     handle_storage.Init.Prescaler = Config::prescaler;
     handle_storage.Init.CounterMode = TIM_COUNTERMODE_UP;
-    handle_storage.Init.Period = Config::period;
+    handle_storage.Init.Period = Config::period - 1U;
     handle_storage.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
     handle_storage.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
 
@@ -1966,6 +2741,39 @@ struct timer_api final
 #endif
   }
 
+  template <typename Config> static status start() noexcept
+  {
+#if MICROHAL_STM32_HAL_HAS_TIM
+    return (HAL_TIM_Base_Start(&handle<Config>()) == HAL_OK) ? status::ok : status::error;
+#else
+    return status::unsupported;
+#endif
+  }
+
+  template <typename Config> static status stop() noexcept
+  {
+#if MICROHAL_STM32_HAL_HAS_TIM
+    return (HAL_TIM_Base_Stop(&handle<Config>()) == HAL_OK) ? status::ok : status::error;
+#else
+    return status::unsupported;
+#endif
+  }
+
+  template <typename Config> static status set_period(const std::uint32_t period) noexcept
+  {
+#if MICROHAL_STM32_HAL_HAS_TIM
+    if (period == 0U)
+    {
+      return status::invalid_argument;
+    }
+    __HAL_TIM_SET_AUTORELOAD(&handle<Config>(), period - 1U);
+    return status::ok;
+#else
+    (void)period;
+    return status::unsupported;
+#endif
+  }
+
   template <typename Config> static std::uint32_t counter() noexcept
   {
 #if MICROHAL_STM32_HAL_HAS_TIM
@@ -1973,6 +2781,55 @@ struct timer_api final
     return __HAL_TIM_GET_COUNTER(&handle_storage);
 #else
     return 0U;
+#endif
+  }
+
+  template <typename Config> static status reset_counter() noexcept
+  {
+#if MICROHAL_STM32_HAL_HAS_TIM
+    __HAL_TIM_SET_COUNTER(&handle<Config>(), 0U);
+    return status::ok;
+#else
+    return status::unsupported;
+#endif
+  }
+
+  template <typename Config> static result<std::uint32_t> period() noexcept
+  {
+#if MICROHAL_STM32_HAL_HAS_TIM
+    return __HAL_TIM_GET_AUTORELOAD(&handle<Config>()) + 1U;
+#else
+    return status::unsupported;
+#endif
+  }
+
+  template <typename Config, typename ChannelConfig> static result<std::uint32_t> capture_value() noexcept
+  {
+#if MICROHAL_STM32_HAL_HAS_TIM
+    if constexpr (ChannelConfig::channel_index == 1U)
+    {
+      return HAL_TIM_ReadCapturedValue(&handle<Config>(), TIM_CHANNEL_1);
+    }
+    else if constexpr (ChannelConfig::channel_index == 2U)
+    {
+      return HAL_TIM_ReadCapturedValue(&handle<Config>(), TIM_CHANNEL_2);
+    }
+    else if constexpr (ChannelConfig::channel_index == 3U)
+    {
+      return HAL_TIM_ReadCapturedValue(&handle<Config>(), TIM_CHANNEL_3);
+    }
+    else if constexpr (ChannelConfig::channel_index == 4U)
+    {
+      return HAL_TIM_ReadCapturedValue(&handle<Config>(), TIM_CHANNEL_4);
+    }
+    else
+    {
+      return status::invalid_argument;
+    }
+#else
+    (void)sizeof(Config);
+    (void)sizeof(ChannelConfig);
+    return status::unsupported;
 #endif
   }
 };
@@ -1993,7 +2850,32 @@ struct adc_api final
     auto& handle_storage = handle<Config>();
     handle_storage.Instance = peripheral_instance<ADC_TypeDef, Config>();
     handle_storage.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
-    handle_storage.Init.Resolution = ADC_RESOLUTION_12B;
+    if constexpr (Config::resolution == microhal::adc_resolution::bits_12)
+    {
+      handle_storage.Init.Resolution = ADC_RESOLUTION_12B;
+    }
+#if defined(ADC_RESOLUTION_10B)
+    else if constexpr (Config::resolution == microhal::adc_resolution::bits_10)
+    {
+      handle_storage.Init.Resolution = ADC_RESOLUTION_10B;
+    }
+#endif
+#if defined(ADC_RESOLUTION_8B)
+    else if constexpr (Config::resolution == microhal::adc_resolution::bits_8)
+    {
+      handle_storage.Init.Resolution = ADC_RESOLUTION_8B;
+    }
+#endif
+#if defined(ADC_RESOLUTION_6B)
+    else if constexpr (Config::resolution == microhal::adc_resolution::bits_6)
+    {
+      handle_storage.Init.Resolution = ADC_RESOLUTION_6B;
+    }
+#endif
+    else
+    {
+      static_assert(dependent_false_v<Config>, "microHAL: requested ADC resolution is not supported by this STM32.");
+    }
     handle_storage.Init.DataAlign = ADC_DATAALIGN_RIGHT;
 #if defined(ADC_SCAN_DISABLE)
     handle_storage.Init.ScanConvMode = ADC_SCAN_DISABLE;
@@ -2018,7 +2900,7 @@ struct adc_api final
 #endif
   }
 
-  template <typename Config> static std::uint16_t read_blocking(const std::uint8_t channel) noexcept
+  template <typename Config> static result<std::uint16_t> read_blocking(const std::uint8_t channel) noexcept
   {
 #if MICROHAL_STM32_HAL_HAS_ADC
     auto& handle_storage = handle<Config>();
@@ -2031,23 +2913,32 @@ struct adc_api final
     config.SamplingTime = ADC_SAMPLETIME_12CYCLES_5;
 #endif
 
-    if (HAL_ADC_ConfigChannel(&handle_storage, &config) == HAL_OK) [[likely]]
+    if (HAL_ADC_ConfigChannel(&handle_storage, &config) != HAL_OK)
     {
-      if (HAL_ADC_Start(&handle_storage) == HAL_OK) [[likely]]
-      {
-        constexpr std::uint32_t timeout_ms = 100U;
-        if (HAL_ADC_PollForConversion(&handle_storage, timeout_ms) == HAL_OK) [[likely]]
-        {
-          const std::uint16_t value = static_cast<std::uint16_t>(HAL_ADC_GetValue(&handle_storage));
-          HAL_ADC_Stop(&handle_storage);
-          return value;
-        }
-      }
+      return status::error;
     }
-    return 0U;
+    if (HAL_ADC_Start(&handle_storage) != HAL_OK)
+    {
+      return status::error;
+    }
+
+    constexpr std::uint32_t timeout_ms = 100U;
+    const HAL_StatusTypeDef poll_status = HAL_ADC_PollForConversion(&handle_storage, timeout_ms);
+    if (poll_status != HAL_OK)
+    {
+      static_cast<void>(HAL_ADC_Stop(&handle_storage));
+      return (poll_status == HAL_TIMEOUT) ? status::timeout : status::error;
+    }
+
+    const std::uint16_t value = static_cast<std::uint16_t>(HAL_ADC_GetValue(&handle_storage));
+    if (HAL_ADC_Stop(&handle_storage) != HAL_OK)
+    {
+      return status::error;
+    }
+    return value;
 #else
     (void)channel;
-    return 0U;
+    return status::unsupported;
 #endif
   }
 
@@ -2226,25 +3117,31 @@ struct dac_api final
 #endif
   }
 
-  template <typename Config> static void write_blocking(const std::uint16_t value) noexcept
+  template <typename Config> static status write_blocking(const std::uint16_t value) noexcept
   {
 #if MICROHAL_STM32_HAL_HAS_DAC
     auto& handle_storage = handle<Config>();
-    HAL_DAC_SetValue(&handle_storage, channel<Config>(), DAC_ALIGN_12B_R, value);
-    HAL_DAC_Start(&handle_storage, channel<Config>());
+    if (HAL_DAC_SetValue(&handle_storage, channel<Config>(), DAC_ALIGN_12B_R, value) != HAL_OK)
+    {
+      return status::error;
+    }
+    return (HAL_DAC_Start(&handle_storage, channel<Config>()) == HAL_OK) ? status::ok : status::error;
 #else
     (void)value;
+    return status::unsupported;
 #endif
   }
 
-  template <typename Config> static void write_dual(const std::uint16_t value1, const std::uint16_t value2) noexcept
+  template <typename Config> static status write_dual(const std::uint16_t value1, const std::uint16_t value2) noexcept
   {
 #if MICROHAL_STM32_HAL_HAS_DAC
     auto& handle_storage = handle<Config>();
-    HAL_DACEx_DualSetValue(&handle_storage, DAC_ALIGN_12B_R, value1, value2);
+    return (HAL_DACEx_DualSetValue(&handle_storage, DAC_ALIGN_12B_R, value1, value2) == HAL_OK) ? status::ok
+                                                                                                 : status::error;
 #else
     (void)value1;
     (void)value2;
+    return status::unsupported;
 #endif
   }
 
@@ -2840,12 +3737,33 @@ struct dma_api final
     static DMA_HandleTypeDef handle_storage{};
     return handle_storage;
   }
+
+  template <typename Config> static bool& completed() noexcept
+  {
+    static bool transfer_completed{false};
+    return transfer_completed;
+  }
+
+  template <typename Config, auto Handler>
+  static void completion_callback(DMA_HandleTypeDef* const handle_storage) noexcept
+  {
+    completed<Config>() = true;
+    if constexpr (requires { Handler(); })
+    {
+      Handler();
+    }
+    else if constexpr (requires { Handler(handle_storage); })
+    {
+      Handler(handle_storage);
+    }
+  }
 #endif
 
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(DMA1) && MICROHAL_STM32_HAL_STREAM_DMA_RUNTIME
     auto& handle_storage = handle<Config>();
+    completed<Config>() = false;
     handle_storage.Instance = peripheral_instance<DMA_Stream_TypeDef, Config>();
     handle_storage.Init.Channel = DMA_CHANNEL_0;
     handle_storage.Init.Direction = DMA_MEMORY_TO_MEMORY;
@@ -2873,6 +3791,8 @@ struct dma_api final
   {
 #if defined(DMA1) && MICROHAL_STM32_HAL_STREAM_DMA_RUNTIME
     auto& handle_storage = handle<Config>();
+    completed<Config>() = false;
+    handle_storage.XferCpltCallback = completion_callback<Config, Handler>;
     if (HAL_DMA_Start_IT(&handle_storage, src_addr, dst_addr, length) == HAL_OK) [[likely]]
     {
       return true;
@@ -2893,11 +3813,34 @@ struct dma_api final
     auto& handle_storage = handle<Config>();
     if (HAL_DMA_Abort(&handle_storage) == HAL_OK) [[likely]]
     {
+      completed<Config>() = false;
       return true;
     }
     return false;
 #else
     return false;
+#endif
+  }
+
+  template <typename Config> static result<dma_transfer_state> transfer_status() noexcept
+  {
+#if defined(DMA1) && MICROHAL_STM32_HAL_STREAM_DMA_RUNTIME
+    const HAL_DMA_StateTypeDef dma_state = HAL_DMA_GetState(&handle<Config>());
+    if (dma_state == HAL_DMA_STATE_BUSY)
+    {
+      return dma_transfer_state::active;
+    }
+    if (dma_state == HAL_DMA_STATE_ERROR)
+    {
+      return dma_transfer_state::error;
+    }
+    if (dma_state == HAL_DMA_STATE_TIMEOUT)
+    {
+      return dma_transfer_state::error;
+    }
+    return completed<Config>() ? dma_transfer_state::complete : dma_transfer_state::idle;
+#else
+    return status::unsupported;
 #endif
   }
 };
@@ -3035,12 +3978,90 @@ struct watchdog_api final
 struct i2s_api final
 {
 #if MICROHAL_STM32_HAL_HAS_SPI // I2S uses SPI hardware
-  static inline I2S_HandleTypeDef handle_storage{};
+  template <typename Config> static auto& handle() noexcept
+  {
+    static I2S_HandleTypeDef handle_storage{};
+    return handle_storage;
+  }
+
+#if defined(USE_HAL_I2S_REGISTER_CALLBACKS) && (USE_HAL_I2S_REGISTER_CALLBACKS == 1)
+  template <typename Config, auto Handler> struct dma_state final
+  {
+    bool active{false};
+    void (*previous_tx_callback)(I2S_HandleTypeDef*){nullptr};
+    void (*previous_error_callback)(I2S_HandleTypeDef*){nullptr};
+  };
+
+  template <typename Config, auto Handler> static auto& state() noexcept
+  {
+    static dma_state<Config, Handler> transfer_state{};
+    return transfer_state;
+  }
+
+  template <typename Config, auto Handler> static void notify_completion(const status result) noexcept
+  {
+    if constexpr (requires { Handler(result); })
+    {
+      Handler(result);
+    }
+    else if constexpr (requires { Handler(); })
+    {
+      Handler();
+    }
+  }
+
+  template <typename Config, auto Handler> static void restore_callbacks() noexcept
+  {
+    auto& transfer_state = state<Config, Handler>();
+    auto& handle_storage = handle<Config>();
+    handle_storage.TxCpltCallback = transfer_state.previous_tx_callback;
+    handle_storage.ErrorCallback = transfer_state.previous_error_callback;
+    transfer_state.active = false;
+  }
+
+  template <typename Config, auto Handler>
+  static void dma_complete(I2S_HandleTypeDef* const handle_storage) noexcept
+  {
+    auto& transfer_state = state<Config, Handler>();
+    if (!transfer_state.active || (handle_storage != &handle<Config>()))
+    {
+      return;
+    }
+
+    const auto previous_callback = transfer_state.previous_tx_callback;
+    restore_callbacks<Config, Handler>();
+    if (previous_callback != nullptr)
+    {
+      previous_callback(handle_storage);
+    }
+    notify_completion<Config, Handler>(status::ok);
+  }
+
+  template <typename Config, auto Handler>
+  static void dma_error(I2S_HandleTypeDef* const handle_storage) noexcept
+  {
+    auto& transfer_state = state<Config, Handler>();
+    if (!transfer_state.active || (handle_storage != &handle<Config>()))
+    {
+      return;
+    }
+
+    const auto previous_callback = transfer_state.previous_error_callback;
+    const status result = (handle_storage->ErrorCode == HAL_I2S_ERROR_NONE) ? status::error : status::io_error;
+    restore_callbacks<Config, Handler>();
+    if (previous_callback != nullptr)
+    {
+      previous_callback(handle_storage);
+    }
+    notify_completion<Config, Handler>(result);
+  }
+#endif
 #endif
 
   template <typename Config> static bool initialize() noexcept
   {
 #if MICROHAL_STM32_HAL_HAS_SPI
+    auto& handle_storage = handle<Config>();
     handle_storage.Instance = peripheral_instance<SPI_TypeDef, Config>();
     handle_storage.Init.Mode = I2S_MODE_MASTER_TX;
     handle_storage.Init.Standard = I2S_STANDARD_PHILIPS;
@@ -3065,6 +4086,7 @@ struct i2s_api final
   template <typename Config> static bool transmit_blocking(const std::span<const std::uint16_t> samples) noexcept
   {
 #if MICROHAL_STM32_HAL_HAS_SPI
+    auto& handle_storage = handle<Config>();
     constexpr std::uint32_t timeout_ms = timeout_for<Config>();
     if (HAL_I2S_Transmit(&handle_storage, hal_tx_buffer(samples.data()), static_cast<std::uint16_t>(samples.size()),
                          timeout_ms) == HAL_OK) [[likely]]
@@ -3081,6 +4103,7 @@ struct i2s_api final
   template <typename Config> static bool receive_blocking(const std::span<std::uint16_t> samples) noexcept
   {
 #if MICROHAL_STM32_HAL_HAS_SPI
+    auto& handle_storage = handle<Config>();
     constexpr std::uint32_t timeout_ms = timeout_for<Config>();
     if (HAL_I2S_Receive(&handle_storage, samples.data(), static_cast<std::uint16_t>(samples.size()), timeout_ms) ==
         HAL_OK) [[likely]]
@@ -3097,12 +4120,32 @@ struct i2s_api final
   template <typename Config, auto Handler>
   static bool start_dma_tx(const std::span<const std::uint16_t> samples) noexcept
   {
-#if MICROHAL_STM32_HAL_HAS_SPI
+#if MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_I2S_REGISTER_CALLBACKS) &&                                    \
+    (USE_HAL_I2S_REGISTER_CALLBACKS == 1)
+    if (samples.size() > UINT16_MAX)
+    {
+      return false;
+    }
+
+    auto& transfer_state = state<Config, Handler>();
+    if (transfer_state.active)
+    {
+      return false;
+    }
+
+    auto& handle_storage = handle<Config>();
+    transfer_state.previous_tx_callback = handle_storage.TxCpltCallback;
+    transfer_state.previous_error_callback = handle_storage.ErrorCallback;
+    transfer_state.active = true;
+    handle_storage.TxCpltCallback = dma_complete<Config, Handler>;
+    handle_storage.ErrorCallback = dma_error<Config, Handler>;
+
     if (HAL_I2S_Transmit_DMA(&handle_storage, hal_tx_buffer(samples.data()),
                              static_cast<std::uint16_t>(samples.size())) == HAL_OK) [[likely]]
     {
       return true;
     }
+    restore_callbacks<Config, Handler>();
     return false;
 #else
     (void)samples;
@@ -3160,29 +4203,38 @@ struct rcc_api final
   }
 
   template <typename Config>
-  static void enable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
+  static status enable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
   {
 #if defined(RCC)
-    // Example - user would need to map peripheral + instance to specific clock enable macro
-    // __HAL_RCC_GPIOA_CLK_ENABLE(); __HAL_RCC_USART1_CLK_ENABLE(); etc.
-    (void)peripheral;
-    (void)instance;
+    if constexpr (requires { typename Config::binding; } &&
+                  requires { Config::binding::enable_peripheral_clock(peripheral, instance); })
+    {
+      return microhal::detail::as_status(
+          [peripheral, instance] { return Config::binding::enable_peripheral_clock(peripheral, instance); });
+    }
+    return status::unsupported;
 #else
     (void)peripheral;
     (void)instance;
+    return status::unsupported;
 #endif
   }
 
   template <typename Config>
-  static void disable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
+  static status disable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
   {
 #if defined(RCC)
-    // Example - user would need to map peripheral + instance to specific clock disable macro
-    (void)peripheral;
-    (void)instance;
+    if constexpr (requires { typename Config::binding; } &&
+                  requires { Config::binding::disable_peripheral_clock(peripheral, instance); })
+    {
+      return microhal::detail::as_status(
+          [peripheral, instance] { return Config::binding::disable_peripheral_clock(peripheral, instance); });
+    }
+    return status::unsupported;
 #else
     (void)peripheral;
     (void)instance;
+    return status::unsupported;
 #endif
   }
 };
@@ -3256,6 +4308,54 @@ struct crc_api final
 namespace microhal
 {
 
+namespace backends::stm32::hal
+{
+template <peripheral_kind Kind> consteval transfer_mode_capability serial_transfer_modes() noexcept
+{
+  if constexpr (Kind == peripheral_kind::i2c)
+  {
+#if MICROHAL_STM32_HAL_HAS_I2C
+#if defined(USE_HAL_I2C_REGISTER_CALLBACKS) && USE_HAL_I2C_REGISTER_CALLBACKS == 1
+    return {true, true, true};
+#else
+    return {true, false, false};
+#endif
+#endif
+  }
+  if constexpr (Kind == peripheral_kind::spi)
+  {
+#if MICROHAL_STM32_HAL_HAS_SPI
+#if defined(USE_HAL_SPI_REGISTER_CALLBACKS) && USE_HAL_SPI_REGISTER_CALLBACKS == 1
+    return {true, true, true};
+#else
+    return {true, false, false};
+#endif
+#endif
+  }
+  if constexpr (Kind == peripheral_kind::uart)
+  {
+#if MICROHAL_STM32_HAL_HAS_UART
+#if defined(USE_HAL_UART_REGISTER_CALLBACKS) && USE_HAL_UART_REGISTER_CALLBACKS == 1
+    return {true, true, true};
+#else
+    return {true, false, false};
+#endif
+#endif
+  }
+  if constexpr (Kind == peripheral_kind::i2s)
+  {
+#if MICROHAL_STM32_HAL_HAS_SPI && defined(HAL_I2S_MODULE_ENABLED)
+#if defined(USE_HAL_I2S_REGISTER_CALLBACKS) && USE_HAL_I2S_REGISTER_CALLBACKS == 1
+    return {true, true, true};
+#else
+    return {true, false, false};
+#endif
+#endif
+  }
+  return {};
+}
+} // namespace backends::stm32::hal
+
 template <> struct backend_traits<stm32_hal_tag> final
 {
   using backend_tag = stm32_hal_tag;
@@ -3297,7 +4397,8 @@ template <> struct backend_traits<stm32_hal_tag> final
             .dma = true,
             .instance_count = gpio_port_count,
             .max_frequency_hz = 0U,
-            .alternate_function = true};
+            .alternate_function = true,
+            .output_toggle = true};
   }
 
   static consteval struct i2c_capability i2c_capability() noexcept
@@ -3309,7 +4410,15 @@ template <> struct backend_traits<stm32_hal_tag> final
             .isr = true,
             .dma = true,
             .instance_count = (MICROHAL_STM32_HAL_FAMILY_SELECTED != 0) ? backends::stm32::hal::i2c_instance_count : 4U,
-            .max_frequency_hz = 1'000'000U};
+            .max_frequency_hz = 1'000'000U,
+            .ten_bit_addressing = true,
+#if MICROHAL_STM32_HAL_HAS_I2C && defined(I2C_FIRST_FRAME) && defined(I2C_LAST_FRAME)
+            .repeated_start = true,
+#else
+            .repeated_start = false,
+#endif
+            .address_probe = true,
+            .transfer_modes = backends::stm32::hal::serial_transfer_modes<peripheral_kind::i2c>()};
   }
 
   static consteval struct spi_capability spi_capability() noexcept
@@ -3321,7 +4430,15 @@ template <> struct backend_traits<stm32_hal_tag> final
             .isr = true,
             .dma = true,
             .instance_count = (MICROHAL_STM32_HAL_FAMILY_SELECTED != 0) ? backends::stm32::hal::spi_instance_count : 6U,
-            .max_frequency_hz = 100'000'000U};
+            .max_frequency_hz = 100'000'000U,
+            .transmit_only = true,
+            .receive_only = true,
+#if MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_SPI_REGISTER_CALLBACKS) && (USE_HAL_SPI_REGISTER_CALLBACKS == 1)
+            .async_transfer = true,
+#else
+            .async_transfer = false,
+#endif
+            .transfer_modes = backends::stm32::hal::serial_transfer_modes<peripheral_kind::spi>()};
   }
 
   static consteval struct qspi_capability qspi_capability() noexcept
@@ -3333,7 +4450,11 @@ template <> struct backend_traits<stm32_hal_tag> final
             .dma = true,
             .instance_count = 1U,
             .max_frequency_hz = 133'000'000U,
-            .quad_mode = true};
+            .quad_mode = true,
+            .dual_mode = true,
+            .command_transfer = true,
+            .memory_mapped = true,
+            .max_address_bytes = 4U};
   }
 
   static consteval struct uart_capability uart_capability() noexcept
@@ -3350,7 +4471,17 @@ template <> struct backend_traits<stm32_hal_tag> final
               .fifo = true,
               .lpuart = backends::stm32::hal::family_has_lpuart,
               .autobaud = true,
-              .fifo_depth = 16U};
+              .fifo_depth = 16U,
+              .parity = true,
+              .two_stop_bits = true,
+#if defined(UART_STOPBITS_1_5)
+              .one_and_half_stop_bits = true,
+#else
+              .one_and_half_stop_bits = false,
+#endif
+              .hardware_flow_control = false,
+              .max_baud_rate = 12'500'000U,
+              .transfer_modes = backends::stm32::hal::serial_transfer_modes<peripheral_kind::uart>()};
     }
 
     return {.supported = true,
@@ -3363,7 +4494,16 @@ template <> struct backend_traits<stm32_hal_tag> final
             .fifo = true,
             .lpuart = true,
             .autobaud = true,
-            .fifo_depth = 16U};
+            .fifo_depth = 16U,
+            .parity = true,
+            .two_stop_bits = true,
+#if defined(UART_STOPBITS_1_5)
+            .one_and_half_stop_bits = true,
+#else
+            .one_and_half_stop_bits = false,
+#endif
+            .hardware_flow_control = false,
+            .max_baud_rate = 12'500'000U};
   }
 
   static consteval struct rtc_capability rtc_capability() noexcept
@@ -3375,7 +4515,10 @@ template <> struct backend_traits<stm32_hal_tag> final
             .dma = false,
             .instance_count = 1U,
             .max_frequency_hz = 0U,
-            .periodic = true};
+            .periodic = true,
+            .alarm = true,
+            .calendar = false,
+            .subsecond = false};
   }
 
   static consteval struct flash_capability flash_capability() noexcept
@@ -3388,7 +4531,9 @@ template <> struct backend_traits<stm32_hal_tag> final
             .instance_count = 1U,
             .max_frequency_hz = 0U,
             .alignment_bytes = 8U,
-            .erase_bytes = 2'048U};
+            .erase_bytes = 2'048U,
+            .erase_region_query = true,
+            .program_readback = true};
   }
 
   static consteval struct timer_capability timer_capability() noexcept
@@ -3403,7 +4548,10 @@ template <> struct backend_traits<stm32_hal_tag> final
                 (MICROHAL_STM32_HAL_FAMILY_SELECTED != 0) ? backends::stm32::hal::timer_instance_count : 14U,
             .max_frequency_hz = 200'000'000U,
             .capture_compare = true,
-            .periodic = true};
+            .periodic = true,
+            .channel_count = 4U,
+            .period_readback = true,
+            .counter_reset = true};
   }
 
   static consteval struct adc_capability adc_capability() noexcept
@@ -3419,7 +4567,9 @@ template <> struct backend_traits<stm32_hal_tag> final
             .resolution_bits = 12U,
             .channel_count = 16U,
             .differential = true,
-            .oversampling = true};
+            .oversampling = true,
+            .sequential_scan = true,
+            .voltage_conversion = true};
   }
 
   static consteval struct dac_capability dac_capability() noexcept
@@ -3433,8 +4583,12 @@ template <> struct backend_traits<stm32_hal_tag> final
             .instance_count = (MICROHAL_STM32_HAL_FAMILY_SELECTED != 0) ? backends::stm32::hal::dac_instance_count : 1U,
             .max_frequency_hz = 0U,
             .resolution_bits = 12U,
+            .channel_count = 2U,
             .dual_mode = true,
-            .waveform_generation = true};
+            .waveform_generation = true,
+            .output_buffer = true,
+            .voltage_conversion = true,
+            .sequence_write = true};
   }
 
   static consteval struct can_capability can_capability() noexcept
@@ -3456,7 +4610,10 @@ template <> struct backend_traits<stm32_hal_tag> final
               .can_fd = false,
               .time_triggered = false,
               .mailbox_count = 3U,
-              .filter_banks = 14U};
+              .filter_banks = 14U,
+              .extended_ids = true,
+              .remote_frames = true,
+              .rx_interrupt = true};
     }
 
     return {.supported = true,
@@ -3469,7 +4626,10 @@ template <> struct backend_traits<stm32_hal_tag> final
             .can_fd = true,
             .time_triggered = false,
             .mailbox_count = 3U,
-            .filter_banks = 14U};
+            .filter_banks = 14U,
+            .extended_ids = true,
+            .remote_frames = true,
+            .rx_interrupt = true};
   }
 
   static consteval struct usb_capability usb_capability() noexcept
@@ -3487,7 +4647,10 @@ template <> struct backend_traits<stm32_hal_tag> final
               .host = false,
               .otg = false,
               .high_speed = false,
-              .endpoint_count = 4U};
+              .endpoint_count = 4U,
+              .endpoint_transfer = true,
+              .endpoint_stall = true,
+              .max_packet_size_bytes = 64U};
     }
 
     return {.supported = true,
@@ -3501,7 +4664,10 @@ template <> struct backend_traits<stm32_hal_tag> final
             .host = true,
             .otg = true,
             .high_speed = true,
-            .endpoint_count = 6U};
+            .endpoint_count = 6U,
+            .endpoint_transfer = true,
+            .endpoint_stall = true,
+            .max_packet_size_bytes = 512U};
   }
 
   static consteval struct ethernet_capability ethernet_capability() noexcept
@@ -3561,7 +4727,11 @@ template <> struct backend_traits<stm32_hal_tag> final
               .uhs = false,
               .bus_width_4 = true,
               .bus_width_8 = false,
-              .block_size_bytes = 512U};
+              .block_size_bytes = 512U,
+              .block_io = true,
+              .erase = true,
+              .capacity_query = true,
+              .bus_width_1 = true};
     }
 
     return {.supported = true,
@@ -3575,7 +4745,11 @@ template <> struct backend_traits<stm32_hal_tag> final
             .uhs = false,
             .bus_width_4 = true,
             .bus_width_8 = false,
-            .block_size_bytes = 512U};
+            .block_size_bytes = 512U,
+            .block_io = true,
+            .erase = true,
+            .capacity_query = true,
+            .bus_width_1 = true};
   }
 
   static consteval struct dma_capability dma_capability() noexcept
@@ -3598,7 +4772,11 @@ template <> struct backend_traits<stm32_hal_tag> final
               .channel_count = 8U,
               .mem_to_mem = true,
               .fifo = true,
-              .double_buffer = true};
+              .double_buffer = true,
+              .transfer_status = true,
+              .abort = true,
+              .completion_callback = true,
+              .address_width_bits = 32U};
     }
 
     return {.supported = true,
@@ -3612,7 +4790,11 @@ template <> struct backend_traits<stm32_hal_tag> final
             .channel_count = 8U,
             .mem_to_mem = true,
             .fifo = true,
-            .double_buffer = true};
+            .double_buffer = true,
+            .transfer_status = true,
+            .abort = true,
+            .completion_callback = true,
+            .address_width_bits = 32U};
   }
 
   static consteval struct pwm_capability pwm_capability() noexcept
@@ -3626,7 +4808,9 @@ template <> struct backend_traits<stm32_hal_tag> final
             .max_frequency_hz = 200'000'000U,
             .channel_count = 4U,
             .complementary_output = true,
-            .dead_time = true};
+            .dead_time = true,
+            .runtime_duty_update = true,
+            .runtime_start_stop = true};
   }
 
   static consteval struct watchdog_capability watchdog_capability() noexcept
@@ -3641,7 +4825,9 @@ template <> struct backend_traits<stm32_hal_tag> final
             .independent = true,
             .window = true,
             .min_timeout_ms = 1U,
-            .max_timeout_ms = 32'768U};
+            .max_timeout_ms = 32'768U,
+            .runtime_refresh = true,
+            .reset_on_timeout = true};
   }
 
   static consteval struct i2s_capability i2s_capability() noexcept
@@ -3654,8 +4840,20 @@ template <> struct backend_traits<stm32_hal_tag> final
             .instance_count = 3U,
             .max_frequency_hz = 42'000'000U,
             .full_duplex = true,
+            .master_mode = true,
+            .slave_mode = true,
             .master_clock_output = true,
-            .max_sample_rate = 192'000U};
+            .max_sample_rate = 192'000U,
+#if MICROHAL_STM32_HAL_FAMILY_SELECTED == 0 ||                                                                  \
+    (MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_I2S_REGISTER_CALLBACKS) &&                                  \
+     (USE_HAL_I2S_REGISTER_CALLBACKS == 1))
+            .transmit_dma = true,
+#else
+            .transmit_dma = false,
+#endif
+            .receive_dma = backends::stm32::hal::serial_transfer_modes<peripheral_kind::i2s>().dma,
+            .sample_bits = 16U,
+            .transfer_modes = backends::stm32::hal::serial_transfer_modes<peripheral_kind::i2s>()};
   }
 
   static consteval struct rcc_capability rcc_capability() noexcept
@@ -3670,7 +4868,10 @@ template <> struct backend_traits<stm32_hal_tag> final
             .pll_config = true,
             .hse = true,
             .lse = true,
-            .max_system_clock_hz = 180'000'000U};
+            .max_system_clock_hz = 180'000'000U,
+            .clock_configuration = true,
+            .peripheral_clock_gating = false,
+            .system_clock_readback = true};
   }
 
   static consteval struct crc_capability crc_capability() noexcept
@@ -3686,7 +4887,10 @@ template <> struct backend_traits<stm32_hal_tag> final
               .max_frequency_hz = 0U,
               .hardware_crc32 = true,
               .programmable_polynomial = true,
-              .random_number_generator = backends::stm32::hal::family_has_rng};
+              .random_number_generator = backends::stm32::hal::family_has_rng,
+              .seed_configurable = false,
+              .output_xor_configurable = false,
+              .checksum_width_bits = 32U};
     }
 
     return {.supported = true,
@@ -3698,7 +4902,10 @@ template <> struct backend_traits<stm32_hal_tag> final
             .max_frequency_hz = 0U,
             .hardware_crc32 = true,
             .programmable_polynomial = true,
-            .random_number_generator = true};
+            .random_number_generator = true,
+            .seed_configurable = false,
+            .output_xor_configurable = false,
+            .checksum_width_bits = 32U};
   }
 
   template <typename PinConfig> static consteval bool is_valid_gpio_pin() noexcept
@@ -3714,3 +4921,7 @@ template <> struct backend_traits<stm32_hal_tag> final
 };
 
 } // namespace microhal
+
+#if MICROHAL_STM32_HAL_FAMILY_SELECTED
+#include "microhal/backends/stm32/hal/serial_modes.hpp"
+#endif

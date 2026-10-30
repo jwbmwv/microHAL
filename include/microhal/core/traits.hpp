@@ -75,6 +75,116 @@ enum class peripheral_kind : std::uint8_t
   crc
 };
 
+enum class transfer_mode : std::uint8_t
+{
+  automatic,
+  polled,
+  interrupt,
+  dma
+};
+
+struct transfer_mode_capability
+{
+  bool polled{false};
+  bool interrupt{false};
+  bool dma{false};
+
+  [[nodiscard]] constexpr bool supports(const transfer_mode mode) const noexcept
+  {
+    switch (mode)
+    {
+    case transfer_mode::automatic:
+      return true;
+    case transfer_mode::polled:
+      return polled;
+    case transfer_mode::interrupt:
+      return interrupt;
+    case transfer_mode::dma:
+      return dma;
+    }
+    return false;
+  }
+};
+
+template <typename Config> constexpr transfer_mode configured_transfer_mode() noexcept
+{
+  if constexpr (requires { Config::transfer_mode_value; })
+    return Config::transfer_mode_value;
+  return transfer_mode::automatic;
+}
+
+template <auto Handler> consteval bool valid_serial_completion_handler() noexcept
+{
+  return requires { Handler(status::ok); } || requires { Handler(); };
+}
+
+template <typename Config> constexpr bool serial_dma_enabled() noexcept
+{
+  if constexpr (configured_transfer_mode<Config>() == transfer_mode::automatic)
+    return Config::enable_dma;
+  else
+    return configured_transfer_mode<Config>() == transfer_mode::dma;
+}
+
+template <typename Config> constexpr bool serial_interrupt_enabled() noexcept
+{
+  if constexpr (configured_transfer_mode<Config>() == transfer_mode::automatic)
+    return Config::enable_interrupts;
+  else
+    return configured_transfer_mode<Config>() == transfer_mode::interrupt;
+}
+
+template <typename Backend, peripheral_kind Kind> struct serial_mode_api
+{
+  template <typename Config> static status initialize() noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config, auto Handler>
+  static status write(std::span<const std::uint8_t>, std::uint16_t = 0U) noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config, auto Handler> static status read(std::span<std::uint8_t>, std::uint16_t = 0U) noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config, auto Handler>
+  static status transfer(std::span<const std::uint8_t>, std::span<std::uint8_t>) noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config, auto Handler>
+  static status write_read(std::span<const std::uint8_t>, std::span<std::uint8_t>, std::uint16_t) noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config, auto Handler> static status transmit(std::span<const std::uint16_t>) noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config, auto Handler> static status receive(std::span<std::uint16_t>) noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config> static status abort() noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config> static status transfer_status() noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config> static status handle_interrupt() noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config> static status probe(std::uint16_t) noexcept
+  {
+    return status::unsupported;
+  }
+};
+
 enum class gpio_mode : std::uint8_t
 {
   input,
@@ -164,6 +274,37 @@ enum class timer_clock_source : std::uint8_t
   internal,
   external,
   core_cycle_counter
+};
+
+/// @brief Number of data lines used by a phase in a QSPI command.
+enum class qspi_io_mode : std::uint8_t
+{
+  none,
+  single,
+  dual,
+  quad,
+  octo
+};
+
+/// @brief Portable instruction/address/dummy/data phases for one QSPI command.
+struct qspi_command final
+{
+  std::uint8_t instruction{0U};
+  qspi_io_mode instruction_mode{qspi_io_mode::single};
+  std::uint32_t address{0U};
+  std::uint8_t address_size_bytes{0U};
+  qspi_io_mode address_mode{qspi_io_mode::none};
+  std::uint8_t dummy_cycles{0U};
+  qspi_io_mode data_mode{qspi_io_mode::single};
+};
+
+/// @brief Observable lifecycle state of one DMA transfer.
+enum class dma_transfer_state : std::uint8_t
+{
+  idle,
+  active,
+  complete,
+  error
 };
 
 enum class flash_operation : std::uint8_t
@@ -347,6 +488,7 @@ struct gpio_capability
   std::uint32_t alternate_function_count{0U};
   std::uint32_t port_count{0U};
   std::uint32_t pins_per_port{0U};
+  bool output_toggle{false};
 };
 
 /**
@@ -361,6 +503,10 @@ struct i2c_capability
   bool dma{false};
   std::uint32_t instance_count{0U};
   std::uint32_t max_frequency_hz{0U};
+  bool ten_bit_addressing{false};
+  bool repeated_start{false};
+  bool address_probe{false};
+  transfer_mode_capability transfer_modes{};
 };
 
 /**
@@ -375,6 +521,10 @@ struct spi_capability
   bool dma{false};
   std::uint32_t instance_count{0U};
   std::uint32_t max_frequency_hz{0U};
+  bool transmit_only{false};
+  bool receive_only{false};
+  bool async_transfer{false};
+  transfer_mode_capability transfer_modes{};
 };
 
 /**
@@ -390,8 +540,12 @@ struct qspi_capability
   std::uint32_t instance_count{0U};
   std::uint32_t max_frequency_hz{0U};
   bool quad_mode{false};
+  bool dual_mode{false};
   bool octo_mode{false};
   bool ddr_mode{false};
+  bool command_transfer{false};
+  bool memory_mapped{false};
+  std::uint8_t max_address_bytes{0U};
 };
 
 /**
@@ -410,6 +564,12 @@ struct uart_capability
   bool lpuart{false};
   bool autobaud{false};
   std::uint32_t fifo_depth{0U};
+  bool parity{false};
+  bool two_stop_bits{false};
+  bool one_and_half_stop_bits{false};
+  bool hardware_flow_control{false};
+  std::uint32_t max_baud_rate{0U};
+  transfer_mode_capability transfer_modes{};
 };
 
 /**
@@ -426,6 +586,8 @@ struct rtc_capability
   std::uint32_t max_frequency_hz{0U};
   bool periodic{false};
   bool alarm{false};
+  bool calendar{false};
+  bool subsecond{false};
 };
 
 /**
@@ -440,9 +602,22 @@ struct flash_capability
   bool dma{false};
   std::uint32_t instance_count{0U};
   std::uint32_t max_frequency_hz{0U};
-  std::uint32_t alignment_bytes{0U};
-  std::uint32_t erase_bytes{0U};
+  std::uint32_t alignment_bytes{0U}; ///< Minimum hardware programming unit in bytes.
+  std::uint32_t erase_bytes{0U};     ///< Minimum hardware erase granularity in bytes.
   std::uint32_t total_size_kb{0U};
+  bool erase_region_query{false};
+  bool program_readback{false};
+};
+
+/**
+ * @brief Physical erase block containing a flash address.
+ * @details Addresses use the same address space as the flash backend's read, write, and erase
+ *          operations. This describes hardware geometry only; it is not a partition boundary.
+ */
+struct flash_erase_region
+{
+  std::uint32_t start_address{0U};
+  std::uint32_t size_bytes{0U};
 };
 
 /**
@@ -461,6 +636,8 @@ struct timer_capability
   bool periodic{false};
   bool pwm{false};
   std::uint32_t channel_count{0U};
+  bool period_readback{false};
+  bool counter_reset{false};
 };
 
 /**
@@ -480,6 +657,8 @@ struct adc_capability
   bool differential{false};
   bool oversampling{false};
   bool injected{false};
+  bool sequential_scan{false};
+  bool voltage_conversion{false};
 };
 
 /**
@@ -498,6 +677,9 @@ struct dac_capability
   std::uint32_t channel_count{0U};
   bool dual_mode{false};
   bool waveform_generation{false};
+  bool output_buffer{false};
+  bool voltage_conversion{false};
+  bool sequence_write{false};
 };
 
 /**
@@ -516,6 +698,9 @@ struct can_capability
   bool time_triggered{false};
   std::uint32_t mailbox_count{0U};
   std::uint32_t filter_banks{0U};
+  bool extended_ids{false};
+  bool remote_frames{false};
+  bool rx_interrupt{false};
 };
 
 /**
@@ -535,6 +720,9 @@ struct usb_capability
   bool otg{false};
   bool high_speed{false};
   std::uint32_t endpoint_count{0U};
+  bool endpoint_transfer{false};
+  bool endpoint_stall{false};
+  std::uint16_t max_packet_size_bytes{0U};
 };
 
 /**
@@ -573,6 +761,10 @@ struct sd_capability
   bool bus_width_4{false};
   bool bus_width_8{false};
   std::uint32_t block_size_bytes{512U};
+  bool block_io{false};
+  bool erase{false};
+  bool capacity_query{false};
+  bool bus_width_1{false};
 };
 
 /**
@@ -592,6 +784,10 @@ struct dma_capability
   bool mem_to_mem{false};
   bool fifo{false};
   bool double_buffer{false};
+  bool transfer_status{false};
+  bool abort{false};
+  bool completion_callback{false};
+  std::uint8_t address_width_bits{0U};
 };
 
 /**
@@ -609,6 +805,8 @@ struct pwm_capability
   std::uint32_t channel_count{0U};
   bool complementary_output{false};
   bool dead_time{false};
+  bool runtime_duty_update{false};
+  bool runtime_start_stop{false};
 };
 
 /**
@@ -627,6 +825,8 @@ struct watchdog_capability
   bool window{false};
   std::uint32_t min_timeout_ms{0U};
   std::uint32_t max_timeout_ms{0U};
+  bool runtime_refresh{false};
+  bool reset_on_timeout{false};
 };
 
 /**
@@ -642,8 +842,14 @@ struct i2s_capability
   std::uint32_t instance_count{0U};
   std::uint32_t max_frequency_hz{0U};
   bool full_duplex{false};
+  bool master_mode{false};
+  bool slave_mode{false};
   bool master_clock_output{false};
   std::uint32_t max_sample_rate{0U};
+  bool transmit_dma{false};
+  bool receive_dma{false};
+  std::uint8_t sample_bits{0U};
+  transfer_mode_capability transfer_modes{};
 };
 
 /**
@@ -662,6 +868,9 @@ struct rcc_capability
   bool hse{false};
   bool lse{false};
   std::uint32_t max_system_clock_hz{0U};
+  bool clock_configuration{false};
+  bool peripheral_clock_gating{false};
+  bool system_clock_readback{false};
 };
 
 /**
@@ -679,6 +888,9 @@ struct crc_capability
   bool hardware_crc32{false};
   bool programmable_polynomial{false};
   bool random_number_generator{false};
+  bool seed_configurable{false};
+  bool output_xor_configurable{false};
+  std::uint8_t checksum_width_bits{0U};
 };
 
 /**

@@ -52,6 +52,11 @@ struct timer final
   {
     return detail::as_status([] { return watchdog_api_t<Backend>::template refresh<Config>(); });
   }
+
+  [[nodiscard]] static inline status feed() noexcept
+  {
+    return refresh();
+  }
 };
 
 } // namespace microhal::watchdog

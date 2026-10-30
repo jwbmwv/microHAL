@@ -219,7 +219,7 @@ to branch on.
 - Applications are expected to own a board directory outside the microHAL library tree that names concrete resources such as `status_led`, `console_uart`, `sensor_i2c`, `motor_pwm`, and `log_flash`.
 - Public configs may continue to use legacy numeric locators such as `instance_index`, `port_index`, `pin_index`, `timer_index`, and `channel`, but new integrations should prefer a nested `binding` type.
 - The `binding` type carries backend-specific resource identity while the config keeps transport and policy choices such as baud rate, transfer mode, polarity, IRQ use, DMA intent, or sample rate.
-- The currently implemented Zephyr convention is: GPIO bindings expose `binding::spec` as a `gpio_dt_spec`, device-backed peripherals expose either `binding::device` or `binding::node_id`, and SPI bindings additionally expose `binding::spi_config`.
+- The currently implemented Zephyr convention is: GPIO bindings expose `binding::spec` as a `gpio_dt_spec`, device-backed peripherals expose `binding::device` (resolved with `DEVICE_DT_GET()` in board code), and SPI bindings additionally expose `binding::spi_config`.
 - The currently implemented STM32 and Kinetis convention is: register-backed peripherals expose `binding::base_address`, while GPIO bindings expose `binding::port_index`, `binding::pin_index`, and backend-specific routing data such as `binding::alternate_function` or `binding::mux`.
 - For Ethernet and SD on STM32 HAL, prefer `microhal::ethernet::bound_mac_config<Binding, ...>` and `microhal::sd::bound_host_config<Binding, ...>` so board code can supply the extra hardware identity those peripherals need.
 - STM32 Ethernet bindings may expose `binding::base_address`, `binding::media_interface`, optional `binding::mac_address`, and optional RX pool sizing via `binding::rx_buffer_size` and `binding::rx_buffer_count`.
@@ -236,7 +236,7 @@ namespace app::board
 
 struct console_uart_binding final
 {
-  static constexpr auto node_id = DT_CHOSEN(zephyr_console);
+  static constexpr const struct device* device{DEVICE_DT_GET(DT_CHOSEN(zephyr_console))};
 };
 
 struct console_uart_cfg final

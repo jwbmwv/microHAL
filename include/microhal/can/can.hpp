@@ -43,6 +43,12 @@ struct bus final
   static constexpr bool has_can_fd{backend_traits<Backend>::can_capability().can_fd};
   static constexpr std::uint32_t mailbox_count{backend_traits<Backend>::can_capability().mailbox_count};
 
+  [[nodiscard]] static constexpr bool is_valid(const message& msg) noexcept
+  {
+    const std::uint32_t max_id = msg.extended_id ? 0x1FFF'FFFFU : 0x7FFU;
+    return (msg.id <= max_id) && (msg.dlc <= sizeof(msg.data));
+  }
+
   [[nodiscard]] static inline status initialize() noexcept
   {
     return detail::as_status([] { return can_api_t<Backend>::template initialize<Config>(); });
@@ -50,6 +56,10 @@ struct bus final
 
   [[nodiscard]] static inline status transmit(const message& msg) noexcept
   {
+    if (!is_valid(msg))
+    {
+      return status::invalid_argument;
+    }
     if constexpr (requires { can_api_t<Backend>::template transmit<Config>(msg); })
     {
       return detail::as_status([&msg] { return can_api_t<Backend>::template transmit<Config>(msg); });
@@ -58,6 +68,23 @@ struct bus final
     {
       return detail::as_status([&msg] { return can_api_t<Backend>::template transmit<Config>(msg.data, msg.dlc); });
     }
+  }
+
+  /**
+   * @brief Transmits messages in order, stopping at the first failure.
+   * @details Earlier messages may already have reached the bus when an error is returned.
+   */
+  [[nodiscard]] static inline status transmit_many(const std::span<const message> messages) noexcept
+  {
+    for (const message& msg : messages)
+    {
+      const status result = transmit(msg);
+      if (result != status::ok)
+      {
+        return result;
+      }
+    }
+    return status::ok;
   }
 
   [[nodiscard]] static inline status receive(message& msg) noexcept
@@ -79,6 +106,23 @@ struct bus final
       }
       return status::io_error;
     }
+  }
+
+  /**
+   * @brief Receives into each message slot in order, stopping at the first backend failure.
+   * @details Slots after the first failed receive are left untouched.
+   */
+  [[nodiscard]] static inline status receive_many(const std::span<message> messages) noexcept
+  {
+    for (message& msg : messages)
+    {
+      const status result = receive(msg);
+      if (result != status::ok)
+      {
+        return result;
+      }
+    }
+    return status::ok;
   }
 
   [[nodiscard]] static inline status configure_filter(const std::uint32_t id, const std::uint32_t mask,

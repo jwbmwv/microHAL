@@ -12,9 +12,10 @@ target_sources(app PRIVATE
   src/main.cpp)
 
 target_include_directories(app PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+  ${CMAKE_CURRENT_SOURCE_DIR}/../..
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../include)
 
-target_compile_definitions(app PRIVATE MICROHAL_SUPPRESS_MISSING_MCU_WARNINGS=1)
+target_compile_definitions(app PRIVATE MICROHAL_SUPPRESS_MISSING_MCU_WARNINGS=1 CONFIG_ZEPHYR_KERNEL=1)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(app PRIVATE -fno-exceptions -fno-rtti)
