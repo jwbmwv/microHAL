@@ -130,10 +130,8 @@ void test_uart_byte_helpers() noexcept
   recorder::reset();
 
   std::uint8_t rx = 0U;
-  check_status(microhal::uart::port<backend, console_uart>::write_byte(0x5AU), status::ok,
-               "uart byte write succeeds");
-  check_status(microhal::uart::port<backend, console_uart>::read_byte(rx), status::ok,
-               "uart byte read succeeds");
+  check_status(microhal::uart::port<backend, console_uart>::write_byte(0x5AU), status::ok, "uart byte write succeeds");
+  check_status(microhal::uart::port<backend, console_uart>::read_byte(rx), status::ok, "uart byte read succeeds");
   check(rx == recorder::read_fill, "uart byte read returns the backend-provided value");
 
   const auto log = recorder::log();
@@ -191,10 +189,9 @@ void test_i2c_combined_async_reports_completion() noexcept
 
   const std::array<std::uint8_t, 1U> tx{0x10U};
   std::array<std::uint8_t, 2U> rx{};
-  check_status(microhal::i2c::master<backend, sensor_i2c>::write_read_async<on_i2c_complete>(0x48U, tx, rx),
-               status::ok, "combined async i2c transfer starts");
-  check(i2c_completed && i2c_completion_status == status::ok,
-        "combined async i2c completion handler receives success");
+  check_status(microhal::i2c::master<backend, sensor_i2c>::write_read_async<on_i2c_complete>(0x48U, tx, rx), status::ok,
+               "combined async i2c transfer starts");
+  check(i2c_completed && i2c_completion_status == status::ok, "combined async i2c completion handler receives success");
   check(rx[0] == 0xA5U && rx[1] == 0xA5U, "combined async i2c mock fills the receive buffer");
   check(recorder::log().size() == 1U && recorder::log()[0].op == operation::write_read,
         "combined async i2c transfer records one bus operation");
@@ -292,18 +289,18 @@ void test_flash_forwards_address() noexcept
   check(recorder::log().size() == 2U, "invalid flash requests do not reach the backend");
 
   std::array<std::uint8_t, 4U> verify_buffer{};
-  const std::array<std::uint8_t, 4U> expected_readback{recorder::read_fill, recorder::read_fill,
-                                                       recorder::read_fill, recorder::read_fill};
-  check_status(microhal::flash::controller<backend, log_flash>::program_and_verify(
-                   0x0800'4000U, expected_readback, verify_buffer),
+  const std::array<std::uint8_t, 4U> expected_readback{recorder::read_fill, recorder::read_fill, recorder::read_fill,
+                                                       recorder::read_fill};
+  check_status(microhal::flash::controller<backend, log_flash>::program_and_verify(0x0800'4000U, expected_readback,
+                                                                                   verify_buffer),
                status::ok, "flash program-and-verify succeeds when readback matches");
   check(verify_buffer == expected_readback, "flash verification reads into caller-owned storage");
   check_status(microhal::flash::controller<backend, log_flash>::program_and_verify(
                    0x0800'4000U, expected_readback, std::span<std::uint8_t>{verify_buffer.data(), 3U}),
                status::invalid_argument, "flash verification rejects mismatched buffer lengths");
   const std::array<std::uint8_t, 4U> mismatched_readback{1U, 2U, 3U, 4U};
-  check_status(microhal::flash::controller<backend, log_flash>::program_and_verify(
-                   0x0800'4000U, mismatched_readback, verify_buffer),
+  check_status(microhal::flash::controller<backend, log_flash>::program_and_verify(0x0800'4000U, mismatched_readback,
+                                                                                   verify_buffer),
                status::io_error, "flash verification reports mismatched readback");
 }
 
@@ -327,8 +324,7 @@ void test_pwm_and_watchdog_sequence() noexcept
   const auto log = recorder::log();
   check(log.size() == 7U, "pwm/watchdog produced seven backend calls");
   check(log[1].op == operation::set_duty_cycle && log[1].argument == 750U, "pwm forwarded the duty cycle in permille");
-  check(log[3].op == operation::set_duty_cycle && log[3].argument == 500U,
-        "pwm percentage helper forwards permille");
+  check(log[3].op == operation::set_duty_cycle && log[3].argument == 500U, "pwm percentage helper forwards permille");
   check(log[5].peripheral == peripheral_kind::watchdog, "watchdog calls are attributed to the watchdog peripheral");
 }
 
@@ -480,14 +476,12 @@ void test_usb_endpoint_validation() noexcept
                status::invalid_argument, "usb rejects invalid endpoint reads");
 
   std::array<std::uint8_t, 1U> byte{};
-  const std::span<const std::uint8_t> oversized{byte.data(),
-                                                static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max()) +
-                                                    1U};
+  const std::span<const std::uint8_t> oversized{
+      byte.data(), static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max()) + 1U};
   check_status(device::endpoint_transmit(0U, oversized), status::invalid_argument,
                "usb rejects endpoint lengths that exceed backend transfer limits");
   const std::span<std::uint8_t> oversized_rx{byte.data(),
-                                             static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max()) +
-                                                 1U};
+                                             static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max()) + 1U};
   check_status(device::endpoint_receive(0U, oversized_rx).error(), status::invalid_argument,
                "usb rejects receive lengths that exceed backend transfer limits");
 }
@@ -528,8 +522,7 @@ void test_adc_and_dac_helpers() noexcept
   constexpr std::array<std::uint8_t, 3U> channels{0U, 1U, 2U};
   std::array<std::uint16_t, channels.size()> samples{};
   check_status(adc::read_sequence_blocking(channels, samples), status::ok, "ADC scans channels in order");
-  check(samples == std::array<std::uint16_t, 3U>{2'048U, 2'048U, 2'048U},
-        "ADC sequence returns each channel sample");
+  check(samples == std::array<std::uint16_t, 3U>{2'048U, 2'048U, 2'048U}, "ADC sequence returns each channel sample");
   const auto millivolts = adc::read_millivolts(0U, 3'300U);
   check(millivolts && millivolts.value() == 1'650U, "ADC converts raw codes to rounded millivolts");
 
@@ -621,8 +614,7 @@ void test_crc_calculate_nonzero() noexcept
   check(crc != 0U, "crc calculate returns a non-zero digest for non-empty input");
 
   constexpr std::array<std::uint8_t, 9U> check_vector{'1', '2', '3', '4', '5', '6', '7', '8', '9'};
-  constexpr std::uint32_t crc_mpeg2 =
-      microhal::crc::accelerator<backend, host_crc>::calculate_software(check_vector);
+  constexpr std::uint32_t crc_mpeg2 = microhal::crc::accelerator<backend, host_crc>::calculate_software(check_vector);
   check(crc_mpeg2 == 0x0376'E6E7U, "software CRC uses the configured polynomial and CRC-32/MPEG-2 parameters");
 }
 

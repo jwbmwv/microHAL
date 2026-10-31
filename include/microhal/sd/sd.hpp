@@ -136,13 +136,13 @@ struct card final
   }
 
   [[nodiscard]] static inline status read_block(const std::uint32_t block,
-                                               const std::span<std::uint8_t> buffer) noexcept
+                                                const std::span<std::uint8_t> buffer) noexcept
   {
     return (buffer.size() == block_size_bytes) ? read_blocks(block, buffer) : status::invalid_argument;
   }
 
   [[nodiscard]] static inline status write_block(const std::uint32_t block,
-                                                const std::span<const std::uint8_t> buffer) noexcept
+                                                 const std::span<const std::uint8_t> buffer) noexcept
   {
     return (buffer.size() == block_size_bytes) ? write_blocks(block, buffer) : status::invalid_argument;
   }

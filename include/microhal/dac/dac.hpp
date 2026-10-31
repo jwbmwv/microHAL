@@ -83,8 +83,7 @@ struct converter final
     constexpr std::uint32_t bits = static_cast<std::uint32_t>(Config::resolution);
     static_assert((bits > 0U) && (bits <= 16U), "microHAL: unsupported DAC resolution.");
     constexpr std::uint32_t max_code = (1U << bits) - 1U;
-    const std::uint64_t numerator =
-        (static_cast<std::uint64_t>(millivolts) * max_code) + (reference_mv / 2U);
+    const std::uint64_t numerator = (static_cast<std::uint64_t>(millivolts) * max_code) + (reference_mv / 2U);
     const auto code = static_cast<std::uint16_t>(numerator / reference_mv);
     return write_blocking(code);
   }

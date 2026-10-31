@@ -103,8 +103,7 @@ struct converter final
       return status::error;
     }
 
-    const std::uint64_t numerator =
-        (static_cast<std::uint64_t>(sample.value()) * reference_mv) + (max_code / 2U);
+    const std::uint64_t numerator = (static_cast<std::uint64_t>(sample.value()) * reference_mv) + (max_code / 2U);
     return static_cast<std::uint32_t>(numerator / max_code);
   }
 

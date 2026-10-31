@@ -673,8 +673,8 @@ struct qspi_api final
 {
   template <typename Config> static bool initialize() noexcept
   {
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::template initialize<Config>(); })
+    if constexpr (
+        requires { typename Config::binding; } && requires { Config::binding::template initialize<Config>(); })
     {
       return microhal::detail::as_status([] { return Config::binding::template initialize<Config>(); }) == status::ok;
     }
@@ -684,11 +684,12 @@ struct qspi_api final
   template <typename Config>
   static status command_write(const qspi_command& request, const std::span<const std::uint8_t> payload) noexcept
   {
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::template command_write<Config>(request, payload); })
+    if constexpr (
+        requires { typename Config::binding; } &&
+        requires { Config::binding::template command_write<Config>(request, payload); })
     {
-      return microhal::detail::as_status(
-          [&] { return Config::binding::template command_write<Config>(request, payload); });
+      return microhal::detail::as_status([&]
+                                         { return Config::binding::template command_write<Config>(request, payload); });
     }
     return status::unsupported;
   }
@@ -696,30 +697,32 @@ struct qspi_api final
   template <typename Config>
   static status command_read(const qspi_command& request, const std::span<std::uint8_t> payload) noexcept
   {
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::template command_read<Config>(request, payload); })
+    if constexpr (
+        requires { typename Config::binding; } &&
+        requires { Config::binding::template command_read<Config>(request, payload); })
     {
-      return microhal::detail::as_status(
-          [&] { return Config::binding::template command_read<Config>(request, payload); });
+      return microhal::detail::as_status([&]
+                                         { return Config::binding::template command_read<Config>(request, payload); });
     }
     return status::unsupported;
   }
 
   template <typename Config> static status enter_memory_mapped(const qspi_command& request) noexcept
   {
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::template enter_memory_mapped<Config>(request); })
+    if constexpr (
+        requires { typename Config::binding; } &&
+        requires { Config::binding::template enter_memory_mapped<Config>(request); })
     {
-      return microhal::detail::as_status(
-          [&] { return Config::binding::template enter_memory_mapped<Config>(request); });
+      return microhal::detail::as_status([&]
+                                         { return Config::binding::template enter_memory_mapped<Config>(request); });
     }
     return status::unsupported;
   }
 
   template <typename Config> static status exit_memory_mapped() noexcept
   {
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::template exit_memory_mapped<Config>(); })
+    if constexpr (
+        requires { typename Config::binding; } && requires { Config::binding::template exit_memory_mapped<Config>(); })
     {
       return microhal::detail::as_status([] { return Config::binding::template exit_memory_mapped<Config>(); });
     }
@@ -1930,8 +1933,8 @@ struct usb_api final
 {
   template <typename Config> static bool initialize() noexcept
   {
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::template initialize<Config>(); })
+    if constexpr (
+        requires { typename Config::binding; } && requires { Config::binding::template initialize<Config>(); })
     {
       return microhal::detail::as_status([] { return Config::binding::template initialize<Config>(); }) == status::ok;
     }
@@ -1940,8 +1943,7 @@ struct usb_api final
 
   template <typename Config> static bool connect() noexcept
   {
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::template connect<Config>(); })
+    if constexpr (requires { typename Config::binding; } && requires { Config::binding::template connect<Config>(); })
     {
       return microhal::detail::as_status([] { return Config::binding::template connect<Config>(); }) == status::ok;
     }
@@ -1950,8 +1952,8 @@ struct usb_api final
 
   template <typename Config> static bool disconnect() noexcept
   {
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::template disconnect<Config>(); })
+    if constexpr (
+        requires { typename Config::binding; } && requires { Config::binding::template disconnect<Config>(); })
     {
       return microhal::detail::as_status([] { return Config::binding::template disconnect<Config>(); }) == status::ok;
     }
@@ -1961,8 +1963,9 @@ struct usb_api final
   template <typename Config>
   static bool endpoint_transmit(const std::uint8_t endpoint, const std::span<const std::uint8_t> data) noexcept
   {
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::template endpoint_transmit<Config>(endpoint, data); })
+    if constexpr (
+        requires { typename Config::binding; } &&
+        requires { Config::binding::template endpoint_transmit<Config>(endpoint, data); })
     {
       return microhal::detail::as_status(
                  [&] { return Config::binding::template endpoint_transmit<Config>(endpoint, data); }) == status::ok;
@@ -2569,8 +2572,8 @@ struct i2s_api final
 {
   template <typename Config> static bool initialize() noexcept
   {
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::template initialize<Config>(); })
+    if constexpr (
+        requires { typename Config::binding; } && requires { Config::binding::template initialize<Config>(); })
     {
       return microhal::detail::as_status([] { return Config::binding::template initialize<Config>(); }) == status::ok;
     }
@@ -2579,8 +2582,9 @@ struct i2s_api final
 
   template <typename Config> static bool transmit_blocking(const std::span<const std::uint16_t> samples) noexcept
   {
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::template transmit_blocking<Config>(samples); })
+    if constexpr (
+        requires { typename Config::binding; } &&
+        requires { Config::binding::template transmit_blocking<Config>(samples); })
     {
       return microhal::detail::as_status(
                  [&] { return Config::binding::template transmit_blocking<Config>(samples); }) == status::ok;
@@ -2590,11 +2594,12 @@ struct i2s_api final
 
   template <typename Config> static bool receive_blocking(const std::span<std::uint16_t> samples) noexcept
   {
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::template receive_blocking<Config>(samples); })
+    if constexpr (
+        requires { typename Config::binding; } &&
+        requires { Config::binding::template receive_blocking<Config>(samples); })
     {
-      return microhal::detail::as_status(
-                 [&] { return Config::binding::template receive_blocking<Config>(samples); }) == status::ok;
+      return microhal::detail::as_status([&] { return Config::binding::template receive_blocking<Config>(samples); }) ==
+             status::ok;
     }
     return false;
   }
@@ -2602,8 +2607,9 @@ struct i2s_api final
   template <typename Config, auto Handler>
   static bool start_dma_tx(const std::span<const std::uint16_t> samples) noexcept
   {
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::template start_dma_tx<Config, Handler>(samples); })
+    if constexpr (
+        requires { typename Config::binding; } &&
+        requires { Config::binding::template start_dma_tx<Config, Handler>(samples); })
     {
       return microhal::detail::as_status(
                  [&] { return Config::binding::template start_dma_tx<Config, Handler>(samples); }) == status::ok;
@@ -2885,7 +2891,10 @@ template <> struct backend_traits<nuttx_tag> final
 #endif
   }
 
-  static consteval struct adc_capability adc_capability() noexcept { return {}; }
+  static consteval struct adc_capability adc_capability() noexcept
+  {
+    return {};
+  }
 
   static consteval struct dac_capability dac_capability() noexcept
   {

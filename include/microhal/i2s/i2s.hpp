@@ -101,8 +101,7 @@ struct interface final
 
   template <auto CompletionHandler>
   [[nodiscard]] static inline status start_dma_tx(const std::span<const std::uint16_t> samples) noexcept
-    requires(DmaCapableConcept<Backend, peripheral_kind::i2s> &&
-             backend_traits<Backend>::i2s_capability().transmit_dma)
+    requires(DmaCapableConcept<Backend, peripheral_kind::i2s> && backend_traits<Backend>::i2s_capability().transmit_dma)
   {
     static_assert(transfer_mode_value == transfer_mode::automatic ||
                   valid_serial_completion_handler<CompletionHandler>());

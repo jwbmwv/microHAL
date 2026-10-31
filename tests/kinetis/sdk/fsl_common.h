@@ -514,8 +514,14 @@ FIXTURE_UART(LPUART, lpuart, LPUART_Type)
 #undef FIXTURE_UART
 inline UART_Type fixture_uart{};
 inline LPUART_Type fixture_lpuart{};
-#define UART_BASE_PTRS {&fixture_uart}
-#define LPUART_BASE_PTRS {&fixture_lpuart}
+#define UART_BASE_PTRS                                                                                                 \
+  {                                                                                                                    \
+    &fixture_uart                                                                                                      \
+  }
+#define LPUART_BASE_PTRS                                                                                               \
+  {                                                                                                                    \
+    &fixture_lpuart                                                                                                    \
+  }
 
 #define FSL_SAI_DRIVER_VERSION MAKE_VERSION(2, 4, 3)
 struct I2S_Type

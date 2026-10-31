@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
+#if defined(STM32C0) || defined(STM32F0) || defined(STM32F1) || defined(STM32F2) || defined(STM32F3) ||                \
+    defined(STM32F4) || defined(STM32F7) || defined(STM32G0) || defined(STM32G4) || defined(STM32H5) ||                \
+    defined(STM32H7) || defined(STM32H7RS) || defined(STM32L0) || defined(STM32L1) || defined(STM32L4) ||              \
+    defined(STM32L5) || defined(STM32N6) || defined(STM32U0) || defined(STM32U3) || defined(STM32U5) ||                \
+    defined(STM32WB)
 #include "microhal/core/backend_selector.hpp"
 #include "microhal/i2c/i2c.hpp"
 #include "microhal/i2s/i2s.hpp"
@@ -119,3 +124,4 @@ void instantiate_stm32_serial_modes()
   exercise<microhal::stm32_ll_tag, microhal::transfer_mode::interrupt>();
   exercise<microhal::stm32_ll_tag, microhal::transfer_mode::dma>();
 }
+#endif

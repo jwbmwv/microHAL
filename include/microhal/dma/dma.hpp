@@ -94,7 +94,7 @@ struct controller final
 
   template <auto CompletionHandler>
   [[nodiscard]] static inline status start_memcpy(const std::uint32_t src_addr, const std::uint32_t dst_addr,
-                                                 const std::uint32_t length) noexcept
+                                                  const std::uint32_t length) noexcept
     requires(has_mem_to_mem)
   {
     if constexpr (Config::direction != dma_direction::memory_to_memory)

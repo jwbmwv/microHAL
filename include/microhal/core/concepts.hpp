@@ -247,21 +247,19 @@ template <typename Backend, typename Config> consteval bool qspi_config_compatib
   }
   else
   {
-    constexpr bool dma_compatible =
-        (!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::qspi>;
+    constexpr bool dma_compatible = (!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::qspi>;
     if constexpr (std::same_as<Backend, kinetis_espresso_tag> || std::same_as<Backend, zephyr_tag> ||
                   std::same_as<Backend, nuttx_tag>)
     {
-      return dma_compatible &&
-             requires(const qspi_command& command, const std::span<const std::uint8_t> tx,
-                      const std::span<std::uint8_t> rx) {
-               typename Config::binding;
-               Config::binding::template initialize<Config>();
-               Config::binding::template command_write<Config>(command, tx);
-               Config::binding::template command_read<Config>(command, rx);
-               Config::binding::template enter_memory_mapped<Config>(command);
-               Config::binding::template exit_memory_mapped<Config>();
-             };
+      return dma_compatible && requires(const qspi_command& command, const std::span<const std::uint8_t> tx,
+                                        const std::span<std::uint8_t> rx) {
+        typename Config::binding;
+        Config::binding::template initialize<Config>();
+        Config::binding::template command_write<Config>(command, tx);
+        Config::binding::template command_read<Config>(command, rx);
+        Config::binding::template enter_memory_mapped<Config>(command);
+        Config::binding::template exit_memory_mapped<Config>();
+      };
     }
     return dma_compatible;
   }
@@ -512,10 +510,9 @@ template <typename Backend, typename Config> consteval bool usb_config_compatibl
   {
     constexpr bool mode_valid = Config::device_mode || Config::host_mode || Config::otg_mode;
     constexpr auto capability = backend_traits<Backend>::usb_capability();
-    constexpr bool speed_valid =
-        ((Config::speed == usb_speed::low) || (Config::speed == usb_speed::full) ||
-         (Config::speed == usb_speed::high)) &&
-        ((Config::speed != usb_speed::high) || capability.high_speed);
+    constexpr bool speed_valid = ((Config::speed == usb_speed::low) || (Config::speed == usb_speed::full) ||
+                                  (Config::speed == usb_speed::high)) &&
+                                 ((Config::speed != usb_speed::high) || capability.high_speed);
     constexpr bool role_valid = (!Config::device_mode || capability.device) &&
                                 (!Config::host_mode || capability.host) && (!Config::otg_mode || capability.otg);
     if constexpr (std::same_as<Backend, kinetis_espresso_tag> || std::same_as<Backend, nuttx_tag>)
@@ -589,8 +586,7 @@ template <typename Backend, typename Config> consteval bool sd_config_compatible
   {
     constexpr bool config_valid =
         backend_traits<Backend>::sd_capability().block_io && backend_traits<Backend>::sd_capability().capacity_query &&
-        (Config::clock_hz > 0U) &&
-        (Config::clock_hz <= backend_traits<Backend>::sd_capability().max_frequency_hz) &&
+        (Config::clock_hz > 0U) && (Config::clock_hz <= backend_traits<Backend>::sd_capability().max_frequency_hz) &&
         ((Config::bus_width != sd_bus_width::one) || backend_traits<Backend>::sd_capability().bus_width_1) &&
         ((Config::bus_width != sd_bus_width::four) || backend_traits<Backend>::sd_capability().bus_width_4) &&
         ((Config::bus_width != sd_bus_width::eight) || backend_traits<Backend>::sd_capability().bus_width_8) &&
@@ -600,16 +596,15 @@ template <typename Backend, typename Config> consteval bool sd_config_compatible
         ((!Config::enable_interrupts) || IsrCapableConcept<Backend, peripheral_kind::sd>);
     if constexpr (std::same_as<Backend, kinetis_espresso_tag>)
     {
-      return config_valid &&
-             requires(const std::uint32_t block, const std::uint32_t count,
-                      const std::span<std::uint8_t> rx, const std::span<const std::uint8_t> tx) {
-               typename Config::binding;
-               Config::binding::template initialize<Config>();
-               Config::binding::read_blocks(block, rx);
-               Config::binding::write_blocks(block, tx);
-               Config::binding::erase_blocks(block, count);
-               Config::binding::capacity_blocks();
-             };
+      return config_valid && requires(const std::uint32_t block, const std::uint32_t count,
+                                      const std::span<std::uint8_t> rx, const std::span<const std::uint8_t> tx) {
+        typename Config::binding;
+        Config::binding::template initialize<Config>();
+        Config::binding::read_blocks(block, rx);
+        Config::binding::write_blocks(block, tx);
+        Config::binding::erase_blocks(block, count);
+        Config::binding::capacity_blocks();
+      };
     }
     return config_valid;
   }
@@ -718,7 +713,7 @@ template <typename Backend, typename Config> consteval bool i2s_config_compatibl
         ((Config::mode == i2s_mode::master_tx) || (Config::mode == i2s_mode::master_rx) ||
          (Config::mode == i2s_mode::slave_tx) || (Config::mode == i2s_mode::slave_rx)) &&
         (((Config::mode == i2s_mode::master_tx) || (Config::mode == i2s_mode::master_rx)) ? capability.master_mode
-                                                                                         : capability.slave_mode);
+                                                                                          : capability.slave_mode);
     constexpr bool config_valid =
         mode_valid && capability.transfer_modes.supports(configured_transfer_mode<Config>()) &&
         (Config::sample_rate > 0U) && (Config::sample_rate <= capability.max_sample_rate) &&
@@ -732,17 +727,14 @@ template <typename Backend, typename Config> consteval bool i2s_config_compatibl
     if constexpr ((std::same_as<Backend, kinetis_espresso_tag> || std::same_as<Backend, nuttx_tag>) &&
                   configured_transfer_mode<Config>() == transfer_mode::automatic)
     {
-      return config_valid &&
-             requires(const std::span<const std::uint16_t> tx, const std::span<std::uint16_t> rx) {
-               typename Config::binding;
-               Config::binding::template initialize<Config>();
-               Config::binding::template transmit_blocking<Config>(tx);
-               Config::binding::template receive_blocking<Config>(rx);
-             } &&
-             ((!Config::enable_dma) ||
-              requires(const std::span<const std::uint16_t> tx) {
-                Config::binding::template start_dma_tx<Config, nullptr>(tx);
-              });
+      return config_valid && requires(const std::span<const std::uint16_t> tx, const std::span<std::uint16_t> rx) {
+        typename Config::binding;
+        Config::binding::template initialize<Config>();
+        Config::binding::template transmit_blocking<Config>(tx);
+        Config::binding::template receive_blocking<Config>(rx);
+      } && ((!Config::enable_dma) || requires(const std::span<const std::uint16_t> tx) {
+               Config::binding::template start_dma_tx<Config, nullptr>(tx);
+             });
     }
     return config_valid;
   }

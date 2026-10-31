@@ -57,8 +57,7 @@ struct device final
   static constexpr bool has_host{backend_traits<Backend>::usb_capability().host};
   static constexpr bool has_otg{backend_traits<Backend>::usb_capability().otg};
   static constexpr std::uint32_t endpoint_count{backend_traits<Backend>::usb_capability().endpoint_count};
-  static constexpr std::uint16_t max_packet_size_bytes{
-      backend_traits<Backend>::usb_capability().max_packet_size_bytes};
+  static constexpr std::uint16_t max_packet_size_bytes{backend_traits<Backend>::usb_capability().max_packet_size_bytes};
 
   [[nodiscard]] static inline status initialize() noexcept
   {

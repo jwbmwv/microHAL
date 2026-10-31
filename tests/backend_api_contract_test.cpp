@@ -247,8 +247,8 @@ template <typename Backend> consteval bool backend_contract_holds() noexcept
                     i2c_api_t<Backend>::template initialize<i2c_cfg>();
                     i2c_api_t<Backend>::template write_blocking<i2c_cfg>(std::span<const std::uint8_t>{}, 0U);
                     i2c_api_t<Backend>::template read_blocking<i2c_cfg>(std::span<std::uint8_t>{}, 0U);
-                    i2c_api_t<Backend>::template write_read_blocking<i2c_cfg>(
-                        std::span<const std::uint8_t>{}, std::span<std::uint8_t>{}, 0U);
+                    i2c_api_t<Backend>::template write_read_blocking<i2c_cfg>(std::span<const std::uint8_t>{},
+                                                                              std::span<std::uint8_t>{}, 0U);
                   }))
     {
       return false;

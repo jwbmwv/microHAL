@@ -1513,14 +1513,13 @@ struct i2c_api final
     }
 
     const std::uint32_t start = HAL_GetTick();
-    while ((HAL_I2C_GetState(&handle_storage) != HAL_I2C_STATE_READY) &&
-           ((HAL_GetTick() - start) < timeout_ms))
+    while ((HAL_I2C_GetState(&handle_storage) != HAL_I2C_STATE_READY) && ((HAL_GetTick() - start) < timeout_ms))
     {
     }
   }
 #endif
 
-#if defined(I2C_FIRST_FRAME) && defined(I2C_LAST_FRAME) && defined(USE_HAL_I2C_REGISTER_CALLBACKS) &&               \
+#if defined(I2C_FIRST_FRAME) && defined(I2C_LAST_FRAME) && defined(USE_HAL_I2C_REGISTER_CALLBACKS) &&                  \
     (USE_HAL_I2C_REGISTER_CALLBACKS == 1)
   template <typename Config, auto Handler> struct async_sequence_state final
   {
@@ -1580,8 +1579,7 @@ struct i2c_api final
     notify_completion<Config, Handler>(result);
   }
 
-  template <typename Config, auto Handler>
-  static void async_error(I2C_HandleTypeDef* const handle_storage) noexcept
+  template <typename Config, auto Handler> static void async_error(I2C_HandleTypeDef* const handle_storage) noexcept
   {
     auto& state = async_state<Config, Handler>();
     if (!state.active || (handle_storage != &handle<Config>()))
@@ -1669,8 +1667,7 @@ struct i2c_api final
     constexpr std::uint32_t timeout_ms = timeout_for<Config>();
     const std::uint16_t device_address =
         (Config::address_mode == i2c_address_mode::seven_bit) ? static_cast<std::uint16_t>(address << 1U) : address;
-    return transfer_status(HAL_I2C_Master_Transmit(&handle_storage, device_address,
-                                                   hal_tx_buffer(payload.data()),
+    return transfer_status(HAL_I2C_Master_Transmit(&handle_storage, device_address, hal_tx_buffer(payload.data()),
                                                    static_cast<std::uint16_t>(payload.size()), timeout_ms),
                            handle_storage);
 #else
@@ -1792,7 +1789,7 @@ struct i2c_api final
   static status write_read_async(const std::span<const std::uint8_t> tx_payload,
                                  const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
   {
-#if MICROHAL_STM32_HAL_HAS_I2C && defined(I2C_FIRST_FRAME) && defined(I2C_LAST_FRAME) &&                         \
+#if MICROHAL_STM32_HAL_HAS_I2C && defined(I2C_FIRST_FRAME) && defined(I2C_LAST_FRAME) &&                               \
     defined(USE_HAL_I2C_REGISTER_CALLBACKS) && (USE_HAL_I2C_REGISTER_CALLBACKS == 1)
     if ((tx_payload.size() > UINT16_MAX) || (rx_payload.size() > UINT16_MAX))
     {
@@ -1918,8 +1915,7 @@ struct spi_api final
     transfer_state.active = false;
   }
 
-  template <typename Config, auto Handler>
-  static void async_complete(SPI_HandleTypeDef* const handle_storage) noexcept
+  template <typename Config, auto Handler> static void async_complete(SPI_HandleTypeDef* const handle_storage) noexcept
   {
     auto& transfer_state = state<Config, Handler>();
     if (!transfer_state.active || (handle_storage != &handle<Config>()))
@@ -1936,8 +1932,7 @@ struct spi_api final
     notify_completion<Config, Handler>(status::ok);
   }
 
-  template <typename Config, auto Handler>
-  static void async_error(SPI_HandleTypeDef* const handle_storage) noexcept
+  template <typename Config, auto Handler> static void async_error(SPI_HandleTypeDef* const handle_storage) noexcept
   {
     auto& transfer_state = state<Config, Handler>();
     if (!transfer_state.active || (handle_storage != &handle<Config>()))
@@ -2026,8 +2021,8 @@ struct spi_api final
       return status::invalid_argument;
     }
     auto& handle_storage = handle<Config>();
-    return transfer_status(
-        HAL_SPI_Receive(&handle_storage, payload.data(), static_cast<std::uint16_t>(payload.size()), timeout_for<Config>()));
+    return transfer_status(HAL_SPI_Receive(&handle_storage, payload.data(), static_cast<std::uint16_t>(payload.size()),
+                                           timeout_for<Config>()));
 #else
     (void)payload;
     return status::unsupported;
@@ -2037,8 +2032,7 @@ struct spi_api final
   template <typename Config, auto Handler>
   static status transfer_async(std::span<const std::uint8_t> tx_payload, std::span<std::uint8_t> rx_payload) noexcept
   {
-#if MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_SPI_REGISTER_CALLBACKS) &&                                    \
-    (USE_HAL_SPI_REGISTER_CALLBACKS == 1)
+#if MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_SPI_REGISTER_CALLBACKS) && (USE_HAL_SPI_REGISTER_CALLBACKS == 1)
     if ((tx_payload.size() > UINT16_MAX) || (rx_payload.size() > UINT16_MAX))
     {
       return status::invalid_argument;
@@ -2057,8 +2051,9 @@ struct spi_api final
     handle_storage.TxRxCpltCallback = async_complete<Config, Handler>;
     handle_storage.ErrorCallback = async_error<Config, Handler>;
 
-    const HAL_StatusTypeDef result = HAL_SPI_TransmitReceive_IT(
-        &handle_storage, hal_tx_buffer(tx_payload.data()), rx_payload.data(), static_cast<std::uint16_t>(tx_payload.size()));
+    const HAL_StatusTypeDef result =
+        HAL_SPI_TransmitReceive_IT(&handle_storage, hal_tx_buffer(tx_payload.data()), rx_payload.data(),
+                                   static_cast<std::uint16_t>(tx_payload.size()));
     if (result == HAL_OK) [[likely]]
     {
       return status::ok;
@@ -3137,7 +3132,7 @@ struct dac_api final
 #if MICROHAL_STM32_HAL_HAS_DAC
     auto& handle_storage = handle<Config>();
     return (HAL_DACEx_DualSetValue(&handle_storage, DAC_ALIGN_12B_R, value1, value2) == HAL_OK) ? status::ok
-                                                                                                 : status::error;
+                                                                                                : status::error;
 #else
     (void)value1;
     (void)value2;
@@ -4019,8 +4014,7 @@ struct i2s_api final
     transfer_state.active = false;
   }
 
-  template <typename Config, auto Handler>
-  static void dma_complete(I2S_HandleTypeDef* const handle_storage) noexcept
+  template <typename Config, auto Handler> static void dma_complete(I2S_HandleTypeDef* const handle_storage) noexcept
   {
     auto& transfer_state = state<Config, Handler>();
     if (!transfer_state.active || (handle_storage != &handle<Config>()))
@@ -4037,8 +4031,7 @@ struct i2s_api final
     notify_completion<Config, Handler>(status::ok);
   }
 
-  template <typename Config, auto Handler>
-  static void dma_error(I2S_HandleTypeDef* const handle_storage) noexcept
+  template <typename Config, auto Handler> static void dma_error(I2S_HandleTypeDef* const handle_storage) noexcept
   {
     auto& transfer_state = state<Config, Handler>();
     if (!transfer_state.active || (handle_storage != &handle<Config>()))
@@ -4120,8 +4113,7 @@ struct i2s_api final
   template <typename Config, auto Handler>
   static bool start_dma_tx(const std::span<const std::uint16_t> samples) noexcept
   {
-#if MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_I2S_REGISTER_CALLBACKS) &&                                    \
-    (USE_HAL_I2S_REGISTER_CALLBACKS == 1)
+#if MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_I2S_REGISTER_CALLBACKS) && (USE_HAL_I2S_REGISTER_CALLBACKS == 1)
     if (samples.size() > UINT16_MAX)
     {
       return false;
@@ -4206,11 +4198,12 @@ struct rcc_api final
   static status enable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
   {
 #if defined(RCC)
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::enable_peripheral_clock(peripheral, instance); })
+    if constexpr (
+        requires { typename Config::binding; } &&
+        requires { Config::binding::enable_peripheral_clock(peripheral, instance); })
     {
-      return microhal::detail::as_status(
-          [peripheral, instance] { return Config::binding::enable_peripheral_clock(peripheral, instance); });
+      return microhal::detail::as_status([peripheral, instance]
+                                         { return Config::binding::enable_peripheral_clock(peripheral, instance); });
     }
     return status::unsupported;
 #else
@@ -4224,11 +4217,12 @@ struct rcc_api final
   static status disable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
   {
 #if defined(RCC)
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::disable_peripheral_clock(peripheral, instance); })
+    if constexpr (
+        requires { typename Config::binding; } &&
+        requires { Config::binding::disable_peripheral_clock(peripheral, instance); })
     {
-      return microhal::detail::as_status(
-          [peripheral, instance] { return Config::binding::disable_peripheral_clock(peripheral, instance); });
+      return microhal::detail::as_status([peripheral, instance]
+                                         { return Config::binding::disable_peripheral_clock(peripheral, instance); });
     }
     return status::unsupported;
 #else
@@ -4844,9 +4838,8 @@ template <> struct backend_traits<stm32_hal_tag> final
             .slave_mode = true,
             .master_clock_output = true,
             .max_sample_rate = 192'000U,
-#if MICROHAL_STM32_HAL_FAMILY_SELECTED == 0 ||                                                                  \
-    (MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_I2S_REGISTER_CALLBACKS) &&                                  \
-     (USE_HAL_I2S_REGISTER_CALLBACKS == 1))
+#if MICROHAL_STM32_HAL_FAMILY_SELECTED == 0 ||                                                                         \
+    (MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_I2S_REGISTER_CALLBACKS) && (USE_HAL_I2S_REGISTER_CALLBACKS == 1))
             .transmit_dma = true,
 #else
             .transmit_dma = false,

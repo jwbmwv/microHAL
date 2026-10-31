@@ -56,9 +56,9 @@ struct accelerator final
    * @brief Computes a non-reflected CRC using the configured 32-bit polynomial.
    * @details This portable fallback uses the caller-supplied initial and final XOR values.
    */
-  [[nodiscard]] static constexpr std::uint32_t
-  calculate_software(const std::span<const std::uint8_t> data, const std::uint32_t initial = 0xFFFF'FFFFU,
-                     const std::uint32_t final_xor = 0U) noexcept
+  [[nodiscard]] static constexpr std::uint32_t calculate_software(const std::span<const std::uint8_t> data,
+                                                                  const std::uint32_t initial = 0xFFFF'FFFFU,
+                                                                  const std::uint32_t final_xor = 0U) noexcept
   {
     std::uint32_t crc = initial;
     for (const std::uint8_t byte : data)

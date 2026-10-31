@@ -518,8 +518,8 @@ enum class dma_priority : std::uint8_t;
 #include "stm32wbxx_ll_iwdg.h"
 #endif
 
-#include "microhal/core/traits.hpp"
 #include "microhal/backends/stm32/hal/traits.hpp"
+#include "microhal/core/traits.hpp"
 
 namespace microhal::backends::stm32::ll
 {
@@ -1707,8 +1707,8 @@ template <typename Config> consteval std::uint32_t dma_destination_increment_mod
 }
 
 template <typename Config>
-static auto dma_init(std::uint32_t src_addr, std::uint32_t dst_addr, std::uint32_t length) noexcept
-    -> LL_DMA_InitTypeDef
+static auto dma_init(std::uint32_t src_addr, std::uint32_t dst_addr,
+                     std::uint32_t length) noexcept -> LL_DMA_InitTypeDef
 {
 #if MICROHAL_STM32_LL_DMA_RUNTIME == 0
   (void)src_addr;
@@ -2093,8 +2093,7 @@ struct spi_api final
     return transfer<Config>(tx_payload.data(), rx_payload.data(), length);
   }
 
-  template <typename Config>
-  static status write_blocking(const std::span<const std::uint8_t> payload) noexcept
+  template <typename Config> static status write_blocking(const std::span<const std::uint8_t> payload) noexcept
   {
     return backends::stm32::hal::spi_api::template write_blocking<Config>(payload);
   }
@@ -3319,11 +3318,12 @@ struct rcc_api final
   static status enable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
   {
 #if defined(RCC)
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::enable_peripheral_clock(peripheral, instance); })
+    if constexpr (
+        requires { typename Config::binding; } &&
+        requires { Config::binding::enable_peripheral_clock(peripheral, instance); })
     {
-      return microhal::detail::as_status(
-          [peripheral, instance] { return Config::binding::enable_peripheral_clock(peripheral, instance); });
+      return microhal::detail::as_status([peripheral, instance]
+                                         { return Config::binding::enable_peripheral_clock(peripheral, instance); });
     }
     return status::unsupported;
 #else
@@ -3337,11 +3337,12 @@ struct rcc_api final
   static status disable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
   {
 #if defined(RCC)
-    if constexpr (requires { typename Config::binding; } &&
-                  requires { Config::binding::disable_peripheral_clock(peripheral, instance); })
+    if constexpr (
+        requires { typename Config::binding; } &&
+        requires { Config::binding::disable_peripheral_clock(peripheral, instance); })
     {
-      return microhal::detail::as_status(
-          [peripheral, instance] { return Config::binding::disable_peripheral_clock(peripheral, instance); });
+      return microhal::detail::as_status([peripheral, instance]
+                                         { return Config::binding::disable_peripheral_clock(peripheral, instance); });
     }
     return status::unsupported;
 #else
@@ -3799,8 +3800,7 @@ template <> struct backend_traits<stm32_ll_tag> final
               .blocking = true,
               .non_blocking = backends::stm32::hal::serial_transfer_modes<peripheral_kind::i2s>().interrupt,
               .isr = backends::stm32::hal::serial_transfer_modes<peripheral_kind::i2s>().interrupt,
-#if MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_I2S_REGISTER_CALLBACKS) &&                                    \
-    (USE_HAL_I2S_REGISTER_CALLBACKS == 1)
+#if MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_I2S_REGISTER_CALLBACKS) && (USE_HAL_I2S_REGISTER_CALLBACKS == 1)
               .dma = true,
 #else
               .dma = false,
@@ -3812,8 +3812,7 @@ template <> struct backend_traits<stm32_ll_tag> final
               .slave_mode = true,
               .master_clock_output = true,
               .max_sample_rate = 192'000U,
-#if MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_I2S_REGISTER_CALLBACKS) &&                                    \
-    (USE_HAL_I2S_REGISTER_CALLBACKS == 1)
+#if MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_I2S_REGISTER_CALLBACKS) && (USE_HAL_I2S_REGISTER_CALLBACKS == 1)
               .transmit_dma = true,
 #else
               .transmit_dma = false,

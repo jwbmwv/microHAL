@@ -160,8 +160,8 @@ template <typename Backend> struct i2c_api_adapter final
   }
 
   template <typename Config, auto Handler>
-  static auto write_read_async(const std::span<const std::uint8_t> tx_payload,
-                               const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
+  static auto write_read_async(const std::span<const std::uint8_t> tx_payload, const std::span<std::uint8_t> rx_payload,
+                               const std::uint16_t address) noexcept
   {
     if constexpr (requires {
                     raw_i2c_api_t<Backend>::template write_read_async<Config, Handler>(tx_payload, rx_payload, address);
@@ -539,8 +539,7 @@ template <typename Backend> struct timer_api_adapter final
   {
     if constexpr (requires { raw_timer_api_t<Backend>::template period<Config>(); })
     {
-      return detail::as_result<std::uint32_t>(
-          [] { return raw_timer_api_t<Backend>::template period<Config>(); });
+      return detail::as_result<std::uint32_t>([] { return raw_timer_api_t<Backend>::template period<Config>(); });
     }
     else
     {

@@ -36,7 +36,10 @@ using backend_nuttx = microhal::nuttx_tag;
 
 struct peripheral_binding_contract final
 {
-  template <typename Config> static bool initialize() noexcept { return true; }
+  template <typename Config> static bool initialize() noexcept
+  {
+    return true;
+  }
   template <typename Config>
   static bool command_read(const microhal::qspi::command&, const std::span<std::uint8_t>) noexcept
   {
@@ -47,10 +50,22 @@ struct peripheral_binding_contract final
   {
     return true;
   }
-  template <typename Config> static bool enter_memory_mapped(const microhal::qspi::command&) noexcept { return true; }
-  template <typename Config> static bool exit_memory_mapped() noexcept { return true; }
-  template <typename Config> static bool connect() noexcept { return true; }
-  template <typename Config> static bool disconnect() noexcept { return true; }
+  template <typename Config> static bool enter_memory_mapped(const microhal::qspi::command&) noexcept
+  {
+    return true;
+  }
+  template <typename Config> static bool exit_memory_mapped() noexcept
+  {
+    return true;
+  }
+  template <typename Config> static bool connect() noexcept
+  {
+    return true;
+  }
+  template <typename Config> static bool disconnect() noexcept
+  {
+    return true;
+  }
   template <typename Config>
   static bool endpoint_transmit(const std::uint8_t, const std::span<const std::uint8_t>) noexcept
   {
@@ -61,21 +76,35 @@ struct peripheral_binding_contract final
   {
     return 0U;
   }
-  template <typename Config>
-  static bool transmit_blocking(const std::span<const std::uint16_t>) noexcept
+  template <typename Config> static bool transmit_blocking(const std::span<const std::uint16_t>) noexcept
   {
     return true;
   }
-  template <typename Config> static bool receive_blocking(const std::span<std::uint16_t>) noexcept { return true; }
+  template <typename Config> static bool receive_blocking(const std::span<std::uint16_t>) noexcept
+  {
+    return true;
+  }
   template <typename Config, auto CompletionHandler>
   static bool start_dma_tx(const std::span<const std::uint16_t>) noexcept
   {
     return true;
   }
-  static bool read_blocks(const std::uint32_t, const std::span<std::uint8_t>) noexcept { return true; }
-  static bool write_blocks(const std::uint32_t, const std::span<const std::uint8_t>) noexcept { return true; }
-  static bool erase_blocks(const std::uint32_t, const std::uint32_t) noexcept { return true; }
-  template <typename Config> static std::uint32_t capacity_blocks() noexcept { return 1024U; }
+  static bool read_blocks(const std::uint32_t, const std::span<std::uint8_t>) noexcept
+  {
+    return true;
+  }
+  static bool write_blocks(const std::uint32_t, const std::span<const std::uint8_t>) noexcept
+  {
+    return true;
+  }
+  static bool erase_blocks(const std::uint32_t, const std::uint32_t) noexcept
+  {
+    return true;
+  }
+  template <typename Config> static std::uint32_t capacity_blocks() noexcept
+  {
+    return 1024U;
+  }
 };
 
 // ADC Configuration
@@ -418,8 +447,7 @@ static_assert(!microhal::WatchdogConcept<backend_nuttx, wdog_cfg>);
 // I2S Configuration
 using i2s_cfg = microhal::i2s::i2s_config<1U, microhal::i2s_mode::master_tx, microhal::i2s_standard::philips, 48000U>;
 using blocking_i2s_cfg =
-    microhal::i2s::i2s_config<1U, microhal::i2s_mode::master_tx, microhal::i2s_standard::philips, 48000U, false,
-                              false>;
+    microhal::i2s::i2s_config<1U, microhal::i2s_mode::master_tx, microhal::i2s_standard::philips, 48000U, false, false>;
 
 static_assert(microhal::I2sConcept<backend_stm32_hal, i2s_cfg>);
 static_assert(microhal::I2sConcept<backend_stm32_ll, blocking_i2s_cfg>);
@@ -437,9 +465,8 @@ static_assert(
     }());
 static_assert(!microhal::I2sConcept<backend_nuttx, i2s_cfg>);
 using bound_i2s_cfg = microhal::i2s::bound_i2s_config<peripheral_binding_contract, microhal::i2s_mode::master_tx,
-                                                       microhal::i2s_standard::philips, 48000U, false, false>;
-using bound_dma_i2s_cfg = microhal::i2s::bound_i2s_config<peripheral_binding_contract,
-                                                          microhal::i2s_mode::master_tx,
+                                                      microhal::i2s_standard::philips, 48000U, false, false>;
+using bound_dma_i2s_cfg = microhal::i2s::bound_i2s_config<peripheral_binding_contract, microhal::i2s_mode::master_tx,
                                                           microhal::i2s_standard::philips, 48000U, false, true>;
 static_assert(
     []() consteval
