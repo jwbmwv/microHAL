@@ -12,7 +12,7 @@ This document defines what each microHAL backend needs from its vendor SDK or en
 | `microhal::nordic_nrf_tag` | Nordic bare-metal nrfx SDK | Current stateful nrfx driver APIs, target CMSIS/system headers, and application nrfx glue/configuration; RTC requires API 4.1 | GPIO/GPIOTE, TWIM, SPIM, UARTE, TIMER, SAADC, PWM, WDT, I2S, and clock readback on selected targets; NVMC/QSPI/RTC additionally target-gated | Typed pin/channel bindings, linked nrfx drivers, clock ownership, IRQ dispatch, and DMA-accessible buffer lifetimes |
 | `microhal::zephyr_tag` | Zephyr RTOS driver model | Zephyr include tree + generated headers (`autoconf.h`, devicetree-generated headers) | `CONFIG_*` gates and Zephyr driver APIs (`device`, `gpio`, `i2c`, `spi`, `adc`, etc.) | Device identity via `binding::device` or `Config::device`, initialized with `DEVICE_DT_GET()` in board code; peripheral-specific config (`gpio_dt_spec`, `spi_config`, etc.) |
 | `microhal::nuttx_tag` | NuttX RTOS | NuttX headers and board defconfig-selected subsystems | `__NUTTX__`, generated `nuttx/config.h`, `CONFIG_*` feature macros, and character/block device or network socket APIs | Character-device paths (for example `/dev/i2c0`, `/dev/spi0`, `/dev/mmcsd0`) via `binding::device_path` or `Config::device_path`; flash requires a board-supplied `mtd_dev_s*` binding |
-| `microhal::mock_tag` | Host test environment | No vendor SDK | C++20 host compiler only; full peripheral recorder surface | None |
+| `microhal::mock_tag` | Host test environment | No vendor SDK | C++20 or newer host compiler; full peripheral recorder surface | None |
 
 ## Kinetis/MCUXpresso Family Coverage Model
 

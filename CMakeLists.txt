@@ -5,7 +5,9 @@ string(STRIP "${MICROHAL_VERSION}" MICROHAL_VERSION)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_STANDARD 20)
+if(NOT DEFINED CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 20)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -518,6 +520,16 @@ add_test(NAME microhal_capability_claim_policy
   COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_capability_claim_policy.sh)
 
 if(NOT MICROHAL_VENDOR_VALIDATION)
+  set(_microhal_test_cxx_standard "${CMAKE_CXX_STANDARD}")
+  if(_microhal_test_cxx_standard LESS 20 OR _microhal_test_cxx_standard STREQUAL "98")
+    set(_microhal_test_cxx_standard 20)
+  endif()
+  add_test(NAME microhal_clock_diagnostics
+    COMMAND ${CMAKE_COMMAND}
+      -S ${CMAKE_CURRENT_SOURCE_DIR}/tests/diagnostics
+      -B ${CMAKE_CURRENT_BINARY_DIR}/tests/diagnostics
+      -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+      -DCMAKE_CXX_STANDARD=${_microhal_test_cxx_standard})
   add_test(NAME microhal_mock_runtime COMMAND microhal_mock_runtime)
   add_test(NAME microhal_nordic_logic COMMAND microhal_nordic_logic)
   add_test(NAME microhal_stm32_serial_state COMMAND microhal_stm32_serial_state)

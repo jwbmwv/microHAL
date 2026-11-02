@@ -2,10 +2,15 @@
 
 ## Goals
 
-- C++20-only, header-first microHAL for deterministic Cortex-M style targets.
+- C++20 minimum, header-first microHAL for deterministic Cortex-M style targets; newer language modes remain supported.
 - No exceptions, RTTI, dynamic allocation, virtual dispatch, or runtime backend selection.
 - Compile-time backend capability validation with clear diagnostics.
 - Backend-facing APIs structured to map directly onto STM32Cube HAL, STM32Cube LL, MCU Espresso, Zephyr, and future vendor layers.
+
+Optional newer-standard features must provide a material benefit and preserve the C++20 API
+and runtime behavior. Feature-test macros, rather than language-version checks alone, gate
+these additions. I2C/SPI clock validation uses C++26 generated assertion messages when available
+to include the requested frequency and backend maximum, with the original fixed messages otherwise.
 
 ## Diagram Set
 

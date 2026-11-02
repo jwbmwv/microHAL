@@ -8,13 +8,78 @@
 
 #pragma once
 
+#include <array>
 #include <concepts>
+#include <cstdint>
+#include <string_view>
 #include <type_traits>
 
 #include "microhal/core/backend_selector.hpp"
 
 namespace microhal
 {
+
+#if defined(__cpp_static_assert) && __cpp_static_assert >= 202306L
+namespace detail
+{
+
+template <std::size_t N>
+consteval auto clock_diagnostic(const std::uint32_t requested, const std::array<char, N>& prefix,
+                                const std::uint32_t maximum) noexcept
+{
+  constexpr std::string_view middle{" Hz is outside backend range 1.."};
+  constexpr std::string_view suffix{" Hz."};
+  constexpr std::size_t capacity = N + middle.size() + suffix.size() + 20U;
+  struct message
+  {
+    std::array<char, capacity> text{};
+    std::size_t length{};
+
+    [[nodiscard]] constexpr std::size_t size() const noexcept
+    {
+      return length;
+    }
+    [[nodiscard]] constexpr const char* data() const noexcept
+    {
+      return text.data();
+    }
+  };
+  message output{};
+  const auto append = [&output](const std::string_view text)
+  {
+    for (const char character : text)
+    {
+      output.text.at(output.length++) = character;
+    }
+  };
+  const auto append_number = [&output](std::uint32_t value)
+  {
+    std::array<char, 10U> digits{};
+    std::size_t count{};
+    while (true)
+    {
+      digits.at(count++) = static_cast<char>('0' + value % 10U);
+      value /= 10U;
+      if (value == 0U)
+      {
+        break;
+      }
+    }
+    while (count != 0U)
+    {
+      output.text.at(output.length++) = digits.at(--count);
+    }
+  };
+  append(std::string_view{prefix.data(), N - 1U});
+  append_number(requested);
+  append(middle);
+  append_number(maximum);
+  append(suffix);
+  return output;
+}
+
+} // namespace detail
+#endif
 
 template <typename Capability>
 concept CapabilityConcept = requires(const Capability capability) {
@@ -825,7 +890,12 @@ template <typename Backend, typename Config> consteval bool validate_i2c_config(
       }, "microHAL: I2C configuration must expose clock_hz, address_mode, enable_dma, and enable_interrupts.");
   static_assert((Config::clock_hz > 0U) &&
                     (Config::clock_hz <= backend_traits<Backend>::i2c_capability().max_frequency_hz),
+#if defined(__cpp_static_assert) && __cpp_static_assert >= 202306L
+                detail::clock_diagnostic(Config::clock_hz, std::to_array("microHAL: requested I2C clock "),
+                                         backend_traits<Backend>::i2c_capability().max_frequency_hz));
+#else
                 "microHAL: requested I2C clock exceeds backend capability.");
+#endif
   static_assert((!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::i2c>,
                 "microHAL: selected backend does not provide DMA-capable I2C.");
   static_assert((!Config::enable_interrupts) || IsrCapableConcept<Backend, peripheral_kind::i2c>,
@@ -855,7 +925,12 @@ template <typename Backend, typename Config> consteval bool validate_spi_config(
          "enable_dma, and enable_interrupts.");
   static_assert((Config::clock_hz > 0U) &&
                     (Config::clock_hz <= backend_traits<Backend>::spi_capability().max_frequency_hz),
+#if defined(__cpp_static_assert) && __cpp_static_assert >= 202306L
+                detail::clock_diagnostic(Config::clock_hz, std::to_array("microHAL: requested SPI clock "),
+                                         backend_traits<Backend>::spi_capability().max_frequency_hz));
+#else
                 "microHAL: requested SPI clock exceeds backend capability.");
+#endif
   static_assert((!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::spi>,
                 "microHAL: selected backend does not provide DMA-capable SPI.");
   static_assert((!Config::enable_interrupts) || IsrCapableConcept<Backend, peripheral_kind::spi>,

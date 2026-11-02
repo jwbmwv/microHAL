@@ -6,32 +6,75 @@ on:
 
 jobs:
   host-build-and-test:
-    name: Host build and test (${{ matrix.compiler }})
-    runs-on: ubuntu-latest
+    name: Host build and test (${{ matrix.compiler }}, C++${{ matrix.standard }})
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         include:
-          - compiler: g++
-            cc: gcc
-          - compiler: clang++
-            cc: clang
+          - compiler: g++-13
+            cc: gcc-13
+            package: g++-13
+            standard: 20
+          - compiler: clang++-18
+            cc: clang-18
+            package: clang-18
+            standard: 20
+          - compiler: g++-13
+            cc: gcc-13
+            package: g++-13
+            standard: 23
+          - compiler: clang++-18
+            cc: clang-18
+            package: clang-18
+            standard: 23
+          - compiler: clang++-18
+            cc: clang-18
+            package: clang-18
+            standard: 26
     steps:
       - uses: actions/checkout@v4
 
       - name: Install toolchain
-        run: sudo apt-get update && sudo apt-get install --yes ${{ matrix.cc }} cmake ninja-build
+        run: sudo apt-get update && sudo apt-get install --yes ${{ matrix.package }} cmake ninja-build
 
       - name: Configure
         env:
+          CC: ${{ matrix.cc }}
           CXX: ${{ matrix.compiler }}
-        run: cmake -S . -B build -G Ninja
+        run: cmake -S . -B build -G Ninja -DCMAKE_CXX_STANDARD=${{ matrix.standard }}
 
       - name: Build
         run: cmake --build build
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+      - name: Test add_subdirectory consumption
+        run: |
+          cmake -S tests/package_consumer -B build/consumer-source -G Ninja \
+            -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+            -DCMAKE_CXX_STANDARD=${{ matrix.standard }} -DMICROHAL_TEST_ADD_SUBDIRECTORY=ON
+          cmake --build build/consumer-source --target microhal_package_consumer
+          ctest --test-dir build/consumer-source --output-on-failure -R '^microhal_package_consumer$'
+
+      - name: Test installed package consumption
+        run: |
+          cmake --install build --prefix "$PWD/build/install"
+          cmake -S tests/package_consumer -B build/consumer-installed -G Ninja \
+            -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} -DCMAKE_CXX_STANDARD=${{ matrix.standard }} \
+            -DCMAKE_PREFIX_PATH="$PWD/build/install"
+          cmake --build build/consumer-installed
+          ctest --test-dir build/consumer-installed --output-on-failure
+
+      - name: Test transitive C++20 minimum
+        if: matrix.compiler == 'g++-13' && matrix.standard == 20
+        run: |
+          cmake -S tests/package_consumer -B build/consumer-minimum -G Ninja \
+            -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} -DCMAKE_CXX_STANDARD=17 \
+            -DCMAKE_PREFIX_PATH="$PWD/build/install"
+          cmake --build build/consumer-minimum
+          ctest --test-dir build/consumer-minimum --output-on-failure
 
   backend-selection-matrix:
     name: Single-backend build (${{ matrix.backend }})
