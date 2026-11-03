@@ -227,12 +227,15 @@ struct interface final
     if constexpr (requires { i2s_api_t<Backend>::template stop<Config>(); })
       return detail::as_status([] { return i2s_api_t<Backend>::template stop<Config>(); });
     else
-      return mode_api::template abort<Config>();
+      return abort();
   }
 
   [[nodiscard]] static status abort() noexcept
   {
-    return mode_api::template abort<Config>();
+    if constexpr (transfer_mode_value == transfer_mode::automatic && !std::same_as<Backend, nordic_nrf_tag>)
+      return status::unsupported;
+    else
+      return mode_api::template abort<Config>();
   }
   [[nodiscard]] static status transfer_status() noexcept
   {
