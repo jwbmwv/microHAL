@@ -160,6 +160,8 @@ private:
            valid_io_mode(request.data_mode) && (request.instruction_mode != io_mode::none) &&
            (request.address_size_bytes <= 4U) &&
            (request.address_size_bytes <= backend_traits<Backend>::qspi_capability().max_address_bytes) &&
+           ((request.address_size_bytes == 0U) || (static_cast<std::uint64_t>(request.address) <=
+                                                   ((std::uint64_t{1U} << (8U * request.address_size_bytes)) - 1U))) &&
            ((request.address_size_bytes == 0U) == (request.address_mode == io_mode::none)) &&
            (no_data == (request.data_mode == io_mode::none));
   }

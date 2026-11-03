@@ -101,7 +101,9 @@ struct device final
 
   [[nodiscard]] static constexpr bool is_valid_endpoint(const std::uint8_t endpoint) noexcept
   {
-    return endpoint < endpoint_count;
+    constexpr std::uint8_t endpoint_number_mask{0x0FU};
+    constexpr std::uint8_t reserved_bits_mask{0x70U};
+    return ((endpoint & reserved_bits_mask) == 0U) && ((endpoint & endpoint_number_mask) < endpoint_count);
   }
 };
 

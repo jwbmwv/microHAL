@@ -76,7 +76,8 @@ using log_flash = microhal::flash::flash_config<4U, 2'048U>;
 using system_watchdog = microhal::watchdog::watchdog_config<1U, 1'000U>;
 using motor_pwm = microhal::pwm::pwm_config<3U, 1U, 20'000U>;
 using host_rtc = microhal::rtc::rtc_config<false, true>;
-using host_timer = microhal::timers::timer_config<0U, 1'000'000U>;
+using host_timer = microhal::timers::timer_config<0U, 1'000'000U, microhal::timer_counter_mode::up,
+                                                  microhal::timer_clock_source::internal, false, false, 0U>;
 using host_timer_channel = microhal::timers::channel_config<1U, true, false>;
 using host_dac = microhal::dac::dac_config<0U>;
 using host_qspi = microhal::qspi::controller_config<0U, 80'000'000U>;
@@ -298,6 +299,13 @@ void test_flash_forwards_address() noexcept
   check_status(microhal::flash::controller<backend, log_flash>::program_and_verify(
                    0x0800'4000U, expected_readback, std::span<std::uint8_t>{verify_buffer.data(), 3U}),
                status::invalid_argument, "flash verification rejects mismatched buffer lengths");
+  std::array<std::uint8_t, 6U> overlapping_buffer{};
+  const std::size_t calls_before_overlap = recorder::log().size();
+  check_status(microhal::flash::controller<backend, log_flash>::program_and_verify(
+                   0x0800'4000U, std::span<const std::uint8_t>{overlapping_buffer.data(), 4U},
+                   std::span<std::uint8_t>{overlapping_buffer.data() + 2U, 4U}),
+               status::invalid_argument, "flash verification rejects overlapping buffers");
+  check(recorder::log().size() == calls_before_overlap, "overlapping flash buffers do not reach the backend");
   const std::array<std::uint8_t, 4U> mismatched_readback{1U, 2U, 3U, 4U};
   check_status(microhal::flash::controller<backend, log_flash>::program_and_verify(0x0800'4000U, mismatched_readback,
                                                                                    verify_buffer),
@@ -441,6 +449,14 @@ void test_qspi_transactions_and_memory_map() noexcept
   check(qspi::is_valid_command(read_command), "qspi command helper accepts a valid request");
   check(qspi::supports_command_mode(read_command), "qspi mode helper recognizes supported bus modes");
 
+  auto out_of_range_address = read_command;
+  out_of_range_address.address = 0x01000000U;
+  check(!qspi::is_valid_command(out_of_range_address), "qspi rejects addresses wider than the selected phase");
+  const std::size_t calls_before_invalid_address = recorder::log().size();
+  check_status(qspi::command_read(out_of_range_address, rx), status::invalid_argument,
+               "qspi rejects out-of-range addresses before dispatch");
+  check(recorder::log().size() == calls_before_invalid_address, "invalid qspi addresses do not reach the backend");
+
   const microhal::qspi::command invalid_command{
       .instruction = 0x03U, .address_size_bytes = 5U, .address_mode = microhal::qspi::io_mode::single};
   check_status(qspi::command_read(invalid_command, rx), status::invalid_argument,
@@ -464,6 +480,8 @@ void test_usb_endpoint_validation() noexcept
   const std::array<std::uint8_t, 3U> tx{1U, 2U, 3U};
   check_status(device::initialize(), status::ok, "usb initializes");
   check(device::is_valid_endpoint(0U), "usb accepts control endpoint zero");
+  check(device::is_valid_endpoint(0x81U), "usb accepts endpoint addresses with the IN direction bit");
+  check(!device::is_valid_endpoint(0x11U), "usb rejects endpoint addresses with reserved bits set");
   check(!device::is_valid_endpoint(static_cast<std::uint8_t>(device::endpoint_count)),
         "usb rejects endpoint indexes outside the backend range");
   check_status(device::endpoint_transmit(0U, tx), status::ok, "usb transfers endpoint data");

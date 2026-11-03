@@ -101,7 +101,7 @@ struct peripheral_binding_contract final
   {
     return true;
   }
-  template <typename Config> static std::uint32_t capacity_blocks() noexcept
+  static std::uint32_t capacity_blocks() noexcept
   {
     return 1024U;
   }
@@ -451,7 +451,16 @@ using blocking_i2s_cfg =
 
 static_assert(microhal::I2sConcept<backend_stm32_hal, i2s_cfg>);
 static_assert(microhal::I2sConcept<backend_stm32_ll, blocking_i2s_cfg>);
-static_assert(!microhal::DmaCapableConcept<backend_stm32_ll, microhal::peripheral_kind::i2s>);
+static_assert(
+    []() consteval
+    {
+      if constexpr (microhal::backend_traits<backend_stm32_ll>::i2s_capability().dma)
+      {
+        return microhal::DmaCapableConcept<backend_stm32_ll, microhal::peripheral_kind::i2s>;
+      }
+
+      return !microhal::DmaCapableConcept<backend_stm32_ll, microhal::peripheral_kind::i2s>;
+    }());
 static_assert(!microhal::I2sConcept<backend_kinetis, i2s_cfg>);
 static_assert(
     []() consteval

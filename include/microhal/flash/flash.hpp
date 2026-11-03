@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <functional>
 #include <span>
 
 #include "microhal/core/concepts.hpp"
@@ -116,6 +117,16 @@ struct controller final
     if (payload.size() != readback.size())
     {
       return status::invalid_argument;
+    }
+    if (!payload.empty())
+    {
+      const auto* const payload_end = payload.data() + payload.size();
+      const auto* const readback_end = readback.data() + readback.size();
+      const std::less<const std::uint8_t*> less{};
+      if (less(payload.data(), readback_end) && less(readback.data(), payload_end))
+      {
+        return status::invalid_argument;
+      }
     }
 
     const status programmed = program(address, payload);

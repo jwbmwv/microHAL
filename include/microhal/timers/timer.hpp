@@ -23,7 +23,6 @@ template <std::uint8_t InstanceIndex, std::uint32_t ClockHz, timer_counter_mode 
           bool EnableInterrupts = false, std::uint32_t Prescaler = 1U, std::uint32_t Period = 65'536U>
 struct timer_config final
 {
-  static_assert(Prescaler > 0U, "microHAL: timer prescaler must be non-zero.");
   static_assert(Period > 0U, "microHAL: timer period in ticks must be non-zero.");
 
   static constexpr std::uint8_t instance_index{InstanceIndex};

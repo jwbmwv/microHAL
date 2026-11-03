@@ -89,10 +89,17 @@ struct port final
       return detail::as_status([payload] { return uart_api_t<Backend>::template read_blocking<Config>(payload); });
   }
 
-  /** @brief Writes one byte using the configured blocking transmit path. */
+  /** @brief Writes one byte only when the configured transfer completes before returning. */
   [[nodiscard]] static inline status write_byte(const std::uint8_t byte) noexcept
   {
-    return write_blocking(std::span<const std::uint8_t>{&byte, 1U});
+    if constexpr ((mode != transfer_mode::automatic) && (mode != transfer_mode::polled))
+    {
+      return status::unsupported;
+    }
+    else
+    {
+      return write_blocking(std::span<const std::uint8_t>{&byte, 1U});
+    }
   }
 
   /** @brief Reads one byte using the configured blocking receive path. */
