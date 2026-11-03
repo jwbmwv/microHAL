@@ -233,7 +233,12 @@ struct interface final
   [[nodiscard]] static status abort() noexcept
   {
     if constexpr (transfer_mode_value == transfer_mode::automatic && !std::same_as<Backend, nordic_nrf_tag>)
-      return status::unsupported;
+    {
+      if constexpr (requires { i2s_api_t<Backend>::template abort<Config>(); })
+        return detail::as_status([] { return i2s_api_t<Backend>::template abort<Config>(); });
+      else
+        return status::unsupported;
+    }
     else
       return mode_api::template abort<Config>();
   }

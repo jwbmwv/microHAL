@@ -119,6 +119,7 @@ struct channel_binding
 struct channel_config : config
 {
   using binding = channel_binding;
+  static constexpr unsigned instance_index = 2;
 };
 struct gpdma_regs
 {
@@ -140,6 +141,7 @@ struct gpdma_binding
 struct gpdma_config : config
 {
   using binding = gpdma_binding;
+  static constexpr unsigned instance_index = 3;
 };
 } // namespace
 int main()
@@ -195,7 +197,7 @@ int main()
   assert(gp.CBR1 == 16 && (gp.CTR1 & 0x30003U) == 0x10001U && gp.CTR2 == 7U);
   assert(gp.CSAR == static_cast<std::uint32_t>(source));
   assert(gp.CDAR == static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(buffer)));
-  assert(gp.CLLR != 0 && gp_dma::node.count == 16 && gp_dma::node.link == gp.CLLR);
+  assert(gp.CLLR != 0 && gp_dma::state::node.count == 16 && gp_dma::state::node.link == gp.CLLR);
   gp.CSR = (1U << 8) | (1U << 9);
   assert(gp_dma::flags() == 3 && gp.CFCR == gp.CSR);
   // Model the hardware's completed reset before checking idempotent cleanup.

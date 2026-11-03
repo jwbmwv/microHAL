@@ -39,6 +39,17 @@ using microhal::status;
 struct backend
 {
 };
+struct legacy_i2s_api
+{
+  template <typename Config> static bool initialize() noexcept
+  {
+    return true;
+  }
+  template <typename Config, auto Handler> static bool start_dma_tx(std::span<const std::uint16_t>) noexcept
+  {
+    return true;
+  }
+};
 template <typename Capability> consteval auto with_modes(Capability capability)
 {
   capability.transfer_modes = {true, true, true};
@@ -145,6 +156,7 @@ namespace microhal
 template <> struct backend_traits<fixture::backend>
 {
   using backend_tag = fixture::backend;
+  using i2s_api = fixture::legacy_i2s_api;
   static constexpr auto vendor = vendor_kind::mock;
   static constexpr auto kind = backend_kind::mock_recording;
   static constexpr std::string_view name = "serial-state-fixture";
@@ -374,6 +386,12 @@ int main()
         "I2S facade selects interrupt receive");
   audio_driver::h.rx(&audio_driver::h);
   check(facade_callbacks == 2, "I2S facade callback delivered");
+  using automatic_audio =
+      microhal::i2s::interface<fixture::backend, microhal::i2s::i2s_config<0, microhal::i2s_mode::master_tx,
+                                                                           microhal::i2s_standard::philips, 48000>>;
+  check(automatic_audio::template start_dma_tx<facade_completed>(samples) == status::ok &&
+            automatic_audio::stop() == status::unsupported && automatic_audio::abort() == status::unsupported,
+        "automatic I2S cancellation remains unsupported without legacy transfer state");
   using spi_bus = microhal::spi::master<
       fixture::backend,
       microhal::spi::master_config<0, 1000000, microhal::spi_duplex_mode::full, microhal::spi_clock_polarity::idle_low,

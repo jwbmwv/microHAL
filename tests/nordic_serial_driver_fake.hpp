@@ -202,6 +202,8 @@ inline std::size_t queued_size{};
 inline bool disable_all{}, sync_abort{};
 inline bool slave_enabled{};
 inline bool master_enabled{true};
+inline void (*tx_abort_hook)(){};
+inline void (*rx_abort_hook)(){};
 inline nrfx_twim_xfer_desc_t master_descriptor{};
 inline nrfx_uarte_config_t uart_configuration{};
 inline unsigned uart_initializations{};
@@ -225,6 +227,12 @@ inline int nrfx_uarte_init(nrfx_uarte_t* instance, const nrfx_uarte_config_t* co
 inline int nrfx_uarte_tx_abort(nrfx_uarte_t*, bool)
 {
   ++fake::abort_tx_calls;
+  if (fake::tx_abort_hook != nullptr)
+  {
+    const auto hook = fake::tx_abort_hook;
+    fake::tx_abort_hook = nullptr;
+    hook();
+  }
   return fake::tx_abort_error;
 }
 inline int nrfx_uarte_rx_abort(nrfx_uarte_t*, bool all, bool sync)
@@ -232,6 +240,12 @@ inline int nrfx_uarte_rx_abort(nrfx_uarte_t*, bool all, bool sync)
   ++fake::abort_rx_calls;
   fake::disable_all = all;
   fake::sync_abort = sync;
+  if (sync && fake::rx_abort_hook != nullptr)
+  {
+    const auto hook = fake::rx_abort_hook;
+    fake::rx_abort_hook = nullptr;
+    hook();
+  }
   return fake::rx_abort_error;
 }
 inline int nrfx_uarte_rx_buffer_set(nrfx_uarte_t*, std::uint8_t* bytes, std::size_t size)

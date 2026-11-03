@@ -34,6 +34,9 @@ struct slave_config : config
 unsigned completions{}, receives{};
 status last_result{};
 std::span<std::uint8_t> last_bytes{};
+std::array<std::uint8_t, 16> rearm_buffer{};
+unsigned tx_rearms{}, rx_rearms{};
+status rx_rearm_result{};
 void completed(status value) noexcept
 {
   ++completions;
@@ -44,6 +47,36 @@ void received(status value, std::span<std::uint8_t> bytes) noexcept
   ++receives;
   last_result = value;
   last_bytes = bytes;
+}
+void rearm_tx(status value) noexcept
+{
+  if (value == status::error)
+  {
+    ++tx_rearms;
+    auto& state = detail::uarte_states[0];
+    assert(state.tx.begin(completed));
+    state.tx_size = 4U;
+    state.tx_cancelled = false;
+  }
+}
+void rearm_rx(status value, std::span<std::uint8_t>) noexcept
+{
+  if (value == status::error)
+  {
+    ++rx_rearms;
+    rx_rearm_result = uart_api::start_receive_to_idle<config, received>(rearm_buffer);
+  }
+}
+void trigger_tx_done()
+{
+  nrfx_uarte_event_t event{NRFX_UARTE_EVT_TX_DONE, {}};
+  event.data.tx.flags = NRFX_UARTE_TX_DONE_ABORTED;
+  detail::uarte_handler(&event, &detail::uarte_states[0]);
+}
+void trigger_rx_disabled()
+{
+  nrfx_uarte_event_t event{NRFX_UARTE_EVT_RX_DISABLED, {}};
+  detail::uarte_handler(&event, &detail::uarte_states[0]);
 }
 
 struct flow_control_pins
@@ -252,6 +285,24 @@ void uart_lifecycle()
   event.data.tx.flags = NRFX_UARTE_TX_DONE_ABORTED;
   detail::uarte_handler(&event, &state);
   assert(last_result == status::error && !state.tx.active);
+
+  assert(state.tx.begin(rearm_tx));
+  state.tx_size = 8U;
+  state.tx_cancelled = false;
+  fake::tx_abort_hook = trigger_tx_done;
+  assert(uart_api::abort_tx<config>() == status::ok);
+  assert(tx_rearms == 1U && state.tx.active);
+
+  assert((uart_api::start_receive_to_idle<config, rearm_rx>(bytes) == status::ok));
+  const auto releases_before_abort = fake::release_calls;
+  fake::rx_abort_hook = trigger_rx_disabled;
+  assert(uart_api::abort_rx<config>() == status::ok);
+  assert(rx_rearms == 1U && rx_rearm_result == status::ok);
+  assert(state.rx.active && timeout_timer.cb.initialized);
+  assert(fake::release_calls == releases_before_abort + 1U);
+  trigger_rx_disabled();
+  assert(!state.rx.active && !timeout_timer.cb.initialized);
+  assert(fake::release_calls == releases_before_abort + 2U);
 }
 
 void slaves()

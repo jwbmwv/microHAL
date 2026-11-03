@@ -20,4 +20,9 @@ int main()
   assert(A::transfer_status<config>() == status::unsupported);
   assert(A::probe<config>(0x50) == status::unsupported);
   assert(A::handle_interrupt<config>() == status::unsupported);
+  assert(A::tx_status<config>() == status::unsupported);
+  assert(A::rx_status<config>() == status::unsupported);
+  assert(A::abort_tx<config>() == status::unsupported);
+  assert(A::abort_rx<config>() == status::unsupported);
+  assert(A::handle_dma_interrupt<config>() == status::unsupported);
 }
