@@ -1534,7 +1534,8 @@ template <typename Config> using driver_t = typename driver_for<Config>::type;
 template <typename Config, peripheral_kind Kind>
 inline constexpr bool matches = []
 {
-  if constexpr (std::is_same_v<driver_t<Config>, unavailable>)
+  if constexpr (((Kind == peripheral_kind::spi || Kind == peripheral_kind::i2c) && serial_slave_enabled<Config>()) ||
+                std::is_same_v<driver_t<Config>, unavailable>)
     return false;
   else
     return driver_t<Config>::kind == Kind;

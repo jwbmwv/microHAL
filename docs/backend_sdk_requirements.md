@@ -213,6 +213,12 @@ I2C/UART/LPUART also support the simple-DMA driver; EDMA takes precedence when
 both variants are available. SDK absence never enables a mode based only on
 silicon capability.
 
+These native SPI and I2C engines are master-only. Slave configurations return
+`status::unsupported` before SDK initialization, transfers, or lifecycle operations,
+and cannot interrupt an active master using the same binding. SPI slave facades,
+including automatic mode, use the role-aware serial API rather than a legacy
+master adapter. SAI master/slave support is unaffected.
+
 `Config::binding` supplies a correctly typed peripheral `instance`, its enabled
 `source_clock_hz`, and a wrapping monotonic `now_ms()` returning `uint32_t` for
 synchronous calls. Optional `idle()` must be bounded. Board code owns pinmux,

@@ -345,6 +345,83 @@ struct unclocked_config : config<UART_Type, transfer_mode::interrupt>
   using binding = unclocked_binding;
 };
 
+template <typename Base, transfer_mode Mode> struct slave_config : config<Base, Mode>
+{
+  static constexpr bool is_slave = true;
+  static constexpr std::uint16_t own_address = 0x52U;
+};
+
+template <typename Base, peripheral_kind Kind, transfer_mode Mode> void reject_slave()
+{
+  using C = slave_config<Base, Mode>;
+  using A = api<Kind>;
+  const auto reject = []
+  {
+    const auto initializations = fixture::initializations, starts = fixture::starts, creates = fixture::creates,
+               dma_creates = fixture::dma_creates, aborts = fixture::aborts, notifications = callbacks;
+    const auto pending = fixture::pending;
+    const auto context = fixture::pending_context;
+    assert(A::template initialize<C>() == status::unsupported);
+    assert((A::template write<C, completed>(tx) == status::unsupported));
+    assert((A::template read<C, completed>(rx) == status::unsupported));
+    assert((A::template write<C, nullptr>(tx) == status::unsupported));
+    assert((A::template read<C, nullptr>(rx) == status::unsupported));
+    assert(A::template abort<C>() == status::unsupported);
+    assert(A::template transfer_status<C>() == status::unsupported);
+    assert(A::template handle_interrupt<C>() == status::unsupported);
+    assert(A::template handle_dma_interrupt<C>() == status::unsupported);
+    if constexpr (Kind == peripheral_kind::spi)
+    {
+      assert((A::template transfer<C, completed>(tx, rx) == status::unsupported));
+      if constexpr (SpiMasterConcept<kinetis_espresso_tag, C>)
+      {
+        using S = spi::slave<kinetis_espresso_tag, C>;
+        assert(S::initialize() == status::unsupported);
+        assert(S::transfer(tx, rx) == status::unsupported);
+        assert(S::write_blocking(tx) == status::unsupported);
+        assert(S::read_blocking(rx) == status::unsupported);
+        assert(S::template transfer_async<completed>(tx, rx) == status::unsupported);
+        assert(S::template transmit_async<completed>(tx) == status::unsupported);
+        assert(S::template receive_async<completed>(rx) == status::unsupported);
+      }
+    }
+    else
+    {
+      assert((A::template write_read<C, completed>(tx, rx, 0x50U) == status::unsupported));
+      if constexpr (I2cMasterConcept<kinetis_espresso_tag, C>)
+      {
+        using S = i2c::slave<kinetis_espresso_tag, C>;
+        assert(S::initialize() == status::unsupported);
+        assert(S::template transmit_async<completed>(tx) == status::unsupported);
+        assert(S::template receive_async<completed>(rx) == status::unsupported);
+      }
+    }
+    assert(fixture::initializations == initializations && fixture::starts == starts && fixture::creates == creates &&
+           fixture::dma_creates == dma_creates && fixture::aborts == aborts);
+    assert(callbacks == notifications && fixture::pending == pending && fixture::pending_context == context);
+  };
+  reject();
+  using M = config<Base, transfer_mode::interrupt>;
+  assert(A::template initialize<M>() == status::ok);
+  if constexpr (Kind == peripheral_kind::spi)
+    assert((A::template transfer<M, completed>(tx, rx) == status::ok));
+  else
+    assert((A::template write<M, completed>(tx, 0x50U) == status::ok));
+  assert(A::template transfer_status<M>() == status::busy);
+  reject();
+  assert(A::template transfer_status<M>() == status::busy);
+  fixture::complete();
+  assert(A::template transfer_status<M>() == status::ok);
+}
+
+template <typename Base, peripheral_kind Kind> void reject_slave_modes()
+{
+  reject_slave<Base, Kind, transfer_mode::automatic>();
+  reject_slave<Base, Kind, transfer_mode::polled>();
+  reject_slave<Base, Kind, transfer_mode::interrupt>();
+  reject_slave<Base, Kind, transfer_mode::dma>();
+}
+
 int main()
 {
   static_assert(backend_traits<kinetis_espresso_tag>::i2c_capability().transfer_modes.interrupt);
@@ -385,4 +462,8 @@ int main()
   using Audio = i2s::interface<kinetis_espresso_tag, config<I2S_Type, transfer_mode::interrupt>>;
   assert(Audio::initialize() == status::ok);
   assert(Audio::transmit_blocking(samples) == status::ok);
+  reject_slave_modes<SPI_Type, peripheral_kind::spi>();
+  reject_slave_modes<LPSPI_Type, peripheral_kind::spi>();
+  reject_slave_modes<I2C_Type, peripheral_kind::i2c>();
+  reject_slave_modes<LPI2C_Type, peripheral_kind::i2c>();
 }
