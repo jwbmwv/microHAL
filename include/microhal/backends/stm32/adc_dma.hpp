@@ -21,17 +21,24 @@ template <typename C> struct binding_for<C, std::void_t<typename C::binding>>
 };
 template <typename C> using binding_t = typename binding_for<C>::type;
 
+struct dma_instance_state
+{
+  inline static detail::serial_gpdma_node nodes[6]{};
+  inline static detail::serial_dma_resource endpoints[6]{};
+};
+
 /// Bind typed register resources; the shared native endpoint implements transfers.
 template <typename C> struct dma_registers
 {
   using board = binding_t<C>;
+  static_assert(C::instance_index > 0 && C::instance_index < 6);
   static constexpr bool available = requires {
     board::dma_channel();
     board::dma_controller();
     board::dma_index;
   };
-  inline static detail::serial_gpdma_node node{};
-  inline static detail::serial_dma_resource endpoint{};
+  inline static detail::serial_gpdma_node& node = dma_instance_state::nodes[C::instance_index];
+  inline static detail::serial_dma_resource& endpoint = dma_instance_state::endpoints[C::instance_index];
 
   template <typename D, typename Controller> static detail::serial_dma_resource resource(D* d, Controller* c) noexcept
   {

@@ -88,8 +88,12 @@ struct config
   static constexpr auto trigger_edge = adc_trigger_edge::rising;
   static constexpr unsigned external_trigger = 3;
 };
+struct alias_config : config
+{
+};
 using hw = backends::stm32::adc_detail::register_hardware<registers, instance>;
 using dm = backends::stm32::adc_detail::dma_registers<config>;
+using alias_dm = backends::stm32::adc_detail::dma_registers<alias_config>;
 struct channel_regs
 {
   volatile std::uint32_t CCR{}, CNDTR{}, CPAR{}, CMAR{};
@@ -170,10 +174,10 @@ int main()
   assert((stream.CR & ((3U << 11) | (3U << 13))) == ((1U << 11) | (1U << 13)));
   assert((stream.CR & (1U << 8)) && (stream.CR & 1U));
   dma.LISR = 0x30U;
-  assert(dm::flags() == 3 && dma.LIFCR == 0x30U);
+  assert(alias_dm::flags() == 3 && dma.LIFCR == 0x30U);
   dma.LISR = 8U;
-  assert(dm::flags() == 4);
-  assert(dm::stop() == status::ok && !(stream.CR & 1U));
+  assert(alias_dm::flags() == 4);
+  assert(alias_dm::stop() == status::ok && !(stream.CR & 1U));
   assert(dm::setup(reinterpret_cast<std::uintptr_t>(&adc.DR), buffer, false, true) == status::ok);
   assert((stream.CR & (1U << 3)) && !(stream.CR & (1U << 8)));
   assert(dm::stop() == status::ok);
