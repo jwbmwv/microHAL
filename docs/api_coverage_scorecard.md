@@ -23,22 +23,22 @@ Interpretation:
 | I2C | `initialize`, `write_blocking`, `read_blocking`, `probe`, `write_read_blocking`, `start_transfer`, `write_async`, `read_async`, `write_read_async`, `abort`, `transfer_status`, `handle_interrupt` | 5 | 5 | 5 | Explicit mode capabilities distinguish polling, interrupt and DMA engines; combined transactions retain repeated START. NuttX relies on its driver's native ioctl timeout. |
 | SPI | `initialize`, `write_blocking`, `read_blocking`, `transfer`, `transfer_async`, `write_async`, `read_async`, `abort`, `transfer_status`, `handle_interrupt` | 5 | 5 | 5 | Mismatched full-duplex buffers are rejected; explicit mode selection preserves legacy defaults. One-direction operations are supported only where implemented. |
 | QSPI | `initialize`, `command_read`, `command_write`, `enter_memory_mapped`, `exit_memory_mapped` | 5 | 5 | 5 | Commands validate bus modes and address widths; STM32 HAL and mock are direct paths, LL forwards to HAL, and Kinetis/Zephyr require complete board bindings. |
-| UART | `initialize`, `write_blocking`, `read_blocking`, `write_byte`, `read_byte`, `start_async_rx`, `start_async_tx`, `abort`, `transfer_status`, `handle_interrupt` (+ autobaud helper) | 5 | 5 | 5 | Explicit polling/interrupt/DMA selection and async completion are backend-gated. Framing limits remain capability metadata. |
-| RTC | `initialize`, `set`, `read`, `now`, `is_valid`, `enable_alarm` | 5 | 5 | 5 | Checked reads preserve backend errors; time fields are validated, and unsupported calendar fields are rejected instead of discarded. |
+| UART | `initialize`, `write_blocking`, `read_blocking`, `write_byte`, `read_byte`, `start_async_rx`, `start_async_tx`, `start_receive_to_idle`, `start_circular_rx`, `abort_tx`, `abort_rx`, `tx_status`, `rx_status`, `abort`, `transfer_status`, `handle_interrupt`, `handle_dma_interrupt`, `handle_rx_timeout_interrupt` (+ autobaud helper) | 5 | 5 | 5 | STM32 and Nordic support independent directions and variable-length/circular RX. Nordic IDLE timing requires a reserved hardware timer/event route; RTS/CTS is binding opt-in. |
+| RTC | `initialize`, `set`, `read`, `now`, `is_valid`, `enable_alarm`, `read_subsecond_us`, `enable_periodic_irq`, `disable_periodic_irq`, `handle_interrupt` | 5 | 5 | 5 | Checked reads preserve errors and available calendar fields; unsupported calendar/subsecond/periodic operations remain explicit. `now` retains its legacy time-only behavior. |
 | Flash | `erase`, `program`, `program_and_verify`, `read`, `erase_region` | 5 | 5 | 5 | Program units and erase ranges are validated; readback verification uses caller-owned storage. Partition policy remains board/application-owned. |
-| Timer | `initialize`, `start`, `stop`, `set_period`, `period`, `counter`, `reset_counter`, `enable_capture_compare`, `capture_value` | 5 | 5 | 5 | Lifecycle and period updates are implemented by mock, STM32 HAL/LL, Kinetis, Zephyr, and Nordic. Nordic additionally implements period readback, counter reset, and compare callbacks, but not input capture. |
-| ADC | `initialize`, `read_blocking`, `read_sequence_blocking`, `read_millivolts`, `start_continuous`, `start_async`, `start_dma_scan` | 5 | 5 | 5 | Blocking reads return explicit errors; sequential scans and millivolt conversion are facade utilities over implemented backend reads. Nordic adds one-shot and DMA-scan SAADC, with binding-owned analog settings. |
+| Timer | `initialize`, `start`, `stop`, `set_period`, `period`, `counter`, `reset_counter`, `enable_capture_compare`, `disable_capture_compare`, `capture_value`, `handle_interrupt` | 5 | 5 | 5 | Nordic input capture uses board-provided hardware event routing; capture channel bounds follow backend capabilities and instance-specific validation. Optional cancellation and IRQ dispatch report unsupported where absent. |
+| ADC | `initialize`, `read_blocking`, `read_differential_blocking`, `read_sequence_blocking`, `read_millivolts`, `read_differential_millivolts`, `start_continuous`, `start_async`, `start_dma_scan`, `start_dma_stream`, `stop`, `abort`, `transfer_status`, `handle_interrupt`, `handle_dma_interrupt` | 5 | 5 | 5 | STM32 implements IRQ acquisition, finite/circular DMA, hardware triggers and lifecycle operations. Signed differential conversion is backend-gated; unsigned voltage conversion rejects differential configurations. New operations report unsupported on backends without matching implementations. |
 | DAC | `initialize`, `write_blocking`, `write_sequence_blocking`, `write_millivolts`, `write_dual`, `start_dma_waveform` | 5 | 5 | 5 | Sequence and voltage helpers are portable facade utilities; backend write failures are propagated on implemented mock, STM32 HAL/LL, Kinetis, and Zephyr paths. |
 | CAN | `initialize`, `is_valid`, `transmit`, `transmit_many`, `receive`, `receive_many`, `configure_filter`, `enable_rx_interrupt` | 5 | 5 | 5 | Identifier/DLC validation is common; ordered batch calls stop on the first failure and may partially complete. STM32 LL uses the legacy HAL CAN driver where Cube provides no LL CAN API. |
-| USB | `initialize`, `connect`, `disconnect`, `endpoint_transmit`, `endpoint_receive` | 5 | 5 | 5 | Endpoint indexes and 16-bit transfer lengths are validated; Kinetis and NuttX require complete stack bindings, and LL forwards to HAL when available. |
+| USB | `initialize`, `connect`, `disconnect`, `endpoint_transmit`, `endpoint_receive`, `endpoint_status`, `endpoint_abort`, `endpoint_stall`, `handle_interrupt` | 5 | 5 | 5 | Endpoint indexes and 16-bit transfer lengths are validated; lifecycle/IRQ operations are backend-gated. Kinetis and NuttX require complete stack bindings, and LL forwards to HAL when available. |
 | Ethernet | `initialize`, `start`, `stop`, `transmit_frame`, `receive_frame`, `set_mac_address`, `enable_rx_interrupt` | 4 | 5 | 3 | Rich surface, available on STM32 HAL, Zephyr, and NuttX packet-socket configurations. |
 | SD/MMC | `initialize`, `read_blocks`, `write_blocks`, `erase_blocks`, `capacity_blocks`, `read_block`, `write_block`, `is_valid_range` | 5 | 5 | 5 | Block sizes and overflow are checked; block erase is capability-gated and reports `unsupported` when the media API cannot erase natively. |
 | DMA | `initialize`, `is_valid_range`, `start_transfer`, `start_memcpy`, `abort`, `transfer_status`, `transfer_complete` | 5 | 5 | 5 | Zero-length and overflowing address ranges are rejected; STM32 LL polls the hardware enable bit for one-shot completion, while callback support remains backend-specific. |
-| PWM | `initialize`, `set_duty_cycle`, `set_duty_cycle_percent`, `start`, `stop`, `set_enabled` | 5 | 5 | 5 | Permille and percentage inputs are range-checked; enable/disable helpers share the backend lifecycle operations. |
+| PWM | `initialize`, `set_duty_cycle`, `set_duty_cycle_percent`, `start`, `stop`, `set_enabled`, `set_frequency` | 5 | 5 | 5 | Permille/percentage inputs are range-checked. Optional frequency updates are backend-gated; Nordic requires shared outputs to be stopped. |
 | Watchdog | `initialize`, `start`, `refresh`, `feed` | 5 | 5 | 5 | Both common refresh/feed terminology and timeout range metadata are exposed; stoppability remains hardware-specific. |
-| I2S | `initialize`, `transmit_blocking`, `receive_blocking`, `start_dma_tx`, `transmit_async`, `receive_async`, `abort`, `transfer_status`, `handle_interrupt` | 5 | 5 | 5 | Finite 16-bit transfers have explicit execution-mode and TX/RX DMA metadata. Legacy Kinetis/NuttX adapter paths still require complete board bindings. |
+| I2S | `initialize`, `transmit_blocking`, `receive_blocking`, `transfer_blocking`, `start_dma_tx`, `start_dma_rx`, `start_dma_transfer`, `start_dma_stream`, `transmit_async`, `receive_async`, `stop`, `abort`, `transfer_status`, `handle_interrupt`, `handle_dma_interrupt` | 5 | 5 | 5 | Nordic supports full-duplex and streaming 16-bit stereo DMA with explicit lifecycle ownership; additional operations are backend-gated. Legacy Kinetis/NuttX adapters require complete board bindings. |
 | RCC | `configure`, `configure_and_verify`, `get_system_clock_hz`, `enable_peripheral_clock`, `disable_peripheral_clock` | 5 | 5 | 4 | Clock readback/configuration is implemented by the mock, STM32 HAL/LL, and Zephyr; per-peripheral gating requires a board binding on STM32/Kinetis, and Kinetis configuration is binding-provided. |
-| CRC | `initialize`, `calculate`, `calculate_software`, `reset`, `get_random` | 5 | 5 | 5 | The portable software path supports the configured non-reflected 32-bit polynomial and explicit initial/final XOR values; RNG remains backend-dependent. |
+| CRC | `initialize`, `calculate`, `calculate_software`, `reset`, `get_random`, `read_random` | 5 | 5 | 5 | The portable software path supports the configured non-reflected 32-bit polynomial and explicit initial/final XOR values. Optional checked RNG preserves native errors; legacy value-only RNG remains unchanged. |
 
 ## Overall Assessment
 
@@ -48,13 +48,15 @@ Interpretation:
   - Major peripherals (UART/ADC/SD/Ethernet) have useful practical APIs.
 - **Current limits**:
   - Explicit serial execution modes are backend/module-specific, not universally
-    available wherever silicon has DMA. STM32 LL explicit modes forward to HAL.
+    available wherever silicon has DMA. STM32 LL UART/SPI/I2C explicit modes are
+    native; I2S retains HAL integration.
     Arbitrary polled I2C combined transactions remain unsupported; interrupt/DMA
     combined paths preserve repeated START. See the [integration contract](backend_sdk_requirements.md#explicit-serial-transfer-modes).
   - Backend parity is not uniform for Ethernet and other peripherals.
-  - Nordic nrfx now implements native GPIO/GPIOTE, TWIM, SPIM, UARTE, TIMER, SAADC, PWM, watchdog,
-    I2S, and clock readback on nRF52840/nRF5340-app/nRF54L15-app, plus target-gated NVMC, QSPI,
-    and RTC. Support is compile-validated, not hardware-certified; NuttX features require
+  - Nordic nrfx covers native serial masters/slaves, acquisition, waveforms, RTC/GRTC and
+    storage across nRF52840/nRF5340-app/nRF54L15-app/nRF54H20-app, with target-gated
+    USB, CAN, memory DMA, clocks and entropy. Support is compile-validated, not hardware-certified;
+    NuttX features require
     corresponding OS configuration and registered devices.
   - Binding-backed QSPI, USB, and legacy I2S adapters require board/application operations.
     Explicit Kinetis I2S instead uses native SAI polling/IRQ/EDMA with typed board resources,
@@ -64,22 +66,22 @@ Interpretation:
 
   | Operation | Mock | STM32 HAL | STM32 LL | Kinetis | Zephyr | NuttX | Nordic nrfx |
   | --- | --- | --- | --- | --- | --- | --- | --- |
-  | QSPI command read/write and memory-mapped mode | ✅ | ✅ | ✅ (HAL forwarding) | ✅ (FLEXSPI + binding) | ✅ (CONFIG_FLASH + binding) | ⚪ | ✅ commands only (nRF52/53 QSPI) |
-  | USB endpoint transfer | ✅ | ✅ | ✅ (HAL forwarding) | ✅ (USB hardware + binding) | ✅ (CONFIG_USB_DEVICE_STACK) | ✅ (CONFIG_USBDEV + binding) | ⚪ |
+  | QSPI command read/write and memory-mapped mode | ✅ | ✅ | ✅ (HAL forwarding) | ✅ (FLEXSPI + binding) | ✅ (CONFIG_FLASH + binding) | ⚪ | ✅ nRF52/53 QSPI/XIP with ownership |
+  | USB endpoint transfer | ✅ | ✅ | ✅ (HAL forwarding) | ✅ (USB hardware + binding) | ✅ (CONFIG_USB_DEVICE_STACK) | ✅ (CONFIG_USBDEV + binding) | ✅ 52/53 USBD |
   | SD block I/O and capacity query | ✅ | ✅ | ✅ | ✅ (SDHC + binding) | ✅ (SDHC/DISK_ACCESS) | ✅ (CONFIG_MMCSD) | ⚪ |
   | SD native block erase | ✅ | ✅ | ✅ | ✅ (binding) | ⚪ | ⚪ | ⚪ |
   | I2S blocking transmit/receive | ✅ | ✅ | ✅ (HAL forwarding) | ✅ (I2S0 + binding) | ✅ (CONFIG_I2S) | ✅ (CONFIG_AUDIO + binding) | ✅ finite 16-bit stereo |
-  | I2S DMA transmit start | ✅ | ✅* | ✅* (HAL forwarding) | ✅ (I2S0 + binding) | ⚪ | ⚪ | ✅ finite TX |
+  | I2S DMA transmit start | ✅ | ✅* | ✅* (HAL forwarding) | ✅ (I2S0 + binding) | ⚪ | ⚪ | ✅ finite/streamed TX |
   | I2C combined write/read (repeated START) | ✅ (simulated) | ✅* | ✅* (HAL forwarding) | ✅ (I2C/LPI2C) | ✅ | ✅ (with `I2C_M_NOSTOP`) | ✅ (TWIM) |
   | I2C combined async write/read | ✅ (simulated) | ✅* | ✅* (HAL forwarding) | ⚪ | ⚪ | ⚪ | ✅ (TWIM callback) |
   | I2C address probe | ✅ (simulated) | ✅ | ✅* (HAL forwarding) | ⚪ | ✅ | ✅ | ✅ zero-length TWIM TX |
   | SPI transmit-only / receive-only | ✅ (simulated) | ✅ | ✅* (HAL forwarding) | ⚪ | ✅ | ✅ | ✅ SPIM |
-  | SPI interrupt-driven transfer | ✅ (simulated) | ✅* | ✅* (HAL forwarding) | ⚪ | ⚪ | ⚪ | ✅ SPIM |
+  | SPI interrupt-driven transfer | ✅ (simulated) | ✅* | ✅* (HAL forwarding) | ⚪ | ⚪ | ⚪ | ✅ SPIM EasyDMA completion IRQ |
   | GPIO native toggle | ✅ | ✅ | ✅ | ⚪ | ✅ | ⚪ | ✅ |
-  | Flash erase-region query | ✅ (uniform mock geometry) | ✅ (page or supported sector geometry) | ✅ (HAL forwarding) | ✅ (MCUXpresso geometry) | ✅ | ✅ (MTD geometry) | ✅ (NVMC targets) |
-  | Flash program/erase alignment validation | ✅ facade | ✅ facade + HAL programming-unit checks | ✅ facade | ✅ facade + driver geometry | ✅ facade | ✅ (MTD geometry) | ✅ (NVMC constraints) |
-  | Flash program/readback verification | ✅ facade | ✅ facade | ✅ facade | ✅ facade | ✅ facade | ✅ (MTD readback) | ✅ (NVMC targets) |
-  | CAN validation and ordered batch calls | ✅ facade | ✅ facade | ✅ facade | ✅ facade | ✅ facade | ⚪ | ⚪ |
+  | Flash erase-region query | ✅ (uniform mock geometry) | ✅ (page or supported sector geometry) | ✅ (HAL forwarding) | ✅ (MCUXpresso geometry) | ✅ | ✅ (MTD geometry) | ✅ NVMC/RRAM/MRAM |
+  | Flash program/erase alignment validation | ✅ facade | ✅ facade + HAL programming-unit checks | ✅ facade | ✅ facade + driver geometry | ✅ facade | ✅ (MTD geometry) | ✅ target geometry |
+  | Flash program/readback verification | ✅ facade | ✅ facade | ✅ facade | ✅ facade | ✅ facade | ✅ (MTD readback) | ✅ NVMC/RRAM/MRAM |
+  | CAN validation and ordered batch calls | ✅ facade | ✅ facade | ✅ facade | ✅ facade | ✅ facade | ⚪ | ✅ H20 classical CAN |
   | Timer start/stop and period update | ✅ | ✅ | ✅ | ✅ | ✅ | ✅* | ✅ TIMER |
   | Timer period readback | ✅ | ✅ | ✅ | ⚪ | ✅ | ✅* | ✅ |
   | Timer counter reset | ✅ | ✅ | ✅ | ✅ (FTM) | ⚪ | ✅* | ✅ |
@@ -98,8 +100,8 @@ Interpretation:
   `capture_value` reads a one-based timer channel already configured for input capture by the board or
   vendor setup. Timer `period` is expressed in counter ticks. Binding entries in this table describe
   required board/OS-provided implementations, not built-in device drivers; the concepts reject configs
-  that omit those operations. Nordic SD/MMC and USB remain unsupported; QSPI memory mapping,
-  continuous ADC, timer input capture, RTC calendar/date, and RCC configuration are not implemented.
+  that omit those operations. Nordic native SD/MMC remains unavailable;
+  USB, CAN, memory DMA, entropy and clock control are target/ownership-gated.
   Nordic blocking I2C
   uses the configured timeout and CMSIS core clock; NuttX I2C can only report a timeout supplied by its
   driver because `I2CIOC_TRANSFER` has no timeout argument. Zephyr and Kinetis DMA completion callbacks

@@ -118,6 +118,19 @@ The equivalent preprocessor form:
 #define MICROHAL_ENABLE_STM32_HAL 1
 ```
 
+### STM32 interrupts and DMA
+
+STM32 UART supports independent TX/RX, receive-to-IDLE, and circular DMA reception.
+SPI and I2C provide master and fixed-length slave transfers. ADC supports one-shot
+IRQ acquisition, finite and circular DMA scans, external triggers, and stop/status
+operations. Explicit LL UART/SPI/I2C engines and the shared STM32 ADC engine use
+native registers rather than HAL transfer callbacks.
+
+These features require board-owned clocks, pinmux, IRQ routing, DMA resources,
+and appropriate buffer/cache management. See the
+[STM32 integration contract](docs/backend_sdk_requirements.md#stm32-integration)
+for APIs, bindings, callback lifetimes, and validation limits.
+
 ## Error handling
 
 There are no exceptions, so results are values:
@@ -238,8 +251,9 @@ Worth knowing before you adopt it:
 - **Backend coverage is uneven.** STM32Cube HAL is still the most complete backend. Kinetis now uses
   SDK-discovery-based compilation across broader Kinetis/i.MX RT families, but runtime coverage still
   depends on which MCUXpresso peripheral modules are available for your selected part. Nordic nrfx
-  coverage is also header-driven: UART/RTC/flash/timer/ADC/DAC/DMA/PWM/watchdog support appears
-  when the corresponding `nrfx_*` drivers are present for the selected SoC.
+  coverage is also hardware/SDK-gated across nRF52840, nRF5340-app, nRF54L15-app and
+  nRF54H20-app. See the [Nordic integration contract](docs/backend_sdk_requirements.md#nordic-board-integration)
+  for serial/slave, streaming, storage, clock and security-domain resources.
 - **Backend API signatures are not yet uniform.** Because facades instantiate lazily, a signature
   mismatch in a backend only surfaces when that specific peripheral is instantiated for that
   backend. The multi-backend test does not cover every peripheral on every backend.

@@ -56,6 +56,54 @@ struct port final
   static constexpr bool has_lpuart{backend_traits<Backend>::uart_capability().lpuart};
   static constexpr bool has_generic_autobaud{backend_traits<Backend>::uart_capability().autobaud};
 
+  /** @brief Finite receive ending on IDLE or a full buffer; buffer must outlive completion. */
+  template <auto Handler> [[nodiscard]] static status start_receive_to_idle(std::span<std::uint8_t> buffer) noexcept
+  {
+    static_assert(valid_uart_receive_handler<Handler>());
+    return mode_api::template start_receive_to_idle<Config, Handler>(buffer);
+  }
+  /** @brief Continuous DMA receive. Callback spans are newly received bytes, valid until overwritten. */
+  template <auto Handler> [[nodiscard]] static status start_circular_rx(std::span<std::uint8_t> buffer) noexcept
+  {
+    static_assert(valid_uart_receive_handler<Handler>());
+    return mode_api::template start_circular_rx<Config, Handler>(buffer);
+  }
+  /** @brief Cancels TX only. A failed abort retains ownership and must be retried. */
+  [[nodiscard]] static status abort_tx() noexcept
+  {
+    if constexpr (mode == transfer_mode::automatic && !std::same_as<Backend, nordic_nrf_tag>)
+      return status::unsupported;
+    else
+      return mode_api::template abort_tx<Config>();
+  }
+  /** @brief Cancels RX only, including a circular stream; TX remains independent. */
+  [[nodiscard]] static status abort_rx() noexcept
+  {
+    if constexpr (mode == transfer_mode::automatic && !std::same_as<Backend, nordic_nrf_tag>)
+      return status::unsupported;
+    else
+      return mode_api::template abort_rx<Config>();
+  }
+  [[nodiscard]] static status tx_status() noexcept
+  {
+    return mode_api::template tx_status<Config>();
+  }
+  [[nodiscard]] static status rx_status() noexcept
+  {
+    return mode_api::template rx_status<Config>();
+  }
+  [[nodiscard]] static status handle_dma_interrupt() noexcept
+  {
+    return mode_api::template handle_dma_interrupt<Config>();
+  }
+  [[nodiscard]] static status handle_rx_timeout_interrupt() noexcept
+  {
+    if constexpr (requires { mode_api::template handle_rx_timeout_interrupt<Config>(); })
+      return detail::as_status([] { return mode_api::template handle_rx_timeout_interrupt<Config>(); });
+    else
+      return status::unsupported;
+  }
+
   /** @brief Initializes the selected UART/USART/LPUART instance. */
   [[nodiscard]] static inline status initialize() noexcept
   {
@@ -143,7 +191,7 @@ struct port final
   }
   [[nodiscard]] static status abort() noexcept
   {
-    if constexpr (mode == transfer_mode::automatic)
+    if constexpr (mode == transfer_mode::automatic && !std::same_as<Backend, nordic_nrf_tag>)
       return status::unsupported;
     else
       return mode_api::template abort<Config>();

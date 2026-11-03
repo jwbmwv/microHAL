@@ -10,6 +10,7 @@
 
 #include <limits>
 #include <span>
+#include <type_traits>
 
 #include "microhal/core/concepts.hpp"
 
@@ -134,26 +135,116 @@ struct interface final
       return status::invalid_argument;
     return mode_api::template receive<Config, CompletionHandler>(samples);
   }
-  [[nodiscard]] static status abort() noexcept
+
+  [[nodiscard]] static status transfer_blocking(const std::span<const std::uint16_t> tx,
+                                                const std::span<std::uint16_t> rx) noexcept
   {
-    if constexpr (transfer_mode_value == transfer_mode::automatic)
+    if (!is_valid_transfer(tx.size()) || tx.size() != rx.size())
+      return status::invalid_argument;
+    if constexpr (!has_full_duplex)
       return status::unsupported;
+    else if constexpr (transfer_mode_value != transfer_mode::automatic &&
+                       requires { mode_api::template transfer<Config, nullptr>(tx, rx); })
+      return mode_api::template transfer<Config, nullptr>(tx, rx);
+    else if constexpr (transfer_mode_value != transfer_mode::automatic)
+      return status::unsupported;
+    else if constexpr (requires { i2s_api_t<Backend>::template transfer_blocking<Config>(tx, rx); })
+      return detail::as_status([tx, rx] { return i2s_api_t<Backend>::template transfer_blocking<Config>(tx, rx); });
+    else
+      return status::unsupported;
+  }
+
+  template <auto CompletionHandler>
+  [[nodiscard]] static status start_dma_rx(const std::span<std::uint16_t> samples) noexcept
+    requires(DmaCapableConcept<Backend, peripheral_kind::i2s> && backend_traits<Backend>::i2s_capability().receive_dma)
+  {
+    static_assert(transfer_mode_value == transfer_mode::automatic ||
+                  valid_serial_completion_handler<CompletionHandler>());
+    if (!is_valid_transfer(samples.size()))
+      return status::invalid_argument;
+    if constexpr (transfer_mode_value == transfer_mode::dma)
+      return mode_api::template receive<Config, CompletionHandler>(samples);
+    else if constexpr (transfer_mode_value != transfer_mode::automatic)
+      return status::unsupported;
+    else if constexpr (requires { i2s_api_t<Backend>::template start_dma_rx<Config, CompletionHandler>(samples); })
+      return detail::as_status(
+          [samples] { return i2s_api_t<Backend>::template start_dma_rx<Config, CompletionHandler>(samples); });
+    else
+      return status::unsupported;
+  }
+
+  template <auto CompletionHandler>
+  [[nodiscard]] static status start_dma_transfer(const std::span<const std::uint16_t> tx,
+                                                 const std::span<std::uint16_t> rx) noexcept
+    requires(DmaCapableConcept<Backend, peripheral_kind::i2s> && has_full_duplex &&
+             backend_traits<Backend>::i2s_capability().transmit_dma &&
+             backend_traits<Backend>::i2s_capability().receive_dma)
+  {
+    static_assert(transfer_mode_value == transfer_mode::automatic ||
+                  valid_serial_completion_handler<CompletionHandler>());
+    if (!is_valid_transfer(tx.size()) || tx.size() != rx.size())
+      return status::invalid_argument;
+    if constexpr (transfer_mode_value == transfer_mode::dma &&
+                  requires { mode_api::template transfer<Config, CompletionHandler>(tx, rx); })
+      return mode_api::template transfer<Config, CompletionHandler>(tx, rx);
+    else if constexpr (transfer_mode_value != transfer_mode::automatic)
+      return status::unsupported;
+    else if constexpr (requires { i2s_api_t<Backend>::template start_dma_transfer<Config, CompletionHandler>(tx, rx); })
+      return detail::as_status(
+          [tx, rx] { return i2s_api_t<Backend>::template start_dma_transfer<Config, CompletionHandler>(tx, rx); });
+    else
+      return status::unsupported;
+  }
+
+  template <auto BlockHandler>
+  [[nodiscard]] static status start_dma_stream(const std::span<const std::uint16_t> tx,
+                                               const std::span<std::uint16_t> rx, const bool circular = true) noexcept
+    requires DmaCapableConcept<Backend, peripheral_kind::i2s>
+  {
+    static_assert(std::is_nothrow_invocable_r_v<void, decltype(BlockHandler), status, std::span<const std::uint16_t>,
+                                                std::span<std::uint16_t>>);
+    if ((tx.empty() && rx.empty()) || (!tx.empty() && !is_valid_transfer(tx.size())) ||
+        (!rx.empty() && !is_valid_transfer(rx.size())) || (!tx.empty() && !rx.empty() && tx.size() != rx.size()))
+      return status::invalid_argument;
+    if constexpr (transfer_mode_value != transfer_mode::automatic && transfer_mode_value != transfer_mode::dma)
+      return status::unsupported;
+    else if ((!tx.empty() && !backend_traits<Backend>::i2s_capability().transmit_dma) ||
+             (!rx.empty() && !backend_traits<Backend>::i2s_capability().receive_dma) ||
+             (!tx.empty() && !rx.empty() && !has_full_duplex))
+      return status::unsupported;
+    else if constexpr (requires {
+                         i2s_api_t<Backend>::template start_dma_stream<Config, BlockHandler>(tx, rx, circular);
+                       })
+      return detail::as_status(
+          [tx, rx, circular]
+          { return i2s_api_t<Backend>::template start_dma_stream<Config, BlockHandler>(tx, rx, circular); });
+    else
+      return status::unsupported;
+  }
+
+  [[nodiscard]] static status stop() noexcept
+  {
+    if constexpr (requires { i2s_api_t<Backend>::template stop<Config>(); })
+      return detail::as_status([] { return i2s_api_t<Backend>::template stop<Config>(); });
     else
       return mode_api::template abort<Config>();
   }
+
+  [[nodiscard]] static status abort() noexcept
+  {
+    return mode_api::template abort<Config>();
+  }
   [[nodiscard]] static status transfer_status() noexcept
   {
-    if constexpr (transfer_mode_value == transfer_mode::automatic)
-      return status::unsupported;
-    else
-      return mode_api::template transfer_status<Config>();
+    return mode_api::template transfer_status<Config>();
   }
   [[nodiscard]] static status handle_interrupt() noexcept
   {
-    if constexpr (transfer_mode_value == transfer_mode::automatic)
-      return status::unsupported;
-    else
-      return detail::as_status([] { return mode_api::template handle_interrupt<Config>(); });
+    return detail::as_status([] { return mode_api::template handle_interrupt<Config>(); });
+  }
+  [[nodiscard]] static status handle_dma_interrupt() noexcept
+  {
+    return detail::as_status([] { return mode_api::template handle_dma_interrupt<Config>(); });
   }
 
   [[nodiscard]] static constexpr bool is_valid_transfer(const std::size_t sample_count) noexcept

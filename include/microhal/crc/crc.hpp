@@ -82,6 +82,15 @@ struct accelerator final
   {
     return crc_api_t<Backend>::template get_random<Config>();
   }
+
+  [[nodiscard]] static result<std::uint32_t> read_random() noexcept
+    requires(has_rng)
+  {
+    if constexpr (requires { crc_api_t<Backend>::template read_random<Config>(); })
+      return detail::as_result<std::uint32_t>([] { return crc_api_t<Backend>::template read_random<Config>(); });
+    else
+      return status::unsupported;
+  }
 };
 
 } // namespace microhal::crc

@@ -77,6 +77,17 @@ struct output final
   {
     return enabled ? start() : stop();
   }
+
+  [[nodiscard]] static status set_frequency(const std::uint32_t frequency_hz) noexcept
+  {
+    if (frequency_hz == 0U)
+      return status::invalid_argument;
+    if constexpr (requires { pwm_api_t<Backend>::template set_frequency<Config>(frequency_hz); })
+      return detail::as_status([frequency_hz]
+                               { return pwm_api_t<Backend>::template set_frequency<Config>(frequency_hz); });
+    else
+      return status::unsupported;
+  }
 };
 
 } // namespace microhal::pwm

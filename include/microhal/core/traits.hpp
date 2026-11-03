@@ -14,6 +14,7 @@
 #include <span>
 #include <string_view>
 
+#include "microhal/core/rtc_types.hpp"
 #include "microhal/core/status.hpp"
 
 namespace microhal
@@ -118,6 +119,18 @@ template <auto Handler> consteval bool valid_serial_completion_handler() noexcep
   return requires { Handler(status::ok); } || requires { Handler(); };
 }
 
+template <auto Handler> consteval bool valid_uart_receive_handler() noexcept
+{
+  return requires(std::span<std::uint8_t> bytes) { Handler(status::ok, bytes); };
+}
+
+template <typename Config> constexpr bool serial_slave_enabled() noexcept
+{
+  if constexpr (requires { Config::is_slave; })
+    return Config::is_slave;
+  return false;
+}
+
 template <typename Config> constexpr bool serial_dma_enabled() noexcept
 {
   if constexpr (configured_transfer_mode<Config>() == transfer_mode::automatic)
@@ -136,6 +149,34 @@ template <typename Config> constexpr bool serial_interrupt_enabled() noexcept
 
 template <typename Backend, peripheral_kind Kind> struct serial_mode_api
 {
+  template <typename Config, auto Handler> static status start_receive_to_idle(std::span<std::uint8_t>) noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config, auto Handler> static status start_circular_rx(std::span<std::uint8_t>) noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config> static status abort_tx() noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config> static status abort_rx() noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config> static status tx_status() noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config> static status rx_status() noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config> static status handle_dma_interrupt() noexcept
+  {
+    return status::unsupported;
+  }
   template <typename Config> static status initialize() noexcept
   {
     return status::unsupported;

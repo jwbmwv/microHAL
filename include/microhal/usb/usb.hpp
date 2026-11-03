@@ -99,6 +99,47 @@ struct device final
         [endpoint, buffer] { return usb_api_t<Backend>::template endpoint_receive<Config>(endpoint, buffer); });
   }
 
+  [[nodiscard]] static status endpoint_status(const std::uint8_t endpoint) noexcept
+  {
+    if (!is_valid_endpoint(endpoint))
+      return status::invalid_argument;
+    if constexpr (requires { usb_api_t<Backend>::template endpoint_status<Config>(endpoint); })
+      return detail::as_status([endpoint] { return usb_api_t<Backend>::template endpoint_status<Config>(endpoint); });
+    else
+      return status::unsupported;
+  }
+
+  [[nodiscard]] static status endpoint_abort(const std::uint8_t endpoint) noexcept
+  {
+    if (!is_valid_endpoint(endpoint))
+      return status::invalid_argument;
+    if constexpr (requires { usb_api_t<Backend>::template endpoint_abort<Config>(endpoint); })
+      return detail::as_status([endpoint] { return usb_api_t<Backend>::template endpoint_abort<Config>(endpoint); });
+    else
+      return status::unsupported;
+  }
+
+  [[nodiscard]] static status endpoint_stall(const std::uint8_t endpoint, const bool enabled = true) noexcept
+  {
+    if (!is_valid_endpoint(endpoint))
+      return status::invalid_argument;
+    if constexpr (requires { usb_api_t<Backend>::template endpoint_stall<Config>(endpoint, enabled); })
+      return detail::as_status([endpoint, enabled]
+                               { return usb_api_t<Backend>::template endpoint_stall<Config>(endpoint, enabled); });
+    else
+      return status::unsupported;
+  }
+
+  [[nodiscard]] static status handle_interrupt() noexcept
+  {
+    if constexpr (requires { usb_api_t<Backend>::template handle_interrupt<Config>(); })
+      return detail::as_status([] { return usb_api_t<Backend>::template handle_interrupt<Config>(); });
+    else if constexpr (requires { usb_api_t<Backend>::handle_interrupt(); })
+      return detail::as_status([] { return usb_api_t<Backend>::handle_interrupt(); });
+    else
+      return status::unsupported;
+  }
+
   [[nodiscard]] static constexpr bool is_valid_endpoint(const std::uint8_t endpoint) noexcept
   {
     constexpr std::uint8_t endpoint_number_mask{0x0FU};

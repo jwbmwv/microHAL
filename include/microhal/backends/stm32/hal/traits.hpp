@@ -95,6 +95,7 @@
 #define MICROHAL_STM32_HAL_STREAM_DMA_RUNTIME 0
 #endif
 
+#include "microhal/backends/stm32/adc_registers.hpp"
 #include "microhal/core/traits.hpp"
 
 namespace microhal::backends::stm32::hal
@@ -171,21 +172,25 @@ inline constexpr bool family_has_legacy_can =
     false;
 #endif
 
-#if defined(I2C1) || defined(I2C2) || defined(I2C3) || defined(I2C4) || defined(I2C5) || defined(I2C6)
+#if defined(HAL_I2C_MODULE_ENABLED) &&                                                                                 \
+    (defined(I2C1) || defined(I2C2) || defined(I2C3) || defined(I2C4) || defined(I2C5) || defined(I2C6))
 #define MICROHAL_STM32_HAL_HAS_I2C 1
 #else
 #define MICROHAL_STM32_HAL_HAS_I2C 0
 #endif
 
-#if defined(SPI1) || defined(SPI2) || defined(SPI3) || defined(SPI4) || defined(SPI5) || defined(SPI6)
+#if defined(HAL_SPI_MODULE_ENABLED) &&                                                                                 \
+    (defined(SPI1) || defined(SPI2) || defined(SPI3) || defined(SPI4) || defined(SPI5) || defined(SPI6))
 #define MICROHAL_STM32_HAL_HAS_SPI 1
 #else
 #define MICROHAL_STM32_HAL_HAS_SPI 0
 #endif
 
-#if defined(USART1) || defined(USART2) || defined(USART3) || defined(UART4) || defined(UART5) || defined(USART6) ||    \
-    defined(UART7) || defined(UART8) || defined(UART9) || defined(UART10) || defined(USART10) || defined(USART11) ||   \
-    defined(USART12) || defined(UART11) || defined(UART12) || defined(LPUART1) || defined(LPUART2) || defined(LPUART3)
+#if defined(HAL_UART_MODULE_ENABLED) &&                                                                                \
+    (defined(USART1) || defined(USART2) || defined(USART3) || defined(UART4) || defined(UART5) || defined(USART6) ||   \
+     defined(UART7) || defined(UART8) || defined(UART9) || defined(UART10) || defined(USART10) || defined(USART11) ||  \
+     defined(USART12) || defined(UART11) || defined(UART12) || defined(LPUART1) || defined(LPUART2) ||                 \
+     defined(LPUART3))
 #define MICROHAL_STM32_HAL_HAS_UART 1
 #else
 #define MICROHAL_STM32_HAL_HAS_UART 0
@@ -344,7 +349,9 @@ inline constexpr std::uint32_t spi_instance_count =
 
 constexpr std::uint32_t flash_sector_from_address(const std::uint32_t address) noexcept
 {
-#if defined(FLASH_SECTOR_0)
+#if defined(STM32H7) && defined(FLASH_BANK_SIZE) && defined(FLASH_SECTOR_SIZE)
+  return ((address - FLASH_BASE) % FLASH_BANK_SIZE) / FLASH_SECTOR_SIZE;
+#elif defined(FLASH_SECTOR_0)
   if (address < 0x08004000U)
   {
     return FLASH_SECTOR_0;
@@ -846,7 +853,11 @@ consteval std::uint32_t hal_gpio_speed(const gpio_speed speed) noexcept
   case gpio_speed::high:
     return GPIO_SPEED_FREQ_HIGH;
   case gpio_speed::very_high:
+#if defined(GPIO_SPEED_FREQ_VERY_HIGH)
     return GPIO_SPEED_FREQ_VERY_HIGH;
+#else
+    return GPIO_SPEED_FREQ_HIGH;
+#endif
   default:
     return GPIO_SPEED_FREQ_LOW;
   }
@@ -977,6 +988,7 @@ template <typename PeripheralType, typename Config> constexpr auto peripheral_in
 
 consteval std::uint32_t hal_i2c_address_mode(const i2c_address_mode mode) noexcept
 {
+#if MICROHAL_STM32_HAL_HAS_I2C
   switch (mode)
   {
   case i2c_address_mode::ten_bit:
@@ -985,6 +997,10 @@ consteval std::uint32_t hal_i2c_address_mode(const i2c_address_mode mode) noexce
   default:
     return I2C_ADDRESSINGMODE_7BIT;
   }
+#else
+  (void)mode;
+  return 0U;
+#endif
 }
 
 template <typename Config> consteval std::uint32_t hal_i2c_timing() noexcept
@@ -1040,7 +1056,7 @@ template <typename Config> consteval std::uint32_t ethernet_rx_buffer_size() noe
     }
   }
 
-#if defined(ETH_RX_BUF_SIZE)
+#if defined(ETH_RX_BUF_SIZE) && defined(ETH)
   return ETH_RX_BUF_SIZE;
 #else
   return 1528U;
@@ -1376,7 +1392,9 @@ struct gpio_api final
     init.Speed = hal_gpio_speed(PinConfig::speed);
     if constexpr (PinConfig::mode == gpio_mode::alternate)
     {
+#if !defined(STM32F1)
       init.Alternate = gpio_alternate_function<PinConfig>();
+#endif
     }
     HAL_GPIO_Init(gpio_port<gpio_port_index<PinConfig>()>(), &init);
 #endif
@@ -1631,14 +1649,19 @@ struct i2c_api final
     auto& handle_storage = handle<Config>();
     handle_storage.Instance = peripheral_instance<I2C_TypeDef, Config>();
 
-#if defined(STM32F1) || defined(STM32F2) || defined(STM32F4) || defined(STM32F7) || defined(STM32L1)
+#if defined(I2C_CCR_FS)
     handle_storage.Init.ClockSpeed = Config::clock_hz;
     handle_storage.Init.DutyCycle = I2C_DUTYCYCLE_2;
 #else
     handle_storage.Init.Timing = hal_i2c_timing<Config>();
 #endif
 
-    handle_storage.Init.OwnAddress1 = 0U;
+    if constexpr (serial_slave_enabled<Config>())
+      handle_storage.Init.OwnAddress1 = Config::address_mode == i2c_address_mode::seven_bit
+                                            ? static_cast<std::uint32_t>(Config::own_address << 1U)
+                                            : Config::own_address;
+    else
+      handle_storage.Init.OwnAddress1 = 0U;
     handle_storage.Init.AddressingMode = hal_i2c_address_mode(Config::address_mode);
     handle_storage.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
 
@@ -1957,14 +1980,18 @@ struct spi_api final
 #if MICROHAL_STM32_HAL_HAS_SPI
     auto& handle_storage = handle<Config>();
     handle_storage.Instance = peripheral_instance<SPI_TypeDef, Config>();
-    handle_storage.Init.Mode = SPI_MODE_MASTER;
-    handle_storage.Init.Direction = SPI_DIRECTION_2LINES;
+    handle_storage.Init.Mode = serial_slave_enabled<Config>() ? SPI_MODE_SLAVE : SPI_MODE_MASTER;
+    handle_storage.Init.Direction = Config::duplex_mode == spi_duplex_mode::half         ? SPI_DIRECTION_1LINE
+                                    : Config::duplex_mode == spi_duplex_mode::simplex_rx ? SPI_DIRECTION_2LINES_RXONLY
+                                                                                         : SPI_DIRECTION_2LINES;
     handle_storage.Init.DataSize = SPI_DATASIZE_8BIT;
-    handle_storage.Init.CLKPolarity = SPI_POLARITY_LOW;
-    handle_storage.Init.CLKPhase = SPI_PHASE_1EDGE;
-    handle_storage.Init.NSS = SPI_NSS_SOFT;
+    handle_storage.Init.CLKPolarity =
+        Config::clock_polarity == spi_clock_polarity::idle_high ? SPI_POLARITY_HIGH : SPI_POLARITY_LOW;
+    handle_storage.Init.CLKPhase =
+        Config::clock_phase == spi_clock_phase::second_edge ? SPI_PHASE_2EDGE : SPI_PHASE_1EDGE;
+    handle_storage.Init.NSS = serial_slave_enabled<Config>() ? SPI_NSS_HARD_INPUT : SPI_NSS_SOFT;
     handle_storage.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
-    handle_storage.Init.FirstBit = SPI_FIRSTBIT_MSB;
+    handle_storage.Init.FirstBit = Config::bit_order == spi_bit_order::lsb_first ? SPI_FIRSTBIT_LSB : SPI_FIRSTBIT_MSB;
     handle_storage.Init.TIMode = SPI_TIMODE_DISABLE;
     handle_storage.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
 
@@ -2187,7 +2214,9 @@ struct qspi_api final
     hal_command.DummyCycles = request.dummy_cycles;
     hal_command.NbData = data_length;
     hal_command.DdrMode = QSPI_DDR_MODE_DISABLE;
+#if defined(QSPI_DDR_HHC_ANALOG_DELAY)
     hal_command.DdrHoldHalfCycle = QSPI_DDR_HHC_ANALOG_DELAY;
+#endif
     hal_command.SIOOMode = QSPI_SIOO_INST_EVERY_CMD;
     return true;
   }
@@ -2454,12 +2483,17 @@ struct rtc_api final
   {
 #if defined(RTC)
     handle_storage.Instance = RTC;
+#if defined(STM32F1)
+    handle_storage.Init.AsynchPrediv = RTC_AUTO_1_SECOND;
+    handle_storage.Init.OutPut = RTC_OUTPUTSOURCE_NONE;
+#else
     handle_storage.Init.HourFormat = RTC_HOURFORMAT_24;
     handle_storage.Init.AsynchPrediv = 127U;
     handle_storage.Init.SynchPrediv = 255U;
     handle_storage.Init.OutPut = RTC_OUTPUT_DISABLE;
     handle_storage.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
     handle_storage.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+#endif
 
     if (HAL_RTC_Init(&handle_storage) == HAL_OK) [[likely]]
     {
@@ -2479,9 +2513,11 @@ struct rtc_api final
     time.Hours = hours;
     time.Minutes = minutes;
     time.Seconds = seconds;
+#if !defined(STM32F1)
     time.TimeFormat = RTC_HOURFORMAT12_AM;
     time.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
     time.StoreOperation = RTC_STOREOPERATION_RESET;
+#endif
 
     if (HAL_RTC_SetTime(&handle_storage, &time, RTC_FORMAT_BIN) == HAL_OK) [[likely]]
     {
@@ -2829,177 +2865,7 @@ struct timer_api final
   }
 };
 
-struct adc_api final
-{
-#if MICROHAL_STM32_HAL_HAS_ADC
-  template <typename Config> static auto& handle() noexcept
-  {
-    static ADC_HandleTypeDef handle_storage{};
-    return handle_storage;
-  }
-#endif
-
-  template <typename Config> static bool initialize() noexcept
-  {
-#if MICROHAL_STM32_HAL_HAS_ADC
-    auto& handle_storage = handle<Config>();
-    handle_storage.Instance = peripheral_instance<ADC_TypeDef, Config>();
-    handle_storage.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
-    if constexpr (Config::resolution == microhal::adc_resolution::bits_12)
-    {
-      handle_storage.Init.Resolution = ADC_RESOLUTION_12B;
-    }
-#if defined(ADC_RESOLUTION_10B)
-    else if constexpr (Config::resolution == microhal::adc_resolution::bits_10)
-    {
-      handle_storage.Init.Resolution = ADC_RESOLUTION_10B;
-    }
-#endif
-#if defined(ADC_RESOLUTION_8B)
-    else if constexpr (Config::resolution == microhal::adc_resolution::bits_8)
-    {
-      handle_storage.Init.Resolution = ADC_RESOLUTION_8B;
-    }
-#endif
-#if defined(ADC_RESOLUTION_6B)
-    else if constexpr (Config::resolution == microhal::adc_resolution::bits_6)
-    {
-      handle_storage.Init.Resolution = ADC_RESOLUTION_6B;
-    }
-#endif
-    else
-    {
-      static_assert(dependent_false_v<Config>, "microHAL: requested ADC resolution is not supported by this STM32.");
-    }
-    handle_storage.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-#if defined(ADC_SCAN_DISABLE)
-    handle_storage.Init.ScanConvMode = ADC_SCAN_DISABLE;
-#else
-    handle_storage.Init.ScanConvMode = DISABLE;
-#endif
-    handle_storage.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
-    handle_storage.Init.ContinuousConvMode = DISABLE;
-    handle_storage.Init.NbrOfConversion = 1U;
-    handle_storage.Init.DiscontinuousConvMode = DISABLE;
-    handle_storage.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-    handle_storage.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-    handle_storage.Init.DMAContinuousRequests = DISABLE;
-
-    if (HAL_ADC_Init(&handle_storage) == HAL_OK) [[likely]]
-    {
-      return true;
-    }
-    return false;
-#else
-    return false;
-#endif
-  }
-
-  template <typename Config> static result<std::uint16_t> read_blocking(const std::uint8_t channel) noexcept
-  {
-#if MICROHAL_STM32_HAL_HAS_ADC
-    auto& handle_storage = handle<Config>();
-    ADC_ChannelConfTypeDef config{};
-    config.Channel = channel;
-    config.Rank = 1U;
-#if defined(ADC_SAMPLETIME_15CYCLES)
-    config.SamplingTime = ADC_SAMPLETIME_15CYCLES;
-#else
-    config.SamplingTime = ADC_SAMPLETIME_12CYCLES_5;
-#endif
-
-    if (HAL_ADC_ConfigChannel(&handle_storage, &config) != HAL_OK)
-    {
-      return status::error;
-    }
-    if (HAL_ADC_Start(&handle_storage) != HAL_OK)
-    {
-      return status::error;
-    }
-
-    constexpr std::uint32_t timeout_ms = 100U;
-    const HAL_StatusTypeDef poll_status = HAL_ADC_PollForConversion(&handle_storage, timeout_ms);
-    if (poll_status != HAL_OK)
-    {
-      static_cast<void>(HAL_ADC_Stop(&handle_storage));
-      return (poll_status == HAL_TIMEOUT) ? status::timeout : status::error;
-    }
-
-    const std::uint16_t value = static_cast<std::uint16_t>(HAL_ADC_GetValue(&handle_storage));
-    if (HAL_ADC_Stop(&handle_storage) != HAL_OK)
-    {
-      return status::error;
-    }
-    return value;
-#else
-    (void)channel;
-    return status::unsupported;
-#endif
-  }
-
-  template <typename Config> static bool start_continuous(const std::span<const std::uint8_t> channels) noexcept
-  {
-#if MICROHAL_STM32_HAL_HAS_ADC
-    auto& handle_storage = handle<Config>();
-    if (HAL_ADC_Start(&handle_storage) == HAL_OK) [[likely]]
-    {
-      return true;
-    }
-    return false;
-#else
-    (void)channels;
-    return false;
-#endif
-  }
-
-  template <typename Config, auto Handler> static bool start_async(const std::uint8_t channel) noexcept
-  {
-#if MICROHAL_STM32_HAL_HAS_ADC
-    auto& handle_storage = handle<Config>();
-    ADC_ChannelConfTypeDef config{};
-    config.Channel = channel;
-    config.Rank = 1U;
-#if defined(ADC_SAMPLETIME_15CYCLES)
-    config.SamplingTime = ADC_SAMPLETIME_15CYCLES;
-#else
-    config.SamplingTime = ADC_SAMPLETIME_12CYCLES_5;
-#endif
-
-    if (HAL_ADC_ConfigChannel(&handle_storage, &config) == HAL_OK) [[likely]]
-    {
-      if (HAL_ADC_Start_IT(&handle_storage) == HAL_OK) [[likely]]
-      {
-        return true;
-      }
-    }
-    return false;
-#else
-    (void)channel;
-    (void)Handler;
-    return false;
-#endif
-  }
-
-  template <typename Config, auto Handler>
-  static bool start_dma_scan(const std::span<const std::uint8_t> channels,
-                             const std::span<std::uint16_t> results) noexcept
-  {
-#if MICROHAL_STM32_HAL_HAS_ADC
-    auto& handle_storage = handle<Config>();
-    if (HAL_ADC_Start_DMA(&handle_storage, reinterpret_cast<std::uint32_t*>(results.data()),
-                          static_cast<std::uint32_t>(results.size())) == HAL_OK) [[likely]]
-    {
-      return true;
-    }
-    return false;
-#else
-    (void)channels;
-    (void)results;
-    (void)Handler;
-    return false;
-#endif
-  }
-};
+#include "microhal/backends/stm32/adc_api.inc"
 
 struct dac_api final
 {
@@ -3622,7 +3488,9 @@ struct sd_api final
         sd_hardware_flow_control<Config>() ? SDIO_HARDWARE_FLOW_CONTROL_ENABLE : SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
 #else
     state::handle_storage.Init.ClockEdge = SDMMC_CLOCK_EDGE_RISING;
+#if defined(SDMMC_CLOCK_BYPASS_DISABLE)
     state::handle_storage.Init.ClockBypass = SDMMC_CLOCK_BYPASS_DISABLE;
+#endif
     state::handle_storage.Init.ClockPowerSave = SDMMC_CLOCK_POWER_SAVE_DISABLE;
     state::handle_storage.Init.HardwareFlowControl =
         sd_hardware_flow_control<Config>() ? SDMMC_HARDWARE_FLOW_CONTROL_ENABLE : SDMMC_HARDWARE_FLOW_CONTROL_DISABLE;
@@ -3760,7 +3628,11 @@ struct dma_api final
     auto& handle_storage = handle<Config>();
     completed<Config>() = false;
     handle_storage.Instance = peripheral_instance<DMA_Stream_TypeDef, Config>();
+#if defined(STM32H7)
+    handle_storage.Init.Request = DMA_REQUEST_MEM2MEM;
+#else
     handle_storage.Init.Channel = DMA_CHANNEL_0;
+#endif
     handle_storage.Init.Direction = DMA_MEMORY_TO_MEMORY;
     handle_storage.Init.PeriphInc = DMA_PINC_DISABLE;
     handle_storage.Init.MemInc = DMA_MINC_ENABLE;
@@ -3829,10 +3701,12 @@ struct dma_api final
     {
       return dma_transfer_state::error;
     }
+#if defined(STM32F2) || defined(STM32F4) || defined(STM32F7)
     if (dma_state == HAL_DMA_STATE_TIMEOUT)
     {
       return dma_transfer_state::error;
     }
+#endif
     return completed<Config>() ? dma_transfer_state::complete : dma_transfer_state::idle;
 #else
     return status::unsupported;
@@ -3972,7 +3846,7 @@ struct watchdog_api final
 
 struct i2s_api final
 {
-#if MICROHAL_STM32_HAL_HAS_SPI // I2S uses SPI hardware
+#if MICROHAL_STM32_HAL_HAS_SPI && defined(HAL_I2S_MODULE_ENABLED) && defined(I2S_STANDARD_PHILIPS)
   template <typename Config> static auto& handle() noexcept
   {
     static I2S_HandleTypeDef handle_storage{};
@@ -4053,7 +3927,7 @@ struct i2s_api final
 
   template <typename Config> static bool initialize() noexcept
   {
-#if MICROHAL_STM32_HAL_HAS_SPI
+#if MICROHAL_STM32_HAL_HAS_SPI && defined(HAL_I2S_MODULE_ENABLED) && defined(I2S_STANDARD_PHILIPS)
     auto& handle_storage = handle<Config>();
     handle_storage.Instance = peripheral_instance<SPI_TypeDef, Config>();
     handle_storage.Init.Mode = I2S_MODE_MASTER_TX;
@@ -4078,7 +3952,7 @@ struct i2s_api final
 
   template <typename Config> static bool transmit_blocking(const std::span<const std::uint16_t> samples) noexcept
   {
-#if MICROHAL_STM32_HAL_HAS_SPI
+#if MICROHAL_STM32_HAL_HAS_SPI && defined(HAL_I2S_MODULE_ENABLED) && defined(I2S_STANDARD_PHILIPS)
     auto& handle_storage = handle<Config>();
     constexpr std::uint32_t timeout_ms = timeout_for<Config>();
     if (HAL_I2S_Transmit(&handle_storage, hal_tx_buffer(samples.data()), static_cast<std::uint16_t>(samples.size()),
@@ -4095,7 +3969,7 @@ struct i2s_api final
 
   template <typename Config> static bool receive_blocking(const std::span<std::uint16_t> samples) noexcept
   {
-#if MICROHAL_STM32_HAL_HAS_SPI
+#if MICROHAL_STM32_HAL_HAS_SPI && defined(HAL_I2S_MODULE_ENABLED) && defined(I2S_STANDARD_PHILIPS)
     auto& handle_storage = handle<Config>();
     constexpr std::uint32_t timeout_ms = timeout_for<Config>();
     if (HAL_I2S_Receive(&handle_storage, samples.data(), static_cast<std::uint16_t>(samples.size()), timeout_ms) ==
@@ -4113,7 +3987,8 @@ struct i2s_api final
   template <typename Config, auto Handler>
   static bool start_dma_tx(const std::span<const std::uint16_t> samples) noexcept
   {
-#if MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_I2S_REGISTER_CALLBACKS) && (USE_HAL_I2S_REGISTER_CALLBACKS == 1)
+#if MICROHAL_STM32_HAL_HAS_SPI && defined(HAL_I2S_MODULE_ENABLED) && defined(I2S_STANDARD_PHILIPS) &&                  \
+    defined(USE_HAL_I2S_REGISTER_CALLBACKS) && (USE_HAL_I2S_REGISTER_CALLBACKS == 1)
     if (samples.size() > UINT16_MAX)
     {
       return false;
@@ -4338,7 +4213,7 @@ template <peripheral_kind Kind> consteval transfer_mode_capability serial_transf
   }
   if constexpr (Kind == peripheral_kind::i2s)
   {
-#if MICROHAL_STM32_HAL_HAS_SPI && defined(HAL_I2S_MODULE_ENABLED)
+#if MICROHAL_STM32_HAL_HAS_SPI && defined(HAL_I2S_MODULE_ENABLED) && defined(I2S_STANDARD_PHILIPS)
 #if defined(USE_HAL_I2S_REGISTER_CALLBACKS) && USE_HAL_I2S_REGISTER_CALLBACKS == 1
     return {true, true, true};
 #else

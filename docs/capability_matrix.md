@@ -25,7 +25,7 @@ mirrors those accessors; if the two disagree, the header wins.
 | Kinetis MCUXpresso | ✅ | ✅ | ✅ | ✅* | ❌ | ✅* | ✅ | ✅ | ✅ | ✅* | ⚠️ | ✅ |
 | Zephyr RTOS | ✅ | ✅ | ✅ | ✅* | ✅* | ✅* | ✅ | ✅ | ✅ | ✅* | ✅ | ✅ |
 | NuttX RTOS | ❌ | ✅* | ✅* | ❌ | ✅* | ✅* | ❌ | ✅* | ✅* | ✅* | ❌ | ❌ |
-| Nordic nrfx (bare metal) | ✅* | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅* | ✅* | ✅* | ✅* | ❌ |
+| Nordic nrfx (bare metal) | ✅* | ❌ | ✅* | ✅* | ❌ | ❌ | ✅* | ✅* | ✅* | ✅* | ✅* | ✅* RNG only |
 | Mock (host) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 **Legend:** ✅ Runtime path available (possibly SDK- or binding-gated) | ⚠️ Compile-time API surface present, backend operations still scaffolded | ❌ Unsupported
@@ -39,17 +39,19 @@ paths are gated by their corresponding NuttX configuration. Its GPIO, ADC, QSPI,
 paths remain unsupported. NuttX I2C repeated-start requires `I2C_M_NOSTOP`; its ioctl API has no
 per-call timeout parameter, so any timeout is supplied by the underlying driver.
 
-Nordic nrfx provides native GPIO/GPIOTE, TWIM I2C, SPIM SPI, UARTE UART, TIMER, SAADC, PWM,
-watchdog, I2S, and CMSIS clock readback on nRF52840, nRF5340 application core, and nRF54L15
-application core, gated by the corresponding enabled nrfx drivers. QSPI and time-of-day RTC are
-available on nRF52840/nRF5340; RTC additionally requires nrfx API 4.1. NVMC flash remains
-target-gated; the nRF54L15 RRAM helper is not a public memory facade and does not imply erase support.
-Blocking TWIM/SPIM/UARTE calls require working IRQ routing and a nonzero `SystemCoreClock`.
-I2S supports finite 16-bit stereo transfers with a short silence/discard tail, not streaming
-full-duplex. RCC is readback-only. GPIO sensing interrupts, SPI/UART callbacks, ADC one-shot/DMA
-scan, and timer compare callbacks are implemented; continuous ADC and timer input capture are not.
-USB remains unimplemented even on Nordic targets with USBD hardware. No native SD/MMC, generic
-memory-copy DMA, DAC, CAN, Ethernet, or CRC/RNG path is advertised. These are compile-validated
+Nordic nrfx covers nRF52840, nRF5340-app, nRF54L15-app and nRF54H20-app, gated by actual
+hardware and enabled SDK modules. Serial masters support polling/DMA; SPIS/TWIS slaves require
+DMA. Completion IRQs are implemented, not a bytewise non-DMA interrupt engine.
+UART has independent directions and IDLE/circular RX with reserved timer/event resources;
+SAADC supports finite/circular scans, continuous readback and signed differential conversion.
+TIMER capture requires real board event routing; PWM outputs share timing without disrupting
+neighboring duty updates. I2S supports 16-bit stereo full-duplex/streaming, except on H20.
+RTC/GRTC provide calendar, subsecond, alarm and periodic operations. NVMC/RRAM/MRAM use
+the public memory facade with target-specific erase/program semantics and ownership.
+USBD/QSPI are available on 52/53; H20 adds classical CAN and memory-copy DMA.
+Clock configuration/gating is ownership-gated on 52/53/L15 and readback-only on H20.
+CRC hardware remains absent; the CRC/RNG facade exposes native or explicitly enabled vendor
+entropy providers. DAC, Ethernet and native SD/MMC remain unavailable. These are compile-validated
 implementations, not board-tested drivers. See [Nordic integration requirements](backend_sdk_requirements.md#nordic-board-integration).
 QSPI/USB and legacy `automatic` I2S adapter paths on Kinetis
 require complete board bindings; Zephyr QSPI also requires a binding. SD erase is not available
@@ -61,7 +63,12 @@ STM32 HAL Ethernet and SD/MMC now route to real HAL calls and should be instanti
 
 STM32 LL QSPI and SD/MMC route through Cube HAL module APIs when the corresponding HAL modules are enabled in the Cube configuration (`HAL_QSPI_MODULE_ENABLED` / `HAL_SD_MODULE_ENABLED`) and the MCU family exposes those peripherals.
 
-STM32 LL also forwards I2C combined transactions/probes, SPI one-direction and interrupt-driven transfers, I2S DMA transmit, stream-DMA transfer/status/callbacks, and flash erase-geometry queries to Cube HAL. These paths require the matching HAL module; the I2C repeated-START path additionally requires a family with sequential I2C APIs and an active I2C IRQ/system tick. Async I2C/SPI/I2S completion dispatch requires `USE_HAL_I2C_REGISTER_CALLBACKS=1`, `USE_HAL_SPI_REGISTER_CALLBACKS=1`, or `USE_HAL_I2S_REGISTER_CALLBACKS=1`, respectively.
+STM32 LL explicit UART/SPI/I2C modes use native register-level engines, including
+IRQ/DMA combined I2C transactions and fixed-length SPI/I2C slave transfers.
+Legacy `automatic` adapters and other peripherals may still forward to HAL.
+I2S, generic stream-DMA callbacks, and flash erase-geometry queries retain their
+existing HAL dependencies. Both STM32 ADC tags share native acquisition with
+finite/circular DMA, hardware triggers, callbacks, and lifecycle APIs.
 
 `*` Capability is conditional on the target SDK and/or hardware: STM32 LL forwards to HAL when the
 selected family supports the peripheral; Kinetis QSPI, SD, USB, and I2S require the relevant
@@ -77,9 +84,11 @@ I2C, SPI, UART, and I2S additionally expose
 `transfer_modes.{polled,interrupt,dma}` and `transfer_modes.supports(mode)`.
 These describe explicit selectable execution engines, not merely silicon DMA
 availability. `automatic` preserves existing configurations on every backend.
-STM32 HAL/LL implement polling, interrupt and DMA engines with matching enabled
+STM32 HAL implements polling, interrupt and DMA engines with matching enabled
 HAL modules; interrupt/DMA additionally require callback registration and board
-IRQ/DMA resources. Explicit LL modes share the HAL engine. Unsupported combinations,
+IRQ/DMA resources. LL UART/SPI/I2C explicit modes use independent native engines.
+STM32 UART additionally supports independent TX/RX, receive-to-IDLE, and circular
+DMA reception. Unsupported combinations,
 including asynchronous calls in polled mode and arbitrary polled I2C combined
 transactions, return `unsupported` rather than silently changing modes.
 See [serial integration](backend_sdk_requirements.md#explicit-serial-transfer-modes)

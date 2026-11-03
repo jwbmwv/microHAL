@@ -65,7 +65,7 @@ template <microhal::peripheral_kind Kind> struct driver
   static inline bool complete_inline = false;
   static inline int starts{}, stops{};
   static inline microhal::transfer_mode last_mode{};
-  static inline bool last_first{}, last_last{}, last_receive{};
+  static inline bool last_first{}, last_last{}, last_receive{}, last_slave{};
   static inline std::uint16_t last_address{};
   template <typename Config> static auto& handle()
   {
@@ -115,6 +115,7 @@ template <microhal::peripheral_kind Kind> struct driver
     last_first = first;
     last_last = last;
     last_receive = !rx.empty();
+    last_slave = microhal::serial_slave_enabled<Config>();
     last_address = address;
     if (complete_inline && value.tx != nullptr)
       value.tx(&value);
@@ -402,5 +403,32 @@ int main()
   check(spi_engine::initialize<bound_dma>() == status::io_error &&
             spi_engine::write<bound_dma, facade_completed>(tx) == status::unsupported,
         "failed board reconfiguration invalidates prior initialization");
+  using spi_slave = microhal::spi::slave<fixture::backend, microhal::spi::slave_config<0>>;
+  check(spi_slave::initialize() == status::ok &&
+            spi_slave::template transfer_async<facade_completed>(tx, rx) == status::ok && spi_driver::last_slave,
+        "SPI slave facade selects slave configuration");
+  check(spi_slave::template read_async<facade_completed>(rx) == status::busy,
+        "SPI slave rejects overlapping operation");
+  spi_driver::h.duplex(&spi_driver::h);
+  check(spi_slave::transfer_status() == status::ok, "SPI slave callback completes operation");
+  using i2c_slave =
+      microhal::i2c::slave<fixture::backend, microhal::i2c::slave_config<0, 0x52, microhal::i2c_address_mode::seven_bit,
+                                                                         100000, false, false, 10, transfer_mode::dma>>;
+  static_assert(i2c_slave::config_type::own_address == 0x52);
+  i2c_driver::error_value = status::ok;
+  check(i2c_slave::initialize() == status::ok &&
+            i2c_slave::template receive_async<facade_completed>(rx) == status::ok && i2c_driver::last_slave &&
+            i2c_driver::last_receive && i2c_driver::last_address == 0,
+        "I2C slave receives without a remote address");
+  check(i2c_slave::template transmit_async<facade_completed>(tx) == status::busy, "I2C slave retains buffer ownership");
+  i2c_driver::h.rx(&i2c_driver::h);
+  check(i2c_slave::template transmit_async<facade_completed>(tx) == status::ok && !i2c_driver::last_receive,
+        "I2C slave transmits without a remote address");
+  i2c_driver::stop_result = status::io_error;
+  check(i2c_slave::abort() == status::io_error &&
+            i2c_slave::template receive_async<facade_completed>(rx) == status::busy,
+        "I2C slave failed cancellation retains ownership");
+  i2c_driver::stop_result = status::ok;
+  check(i2c_slave::abort() == status::ok, "I2C slave abort recovers");
   return failures == 0 ? 0 : 1;
 }
