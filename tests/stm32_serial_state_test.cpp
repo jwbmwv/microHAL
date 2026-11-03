@@ -45,8 +45,10 @@ struct legacy_i2s_api
   {
     return true;
   }
-  template <typename Config, auto Handler> static bool start_dma_tx(std::span<const std::uint16_t>) noexcept
+  template <typename Config, auto Handler>
+  static bool start_dma_tx(std::span<const std::uint16_t> samples) noexcept
   {
+    static_cast<void>(samples);
     return true;
   }
 };
@@ -389,9 +391,10 @@ int main()
   using automatic_audio =
       microhal::i2s::interface<fixture::backend, microhal::i2s::i2s_config<0, microhal::i2s_mode::master_tx,
                                                                            microhal::i2s_standard::philips, 48000>>;
-  check(automatic_audio::template start_dma_tx<facade_completed>(samples) == status::ok &&
-            automatic_audio::stop() == status::unsupported && automatic_audio::abort() == status::unsupported,
-        "automatic I2S cancellation remains unsupported without legacy transfer state");
+  check(automatic_audio::template start_dma_tx<facade_completed>(samples) == status::ok,
+        "automatic I2S DMA transmit");
+  check(automatic_audio::stop() == status::unsupported, "automatic I2S stop remains unsupported");
+  check(automatic_audio::abort() == status::unsupported, "automatic I2S abort remains unsupported");
   using spi_bus = microhal::spi::master<
       fixture::backend,
       microhal::spi::master_config<0, 1000000, microhal::spi_duplex_mode::full, microhal::spi_clock_polarity::idle_low,

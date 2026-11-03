@@ -62,6 +62,7 @@ template <typename Base, transfer_mode Mode> struct config
 template <typename Base, transfer_mode Mode> struct slave_config : config<Base, Mode>
 {
   static constexpr bool is_slave = true;
+  static constexpr std::uint16_t own_address = 0x52U;
 };
 inline unsigned callbacks{};
 inline status last_callback{};
@@ -370,12 +371,6 @@ struct unclocked_binding : binding<UART_Type>
 struct unclocked_config : config<UART_Type, transfer_mode::interrupt>
 {
   using binding = unclocked_binding;
-};
-
-template <typename Base, transfer_mode Mode> struct slave_config : config<Base, Mode>
-{
-  static constexpr bool is_slave = true;
-  static constexpr std::uint16_t own_address = 0x52U;
 };
 
 template <typename Base, peripheral_kind Kind, transfer_mode Mode> void reject_slave()
