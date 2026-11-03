@@ -375,9 +375,13 @@ int main()
   using S = spi::master<kinetis_espresso_tag, config<SPI_Type, transfer_mode::interrupt>>;
   assert(S::initialize() == status::ok);
   assert(S::transfer(tx, rx) == status::ok);
+  assert(S::handle_dma_interrupt() == status::unsupported);
   using U = uart::port<kinetis_espresso_tag, config<UART_Type, transfer_mode::polled>>;
   assert(U::initialize() == status::ok);
   assert(U::write_blocking(tx) == status::ok);
+  assert(U::tx_status() == status::unsupported);
+  assert(U::rx_status() == status::unsupported);
+  assert(U::handle_dma_interrupt() == status::unsupported);
   using Audio = i2s::interface<kinetis_espresso_tag, config<I2S_Type, transfer_mode::interrupt>>;
   assert(Audio::initialize() == status::ok);
   assert(Audio::transmit_blocking(samples) == status::ok);

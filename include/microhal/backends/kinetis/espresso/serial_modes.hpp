@@ -1542,6 +1542,34 @@ inline constexpr bool matches = []
 
 template <peripheral_kind Kind> struct api
 {
+  template <typename Config, auto Handler> static status start_receive_to_idle(std::span<std::uint8_t>) noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config, auto Handler> static status start_circular_rx(std::span<std::uint8_t>) noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config> static status abort_tx() noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config> static status abort_rx() noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config> static status tx_status() noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config> static status rx_status() noexcept
+  {
+    return status::unsupported;
+  }
+  template <typename Config> static status handle_dma_interrupt() noexcept
+  {
+    return status::unsupported;
+  }
   template <typename Config> static status initialize() noexcept
   {
     if constexpr (!matches<Config, Kind>)
