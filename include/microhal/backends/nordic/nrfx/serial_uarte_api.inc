@@ -41,7 +41,7 @@ template <typename Config> static status abort_tx() noexcept
     return status::unsupported;
   if (!state.tx.active.load())
     return status::ok;
-  const auto generation = state.tx.generation.load(std::memory_order_relaxed);
+  const auto generation = state.tx.generation.load(std::memory_order_acquire);
   state.tx_cancelled = true;
   const auto error = nrfx_uarte_tx_abort(state.instance, true);
   if (error != 0)
@@ -49,7 +49,7 @@ template <typename Config> static status abort_tx() noexcept
     state.tx_cancelled = false;
     return detail::driver_result(error);
   }
-  if (state.tx.active.load() && state.tx.generation.load(std::memory_order_relaxed) == generation)
+  if (state.tx.active.load() && state.tx.generation.load(std::memory_order_acquire) == generation)
     state.tx.finish(status::error);
   return status::ok;
 #else
@@ -67,7 +67,7 @@ template <typename Config> static status abort_rx() noexcept
     return status::unsupported;
   if (!state.rx.active.load())
     return status::ok;
-  const auto generation = state.rx.generation.load(std::memory_order_relaxed);
+  const auto generation = state.rx.generation.load(std::memory_order_acquire);
   state.rx_cancelled = true;
   const auto error = nrfx_uarte_rx_abort(state.instance, true, true);
   if (error != 0)
@@ -76,7 +76,7 @@ template <typename Config> static status abort_rx() noexcept
     return detail::driver_result(error);
   }
   // Synchronous abort returns ownership even when the driver has no pending event.
-  if (state.rx.active.load() && state.rx.generation.load(std::memory_order_relaxed) == generation)
+  if (state.rx.active.load() && state.rx.generation.load(std::memory_order_acquire) == generation)
   {
     detail::uarte_timeout_release(state);
     const auto callback = state.receive;

@@ -11,7 +11,7 @@ struct transfer_state
   {
     if (active.exchange(true))
       return false;
-    generation.fetch_add(1U, std::memory_order_relaxed);
+    generation.fetch_add(1U, std::memory_order_release);
     complete.store(false);
     result = status::error;
     completion = callback;
