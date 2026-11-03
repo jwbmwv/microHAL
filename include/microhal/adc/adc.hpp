@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <span>
 
 #include "microhal/core/concepts.hpp"
@@ -44,6 +45,8 @@ struct converter final
   static constexpr peripheral_kind kind{peripheral_kind::adc};
   static constexpr bool has_differential{backend_traits<Backend>::adc_capability().differential};
   static constexpr bool has_oversampling{backend_traits<Backend>::adc_capability().oversampling};
+  static constexpr bool has_sequential_scan{backend_traits<Backend>::adc_capability().sequential_scan};
+  static constexpr bool has_voltage_conversion{backend_traits<Backend>::adc_capability().voltage_conversion};
   static constexpr std::uint32_t channel_count{backend_traits<Backend>::adc_capability().channel_count};
 
   [[nodiscard]] static inline status initialize() noexcept
@@ -55,6 +58,53 @@ struct converter final
   {
     return detail::as_result<std::uint16_t>([channel]
                                             { return adc_api_t<Backend>::template read_blocking<Config>(channel); });
+  }
+
+  /** @brief Reads channels in order into an equally sized output span. */
+  [[nodiscard]] static inline status read_sequence_blocking(const std::span<const std::uint8_t> channels,
+                                                            const std::span<std::uint16_t> samples) noexcept
+  {
+    if (channels.empty() || (channels.size() != samples.size()))
+    {
+      return status::invalid_argument;
+    }
+
+    for (std::size_t index = 0U; index < channels.size(); ++index)
+    {
+      const auto sample = read_blocking(channels[index]);
+      if (!sample)
+      {
+        return sample.error();
+      }
+      samples[index] = sample.value();
+    }
+    return status::ok;
+  }
+
+  /** @brief Converts one raw sample to millivolts using the configured ADC resolution. */
+  [[nodiscard]] static inline result<std::uint32_t> read_millivolts(const std::uint8_t channel,
+                                                                    const std::uint32_t reference_mv) noexcept
+  {
+    if (reference_mv == 0U)
+    {
+      return status::invalid_argument;
+    }
+
+    constexpr std::uint32_t bits = static_cast<std::uint32_t>(Config::resolution);
+    static_assert((bits > 0U) && (bits <= 16U), "microHAL: unsupported ADC resolution.");
+    constexpr std::uint32_t max_code = (1U << bits) - 1U;
+    const auto sample = read_blocking(channel);
+    if (!sample)
+    {
+      return sample.error();
+    }
+    if (sample.value() > max_code)
+    {
+      return status::error;
+    }
+
+    const std::uint64_t numerator = (static_cast<std::uint64_t>(sample.value()) * reference_mv) + (max_code / 2U);
+    return static_cast<std::uint32_t>(numerator / max_code);
   }
 
   [[nodiscard]] static inline status start_continuous(const std::span<const std::uint8_t> channels) noexcept

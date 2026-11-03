@@ -9,6 +9,7 @@
 #include <array>
 
 #include "microhal/dac/dac.hpp"
+#include "microhal/dma/dma.hpp"
 #include "microhal/ethernet/ethernet.hpp"
 #include "microhal/flash/flash.hpp"
 #include "microhal/gpio/gpio.hpp"
@@ -36,6 +37,8 @@ using rtc_cfg = microhal::rtc::rtc_config<true, true>;
 using flash_cfg = microhal::flash::flash_config<8U, 2048U, true, true>;
 using timer_cfg = microhal::timers::timer_config<3U, 1000000U, microhal::timer_counter_mode::up,
                                                  microhal::timer_clock_source::internal, true, true>;
+using timer_channel_cfg = microhal::timers::channel_config<1U, true, false>;
+using dma_cfg = microhal::dma::dma_config<0U, 0U, 0U>;
 using autobaud_cfg = microhal::uart::autobaud_config<led_pin_cfg, timer_cfg, 9600U, 1000000U, true, false>;
 
 struct status_led_binding final
@@ -363,10 +366,32 @@ int main()
   observe(microhal::i2c::master<test_backend, sensor_i2c_secondary_cfg>::initialize());
   observe(microhal::i2c::master<test_backend, sensor_i2c_secondary_cfg>::write_blocking(0x1DU, tx_payload));
   observe(microhal::i2c::master<test_backend, sensor_i2c_secondary_cfg>::read_blocking(0x1DU, rx_payload));
+  observe(microhal::i2c::master<test_backend, sensor_i2c_secondary_cfg>::write_read_blocking(0x1DU, tx_payload,
+                                                                                             rx_payload));
   observe(microhal::spi::master<test_backend, sensor_spi_secondary_cfg>::initialize());
   observe(microhal::spi::master<test_backend, sensor_spi_secondary_cfg>::transfer(tx_payload, rx_payload));
   observe(microhal::timers::timer<test_backend, aux_timer_cfg>::initialize());
+  observe(microhal::timers::timer<test_backend, aux_timer_cfg>::start());
+  observe(microhal::timers::timer<test_backend, aux_timer_cfg>::set_period(1000U));
+  (void)microhal::timers::timer<test_backend, aux_timer_cfg>::capture_value<timer_channel_cfg>();
   (void)microhal::timers::timer<test_backend, aux_timer_cfg>::counter();
+  []<typename Backend>()
+  {
+    if constexpr (microhal::peripheral_available<Backend, microhal::peripheral_kind::dma>())
+      (void)microhal::dma::controller<Backend, dma_cfg>::transfer_status();
+  }.template operator()<test_backend>();
+
+  const microhal::qspi::command qspi_read{.instruction = 0x0BU,
+                                          .address = 0x123456U,
+                                          .address_size_bytes = 3U,
+                                          .address_mode = microhal::qspi::io_mode::single,
+                                          .dummy_cycles = 8U,
+                                          .data_mode = microhal::qspi::io_mode::single};
+  observe(microhal::qspi::controller<test_backend, qspi_cfg>::initialize());
+  observe(microhal::qspi::controller<test_backend, qspi_cfg>::command_read(qspi_read, rx_payload));
+  observe(microhal::qspi::controller<test_backend, qspi_cfg>::command_write(qspi_read, tx_payload));
+  observe(microhal::qspi::controller<test_backend, qspi_cfg>::enter_memory_mapped(qspi_read));
+  observe(microhal::qspi::controller<test_backend, qspi_cfg>::exit_memory_mapped());
 
   observe(microhal::uart::port<test_backend_ll, console_uart_secondary_cfg>::initialize());
   observe(microhal::uart::port<test_backend_ll, console_uart_secondary_cfg>::write_blocking(tx_payload));
@@ -374,9 +399,14 @@ int main()
   observe(microhal::i2c::master<test_backend_ll, sensor_i2c_secondary_cfg>::initialize());
   observe(microhal::i2c::master<test_backend_ll, sensor_i2c_secondary_cfg>::write_blocking(0x1DU, tx_payload));
   observe(microhal::i2c::master<test_backend_ll, sensor_i2c_secondary_cfg>::read_blocking(0x1DU, rx_payload));
+  observe(microhal::i2c::master<test_backend_ll, sensor_i2c_secondary_cfg>::write_read_blocking(0x1DU, tx_payload,
+                                                                                                rx_payload));
   observe(microhal::spi::master<test_backend_ll, sensor_spi_secondary_cfg>::initialize());
   observe(microhal::spi::master<test_backend_ll, sensor_spi_secondary_cfg>::transfer(tx_payload, rx_payload));
   observe(microhal::timers::timer<test_backend_ll, aux_timer_cfg>::initialize());
+  observe(microhal::timers::timer<test_backend_ll, aux_timer_cfg>::start());
+  observe(microhal::timers::timer<test_backend_ll, aux_timer_cfg>::set_period(1000U));
+  (void)microhal::timers::timer<test_backend_ll, aux_timer_cfg>::capture_value<timer_channel_cfg>();
   (void)microhal::timers::timer<test_backend_ll, aux_timer_cfg>::counter();
 
   observe(microhal::gpio::pin<test_backend, interrupt_pin_cfg>::template enable_interrupt<board_exti_handler>());

@@ -140,6 +140,58 @@ template <typename Backend> struct i2c_api_adapter final
     }
   }
 
+  template <typename Config>
+  static auto write_read_blocking(const std::span<const std::uint8_t> tx_payload,
+                                  const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
+  {
+    if constexpr (requires {
+                    raw_i2c_api_t<Backend>::template write_read_blocking<Config>(tx_payload, rx_payload, address);
+                  })
+    {
+      return raw_i2c_api_t<Backend>::template write_read_blocking<Config>(tx_payload, rx_payload, address);
+    }
+    else
+    {
+      (void)tx_payload;
+      (void)rx_payload;
+      (void)address;
+      return status::unsupported;
+    }
+  }
+
+  template <typename Config, auto Handler>
+  static auto write_read_async(const std::span<const std::uint8_t> tx_payload, const std::span<std::uint8_t> rx_payload,
+                               const std::uint16_t address) noexcept
+  {
+    if constexpr (requires {
+                    raw_i2c_api_t<Backend>::template write_read_async<Config, Handler>(tx_payload, rx_payload, address);
+                  })
+    {
+      return raw_i2c_api_t<Backend>::template write_read_async<Config, Handler>(tx_payload, rx_payload, address);
+    }
+    else
+    {
+      (void)tx_payload;
+      (void)rx_payload;
+      (void)address;
+      (void)Handler;
+      return status::unsupported;
+    }
+  }
+
+  template <typename Config> static auto probe(const std::uint16_t address) noexcept
+  {
+    if constexpr (requires { raw_i2c_api_t<Backend>::template probe<Config>(address); })
+    {
+      return raw_i2c_api_t<Backend>::template probe<Config>(address);
+    }
+    else
+    {
+      (void)address;
+      return status::unsupported;
+    }
+  }
+
   template <typename Config, auto Handler>
   static auto start_transfer(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
   {
@@ -153,6 +205,69 @@ template <typename Backend> struct i2c_api_adapter final
       (void)address;
       (void)Handler;
       return false;
+    }
+  }
+};
+
+template <typename Backend> struct qspi_api_adapter final
+{
+  template <typename Config> static auto initialize() noexcept
+  {
+    return raw_qspi_api_t<Backend>::template initialize<Config>();
+  }
+
+  template <typename Config>
+  static auto command_write(const qspi_command& request, const std::span<const std::uint8_t> payload) noexcept
+  {
+    if constexpr (requires { raw_qspi_api_t<Backend>::template command_write<Config>(request, payload); })
+    {
+      return raw_qspi_api_t<Backend>::template command_write<Config>(request, payload);
+    }
+    else
+    {
+      (void)request;
+      (void)payload;
+      return status::unsupported;
+    }
+  }
+
+  template <typename Config>
+  static auto command_read(const qspi_command& request, const std::span<std::uint8_t> payload) noexcept
+  {
+    if constexpr (requires { raw_qspi_api_t<Backend>::template command_read<Config>(request, payload); })
+    {
+      return raw_qspi_api_t<Backend>::template command_read<Config>(request, payload);
+    }
+    else
+    {
+      (void)request;
+      (void)payload;
+      return status::unsupported;
+    }
+  }
+
+  template <typename Config> static auto enter_memory_mapped(const qspi_command& request) noexcept
+  {
+    if constexpr (requires { raw_qspi_api_t<Backend>::template enter_memory_mapped<Config>(request); })
+    {
+      return raw_qspi_api_t<Backend>::template enter_memory_mapped<Config>(request);
+    }
+    else
+    {
+      (void)request;
+      return status::unsupported;
+    }
+  }
+
+  template <typename Config> static auto exit_memory_mapped() noexcept
+  {
+    if constexpr (requires { raw_qspi_api_t<Backend>::template exit_memory_mapped<Config>(); })
+    {
+      return raw_qspi_api_t<Backend>::template exit_memory_mapped<Config>();
+    }
+    else
+    {
+      return status::unsupported;
     }
   }
 };
@@ -177,6 +292,32 @@ template <typename Backend> struct spi_api_adapter final
       return raw_spi_api_t<Backend>::template transfer<Config>(
           tx_payload.data(), rx_payload.data(),
           (tx_payload.size() < rx_payload.size()) ? tx_payload.size() : rx_payload.size());
+    }
+  }
+
+  template <typename Config> static auto write_blocking(const std::span<const std::uint8_t> payload) noexcept
+  {
+    if constexpr (requires { raw_spi_api_t<Backend>::template write_blocking<Config>(payload); })
+    {
+      return raw_spi_api_t<Backend>::template write_blocking<Config>(payload);
+    }
+    else
+    {
+      (void)payload;
+      return status::unsupported;
+    }
+  }
+
+  template <typename Config> static auto read_blocking(const std::span<std::uint8_t> payload) noexcept
+  {
+    if constexpr (requires { raw_spi_api_t<Backend>::template read_blocking<Config>(payload); })
+    {
+      return raw_spi_api_t<Backend>::template read_blocking<Config>(payload);
+    }
+    else
+    {
+      (void)payload;
+      return status::unsupported;
     }
   }
 
@@ -263,6 +404,41 @@ template <typename Backend> struct uart_api_adapter final
   }
 };
 
+template <typename Backend> struct gpio_api_adapter final
+{
+  template <typename PinConfig> static auto configure() noexcept
+  {
+    return raw_gpio_api_t<Backend>::template configure<PinConfig>();
+  }
+
+  template <typename PinConfig> static auto write(const bool level) noexcept
+  {
+    return raw_gpio_api_t<Backend>::template write<PinConfig>(level);
+  }
+
+  template <typename PinConfig> static auto read() noexcept
+  {
+    return raw_gpio_api_t<Backend>::template read<PinConfig>();
+  }
+
+  template <typename PinConfig, auto Handler> static auto enable_interrupt() noexcept
+  {
+    return raw_gpio_api_t<Backend>::template enable_interrupt<PinConfig, Handler>();
+  }
+
+  template <typename PinConfig> static auto toggle() noexcept
+  {
+    if constexpr (requires { raw_gpio_api_t<Backend>::template toggle<PinConfig>(); })
+    {
+      return raw_gpio_api_t<Backend>::template toggle<PinConfig>();
+    }
+    else
+    {
+      return status::unsupported;
+    }
+  }
+};
+
 template <typename Backend> struct rtc_api_adapter final
 {
   template <typename Config> static auto initialize() noexcept
@@ -325,6 +501,19 @@ template <typename Backend> struct flash_api_adapter final
       return false;
     }
   }
+
+  template <typename Config> static auto erase_region(const std::uint32_t address) noexcept
+  {
+    if constexpr (requires { raw_flash_api_t<Backend>::template erase_region<Config>(address); })
+    {
+      return raw_flash_api_t<Backend>::template erase_region<Config>(address);
+    }
+    else
+    {
+      (void)address;
+      return result<flash_erase_region>{status::unsupported};
+    }
+  }
 };
 
 template <typename Backend> struct timer_api_adapter final
@@ -346,6 +535,67 @@ template <typename Backend> struct timer_api_adapter final
     }
   }
 
+  template <typename Config> static auto period() noexcept
+  {
+    if constexpr (requires { raw_timer_api_t<Backend>::template period<Config>(); })
+    {
+      return detail::as_result<std::uint32_t>([] { return raw_timer_api_t<Backend>::template period<Config>(); });
+    }
+    else
+    {
+      return result<std::uint32_t>{status::unsupported};
+    }
+  }
+
+  template <typename Config> static auto start() noexcept
+  {
+    if constexpr (requires { raw_timer_api_t<Backend>::template start<Config>(); })
+    {
+      return raw_timer_api_t<Backend>::template start<Config>();
+    }
+    else
+    {
+      return status::unsupported;
+    }
+  }
+
+  template <typename Config> static auto stop() noexcept
+  {
+    if constexpr (requires { raw_timer_api_t<Backend>::template stop<Config>(); })
+    {
+      return raw_timer_api_t<Backend>::template stop<Config>();
+    }
+    else
+    {
+      return status::unsupported;
+    }
+  }
+
+  template <typename Config> static auto reset_counter() noexcept
+  {
+    if constexpr (requires { raw_timer_api_t<Backend>::template reset_counter<Config>(); })
+    {
+      return raw_timer_api_t<Backend>::template reset_counter<Config>();
+    }
+    else
+    {
+      return status::unsupported;
+    }
+  }
+
+  template <typename Config> static auto set_period(const std::uint32_t period) noexcept
+  {
+    if constexpr (requires { raw_timer_api_t<Backend>::template set_period<Config>(period); })
+    {
+      return raw_timer_api_t<Backend>::template set_period<Config>(period);
+    }
+    else
+    {
+      (void)period;
+      return status::unsupported;
+    }
+  }
+
   template <typename Config, typename ChannelConfig, auto Handler> static auto enable_capture_compare() noexcept
   {
     if constexpr (requires {
@@ -357,7 +607,53 @@ template <typename Backend> struct timer_api_adapter final
     else
     {
       (void)Handler;
-      return false;
+      return status::unsupported;
+    }
+  }
+
+  template <typename Config, typename ChannelConfig> static auto capture_value() noexcept
+  {
+    if constexpr (requires { raw_timer_api_t<Backend>::template capture_value<Config, ChannelConfig>(); })
+    {
+      return detail::as_result<std::uint32_t>(
+          [] { return raw_timer_api_t<Backend>::template capture_value<Config, ChannelConfig>(); });
+    }
+    else
+    {
+      return result<std::uint32_t>{status::unsupported};
+    }
+  }
+};
+
+template <typename Backend> struct dma_api_adapter final
+{
+  template <typename Config> static auto initialize() noexcept
+  {
+    return raw_dma_api_t<Backend>::template initialize<Config>();
+  }
+
+  template <typename Config, auto Handler>
+  static auto start_transfer(const std::uint32_t src_addr, const std::uint32_t dst_addr,
+                             const std::uint32_t length) noexcept
+  {
+    return raw_dma_api_t<Backend>::template start_transfer<Config, Handler>(src_addr, dst_addr, length);
+  }
+
+  template <typename Config> static auto abort() noexcept
+  {
+    return raw_dma_api_t<Backend>::template abort<Config>();
+  }
+
+  template <typename Config> static auto transfer_status() noexcept
+  {
+    if constexpr (requires { raw_dma_api_t<Backend>::template transfer_status<Config>(); })
+    {
+      return detail::as_result<dma_transfer_state>(
+          [] { return raw_dma_api_t<Backend>::template transfer_status<Config>(); });
+    }
+    else
+    {
+      return result<dma_transfer_state>{status::unsupported};
     }
   }
 };
@@ -371,7 +667,8 @@ template <typename Backend> struct adc_api_adapter final
 
   template <typename Config> static auto read_blocking(const std::uint8_t channel) noexcept
   {
-    return raw_adc_api_t<Backend>::template read_blocking<Config>(channel);
+    return detail::as_result<std::uint16_t>(
+        [channel] { return raw_adc_api_t<Backend>::template read_blocking<Config>(channel); });
   }
 
   template <typename Config> static auto start_continuous(const std::span<const std::uint8_t> channels) noexcept
@@ -383,7 +680,7 @@ template <typename Backend> struct adc_api_adapter final
     else
     {
       (void)channels;
-      return false;
+      return status::unsupported;
     }
   }
 
@@ -479,10 +776,10 @@ template <typename Backend> struct dac_api_adapter final
  *          `ethernet_api`.
  */
 /// @{
-template <typename Backend> using gpio_api_t = detail::raw_gpio_api_t<Backend>;
+template <typename Backend> using gpio_api_t = detail::gpio_api_adapter<Backend>;
 template <typename Backend> using i2c_api_t = detail::i2c_api_adapter<Backend>;
 template <typename Backend> using spi_api_t = detail::spi_api_adapter<Backend>;
-template <typename Backend> using qspi_api_t = detail::raw_qspi_api_t<Backend>;
+template <typename Backend> using qspi_api_t = detail::qspi_api_adapter<Backend>;
 template <typename Backend> using uart_api_t = detail::uart_api_adapter<Backend>;
 template <typename Backend> using rtc_api_t = detail::rtc_api_adapter<Backend>;
 template <typename Backend> using flash_api_t = detail::flash_api_adapter<Backend>;
@@ -493,7 +790,7 @@ template <typename Backend> using can_api_t = detail::raw_can_api_t<Backend>;
 template <typename Backend> using usb_api_t = detail::raw_usb_api_t<Backend>;
 template <typename Backend> using ethernet_api_t = detail::raw_ethernet_api_t<Backend>;
 template <typename Backend> using sd_api_t = detail::raw_sd_api_t<Backend>;
-template <typename Backend> using dma_api_t = detail::raw_dma_api_t<Backend>;
+template <typename Backend> using dma_api_t = detail::dma_api_adapter<Backend>;
 template <typename Backend> using pwm_api_t = detail::raw_pwm_api_t<Backend>;
 template <typename Backend> using watchdog_api_t = detail::raw_watchdog_api_t<Backend>;
 template <typename Backend> using i2s_api_t = detail::raw_i2s_api_t<Backend>;

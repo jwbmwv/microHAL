@@ -9,6 +9,7 @@
 #pragma once
 
 #include <cstdint>
+#include <type_traits>
 
 #include "microhal/core/concepts.hpp"
 
@@ -49,6 +50,11 @@ struct controller final
 
   static constexpr peripheral_kind kind{peripheral_kind::rtc};
 
+  [[nodiscard]] static constexpr bool is_valid(const date_time value) noexcept
+  {
+    return (value.hour < 24U) && (value.minute < 60U) && (value.second < 60U);
+  }
+
   [[nodiscard]] static inline status initialize() noexcept
   {
     return detail::as_status([] { return rtc_api_t<Backend>::template initialize<Config>(); });
@@ -56,8 +62,44 @@ struct controller final
 
   [[nodiscard]] static inline status set(const date_time value) noexcept
   {
+    if (!is_valid(value))
+    {
+      return status::invalid_argument;
+    }
+    if ((value.year != 0U) || (value.month != 0U) || (value.day != 0U))
+    {
+      return status::unsupported;
+    }
     return detail::as_status(
         [value] { return rtc_api_t<Backend>::template set_time<Config>(value.hour, value.minute, value.second); });
+  }
+
+  [[nodiscard]] static inline result<date_time> read() noexcept
+  {
+    std::uint8_t hours = 0U;
+    std::uint8_t minutes = 0U;
+    std::uint8_t seconds = 0U;
+    using return_type = decltype(rtc_api_t<Backend>::template get_time<Config>(hours, minutes, seconds));
+    if constexpr (std::is_same_v<std::remove_cv_t<return_type>, status>)
+    {
+      const status read_status = rtc_api_t<Backend>::template get_time<Config>(hours, minutes, seconds);
+      if (read_status != status::ok)
+      {
+        return read_status;
+      }
+    }
+    else if constexpr (std::is_same_v<std::remove_cv_t<return_type>, bool>)
+    {
+      if (!rtc_api_t<Backend>::template get_time<Config>(hours, minutes, seconds))
+      {
+        return status::io_error;
+      }
+    }
+    else
+    {
+      rtc_api_t<Backend>::template get_time<Config>(hours, minutes, seconds);
+    }
+    return date_time{.hour = hours, .minute = minutes, .second = seconds};
   }
 
   [[nodiscard]] static inline date_time now() noexcept

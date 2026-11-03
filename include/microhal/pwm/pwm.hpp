@@ -46,8 +46,21 @@ struct output final
 
   [[nodiscard]] static inline status set_duty_cycle(const std::uint16_t duty_permille) noexcept
   {
+    if (duty_permille > 1'000U)
+    {
+      return status::invalid_argument;
+    }
     return detail::as_status([duty_permille]
                              { return pwm_api_t<Backend>::template set_duty_cycle<Config>(duty_permille); });
+  }
+
+  [[nodiscard]] static inline status set_duty_cycle_percent(const std::uint8_t duty_percent) noexcept
+  {
+    if (duty_percent > 100U)
+    {
+      return status::invalid_argument;
+    }
+    return set_duty_cycle(static_cast<std::uint16_t>(duty_percent) * 10U);
   }
 
   [[nodiscard]] static inline status start() noexcept
@@ -58,6 +71,11 @@ struct output final
   [[nodiscard]] static inline status stop() noexcept
   {
     return detail::as_status([] { return pwm_api_t<Backend>::template stop<Config>(); });
+  }
+
+  [[nodiscard]] static inline status set_enabled(const bool enabled) noexcept
+  {
+    return enabled ? start() : stop();
   }
 };
 

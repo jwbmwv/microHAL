@@ -52,6 +52,20 @@
         "MICROHAL_VENDOR_VALIDATION_NORDIC_INCLUDE_DIRS": "$env{MICROHAL_NORDIC_INCLUDE_DIRS}",
         "MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS": "$env{MICROHAL_NORDIC_DEFINITIONS}"
       }
+    },
+    {
+      "name": "nuttx-backend-ci",
+      "displayName": "NuttX Backend CI",
+      "description": "Validate the NuttX backend against a configured NuttX tree and board headers.",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/nuttx-backend-ci",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MICROHAL_SUPPRESS_MISSING_MCU_WARNINGS": "ON",
+        "MICROHAL_VENDOR_VALIDATION": "ON",
+        "MICROHAL_VENDOR_VALIDATION_PROVIDER": "NUTTX",
+        "MICROHAL_VENDOR_VALIDATION_NUTTX_INCLUDE_DIRS": "$env{MICROHAL_NUTTX_INCLUDE_DIRS}"
+      }
     }
   ],
   "buildPresets": [
@@ -84,6 +98,15 @@
         "microhal_backend_api_contract",
         "microhal_preset_capability_expectations"
       ]
+    },
+    {
+      "name": "nuttx-backend-ci",
+      "configurePreset": "nuttx-backend-ci",
+      "targets": [
+        "microhal_backend_selection",
+        "microhal_backend_api_contract",
+        "microhal_preset_capability_expectations"
+      ]
     }
   ],
   "testPresets": [
@@ -104,6 +127,18 @@
     {
       "name": "nordic-backend-ci",
       "configurePreset": "nordic-backend-ci",
+      "filter": {
+        "include": {
+          "name": "microhal_backend_selection|microhal_backend_api_contract|microhal_preset_capability_expectations|microhal_capability_claim_policy"
+        }
+      },
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "nuttx-backend-ci",
+      "configurePreset": "nuttx-backend-ci",
       "filter": {
         "include": {
           "name": "microhal_backend_selection|microhal_backend_api_contract|microhal_preset_capability_expectations|microhal_capability_claim_policy"

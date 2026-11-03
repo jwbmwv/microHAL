@@ -17,17 +17,23 @@ namespace microhal::i2c
 
 /**
  * @brief Compile-time I2C controller configuration.
- * @tparam TimeoutMs Bound applied to blocking transfers.
+ * @tparam TimeoutMs Deadline applied when the backend exposes a configurable timeout; otherwise the
+ *         backend's native blocking-transfer timeout applies.
  */
 template <std::uint8_t InstanceIndex, std::uint32_t ClockHz, i2c_address_mode AddressMode = i2c_address_mode::seven_bit,
-          bool EnableDma = false, bool EnableInterrupts = false, std::uint32_t TimeoutMs = 1000U>
+          bool EnableDma = false, bool EnableInterrupts = false, std::uint32_t TimeoutMs = 1000U,
+          transfer_mode Mode = transfer_mode::automatic>
 struct master_config final
 {
+  static_assert(TimeoutMs > 0U, "microHAL: I2C timeout must be non-zero.");
+
   static constexpr std::uint8_t instance_index{InstanceIndex};
   static constexpr std::uint32_t clock_hz{ClockHz};
   static constexpr i2c_address_mode address_mode{AddressMode};
-  static constexpr bool enable_dma{EnableDma};
-  static constexpr bool enable_interrupts{EnableInterrupts};
+  static constexpr transfer_mode transfer_mode_value{Mode};
+  static constexpr bool enable_dma{Mode == transfer_mode::dma || (Mode == transfer_mode::automatic && EnableDma)};
+  static constexpr bool enable_interrupts{Mode == transfer_mode::interrupt ||
+                                          (Mode == transfer_mode::automatic && EnableInterrupts)};
   static constexpr std::uint32_t timeout_ms{TimeoutMs};
 };
 
@@ -42,13 +48,18 @@ struct master final
   using config_type = Config;
 
   static constexpr peripheral_kind kind{peripheral_kind::i2c};
-  static constexpr bool is_dma_capable{Config::enable_dma};
-  static constexpr bool is_isr_capable{Config::enable_interrupts};
+  static constexpr bool is_dma_capable{serial_dma_enabled<Config>()};
+  static constexpr bool is_isr_capable{serial_interrupt_enabled<Config>()};
+  static constexpr transfer_mode mode{configured_transfer_mode<Config>()};
+  using mode_api = serial_mode_api<Backend, peripheral_kind::i2c>;
 
   /** @brief Initializes the selected I2C controller instance. */
   [[nodiscard]] static inline status initialize() noexcept
   {
-    return detail::as_status([] { return i2c_api_t<Backend>::template initialize<Config>(); });
+    if constexpr (mode != transfer_mode::automatic)
+      return mode_api::template initialize<Config>();
+    else
+      return detail::as_status([] { return i2c_api_t<Backend>::template initialize<Config>(); });
   }
 
   /**
@@ -59,8 +70,17 @@ struct master final
   [[nodiscard]] static inline status write_blocking(const std::uint16_t address,
                                                     const std::span<const std::uint8_t> payload) noexcept
   {
-    return detail::as_status([address, payload]
-                             { return i2c_api_t<Backend>::template write_blocking<Config>(payload, address); });
+    const std::uint16_t max_address = (Config::address_mode == i2c_address_mode::seven_bit) ? 0x7FU : 0x3FFU;
+    if (address > max_address)
+    {
+      return status::invalid_argument;
+    }
+
+    if constexpr (mode != transfer_mode::automatic)
+      return mode_api::template write<Config, nullptr>(payload, address);
+    else
+      return detail::as_status([address, payload]
+                               { return i2c_api_t<Backend>::template write_blocking<Config>(payload, address); });
   }
 
   /**
@@ -71,12 +91,96 @@ struct master final
   [[nodiscard]] static inline status read_blocking(const std::uint16_t address,
                                                    const std::span<std::uint8_t> payload) noexcept
   {
-    return detail::as_status([address, payload]
-                             { return i2c_api_t<Backend>::template read_blocking<Config>(payload, address); });
+    const std::uint16_t max_address = (Config::address_mode == i2c_address_mode::seven_bit) ? 0x7FU : 0x3FFU;
+    if (address > max_address)
+    {
+      return status::invalid_argument;
+    }
+
+    if constexpr (mode != transfer_mode::automatic)
+      return mode_api::template read<Config, nullptr>(payload, address);
+    else
+      return detail::as_status([address, payload]
+                               { return i2c_api_t<Backend>::template read_blocking<Config>(payload, address); });
   }
 
   /**
-   * @brief Starts an interrupt-driven transfer.
+   * @brief Checks whether a slave acknowledges its address without transferring payload bytes.
+   * @param address 7-bit or 10-bit slave address, as defined by @ref Config::address_mode.
+   * @return @ref status::ok on ACK, @ref status::io_error when the address is not acknowledged,
+   *         or @ref status::unsupported if the backend cannot perform an address-only probe.
+   */
+  [[nodiscard]] static inline status probe(const std::uint16_t address) noexcept
+  {
+    const std::uint16_t max_address = (Config::address_mode == i2c_address_mode::seven_bit) ? 0x7FU : 0x3FFU;
+    if (address > max_address)
+    {
+      return status::invalid_argument;
+    }
+
+    if constexpr (mode != transfer_mode::automatic)
+      return mode_api::template probe<Config>(address);
+    else
+      return detail::as_status([address] { return i2c_api_t<Backend>::template probe<Config>(address); });
+  }
+
+  /**
+   * @brief Writes a command or register address, then reads data without releasing the bus.
+   * @details The backend must issue a repeated START between the write and read phases. A backend
+   *          timeout is reported as @ref status::timeout, bus/address failures as @ref status::io_error,
+   *          and absent support as @ref status::unsupported. Backends with configurable deadlines use
+   *          @c Config::timeout_ms; drivers with only native blocking calls use their native timeout.
+   */
+  [[nodiscard]] static inline status write_read_blocking(const std::uint16_t address,
+                                                         const std::span<const std::uint8_t> tx_payload,
+                                                         const std::span<std::uint8_t> rx_payload) noexcept
+  {
+    const std::uint16_t max_address = (Config::address_mode == i2c_address_mode::seven_bit) ? 0x7FU : 0x3FFU;
+    if ((address > max_address) || tx_payload.empty() || rx_payload.empty())
+    {
+      return status::invalid_argument;
+    }
+
+    if constexpr (mode != transfer_mode::automatic)
+      return mode_api::template write_read<Config, nullptr>(tx_payload, rx_payload, address);
+    else
+      return detail::as_status(
+          [address, tx_payload, rx_payload]
+          { return i2c_api_t<Backend>::template write_read_blocking<Config>(tx_payload, rx_payload, address); });
+  }
+
+  /**
+   * @brief Starts a write followed by a repeated-START read.
+   * @details The completion handler is called after the read finishes or an error occurs. Backends
+   *          without asynchronous combined-transfer support return @ref status::unsupported. Both
+   *          buffers must remain valid until completion; on interrupt-driven backends, the handler
+   *          runs in the completion interrupt context.
+   */
+  template <auto CompletionHandler>
+  [[nodiscard]] static inline status write_read_async(const std::uint16_t address,
+                                                      const std::span<const std::uint8_t> tx_payload,
+                                                      const std::span<std::uint8_t> rx_payload) noexcept
+    requires IsrCapableConcept<Backend, peripheral_kind::i2c>
+  {
+    static_assert(mode == transfer_mode::automatic || valid_serial_completion_handler<CompletionHandler>());
+    const std::uint16_t max_address = (Config::address_mode == i2c_address_mode::seven_bit) ? 0x7FU : 0x3FFU;
+    if ((address > max_address) || tx_payload.empty() || rx_payload.empty())
+    {
+      return status::invalid_argument;
+    }
+
+    if constexpr (mode != transfer_mode::automatic)
+      return mode_api::template write_read<Config, CompletionHandler>(tx_payload, rx_payload, address);
+    else
+      return detail::as_status(
+          [address, tx_payload, rx_payload] {
+            return i2c_api_t<Backend>::template write_read_async<Config, CompletionHandler>(tx_payload, rx_payload,
+                                                                                            address);
+          });
+  }
+
+  /**
+   * @brief Starts transmit using the selected asynchronous engine (legacy interrupt path in automatic mode).
    * @tparam CompletionHandler Callback notified by the backend when the transfer completes.
    * @param address 7-bit or 10-bit slave address, as defined by @ref Config::address_mode.
    * @param payload Transfer buffer used by the backend.
@@ -86,9 +190,60 @@ struct master final
                                                     const std::span<std::uint8_t> payload) noexcept
     requires IsrCapableConcept<Backend, peripheral_kind::i2c>
   {
-    return detail::as_status(
-        [address, payload]
-        { return i2c_api_t<Backend>::template start_transfer<Config, CompletionHandler>(payload, address); });
+    static_assert(mode == transfer_mode::automatic || valid_serial_completion_handler<CompletionHandler>());
+    const std::uint16_t max_address = (Config::address_mode == i2c_address_mode::seven_bit) ? 0x7FU : 0x3FFU;
+    if ((address > max_address) || payload.empty())
+    {
+      return status::invalid_argument;
+    }
+
+    if constexpr (mode != transfer_mode::automatic)
+      return mode_api::template write<Config, CompletionHandler>(payload, address);
+    else
+      return detail::as_status(
+          [address, payload]
+          { return i2c_api_t<Backend>::template start_transfer<Config, CompletionHandler>(payload, address); });
+  }
+
+  template <auto CompletionHandler>
+  [[nodiscard]] static status write_async(const std::uint16_t address,
+                                          const std::span<const std::uint8_t> payload) noexcept
+  {
+    static_assert(valid_serial_completion_handler<CompletionHandler>());
+    if (address > (Config::address_mode == i2c_address_mode::seven_bit ? 0x7FU : 0x3FFU) || payload.empty())
+      return status::invalid_argument;
+    return mode_api::template write<Config, CompletionHandler>(payload, address);
+  }
+
+  template <auto CompletionHandler>
+  [[nodiscard]] static status read_async(const std::uint16_t address, const std::span<std::uint8_t> payload) noexcept
+  {
+    static_assert(valid_serial_completion_handler<CompletionHandler>());
+    if (address > (Config::address_mode == i2c_address_mode::seven_bit ? 0x7FU : 0x3FFU) || payload.empty())
+      return status::invalid_argument;
+    return mode_api::template read<Config, CompletionHandler>(payload, address);
+  }
+
+  [[nodiscard]] static status abort() noexcept
+  {
+    if constexpr (mode == transfer_mode::automatic)
+      return status::unsupported;
+    else
+      return mode_api::template abort<Config>();
+  }
+  [[nodiscard]] static status transfer_status() noexcept
+  {
+    if constexpr (mode == transfer_mode::automatic)
+      return status::unsupported;
+    else
+      return mode_api::template transfer_status<Config>();
+  }
+  [[nodiscard]] static status handle_interrupt() noexcept
+  {
+    if constexpr (mode == transfer_mode::automatic)
+      return status::unsupported;
+    else
+      return detail::as_status([] { return mode_api::template handle_interrupt<Config>(); });
   }
 };
 

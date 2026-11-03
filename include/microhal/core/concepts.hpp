@@ -8,13 +8,78 @@
 
 #pragma once
 
+#include <array>
 #include <concepts>
+#include <cstdint>
+#include <string_view>
 #include <type_traits>
 
 #include "microhal/core/backend_selector.hpp"
 
 namespace microhal
 {
+
+#if defined(__cpp_static_assert) && __cpp_static_assert >= 202306L
+namespace detail
+{
+
+template <std::size_t N>
+consteval auto clock_diagnostic(const std::uint32_t requested, const std::array<char, N>& prefix,
+                                const std::uint32_t maximum) noexcept
+{
+  constexpr std::string_view middle{" Hz is outside backend range 1.."};
+  constexpr std::string_view suffix{" Hz."};
+  constexpr std::size_t capacity = N + middle.size() + suffix.size() + 20U;
+  struct message
+  {
+    std::array<char, capacity> text{};
+    std::size_t length{};
+
+    [[nodiscard]] constexpr std::size_t size() const noexcept
+    {
+      return length;
+    }
+    [[nodiscard]] constexpr const char* data() const noexcept
+    {
+      return text.data();
+    }
+  };
+  message output{};
+  const auto append = [&output](const std::string_view text)
+  {
+    for (const char character : text)
+    {
+      output.text.at(output.length++) = character;
+    }
+  };
+  const auto append_number = [&output](std::uint32_t value)
+  {
+    std::array<char, 10U> digits{};
+    std::size_t count{};
+    while (true)
+    {
+      digits.at(count++) = static_cast<char>('0' + value % 10U);
+      value /= 10U;
+      if (value == 0U)
+      {
+        break;
+      }
+    }
+    while (count != 0U)
+    {
+      output.text.at(output.length++) = digits.at(--count);
+    }
+  };
+  append(std::string_view{prefix.data(), N - 1U});
+  append_number(requested);
+  append(middle);
+  append_number(maximum);
+  append(suffix);
+  return output;
+}
+
+} // namespace detail
+#endif
 
 template <typename Capability>
 concept CapabilityConcept = requires(const Capability capability) {
@@ -181,10 +246,12 @@ template <typename Backend, typename Config> consteval bool i2c_config_compatibl
   }
   else
   {
-    return (Config::clock_hz > 0U) &&
-           (Config::clock_hz <= backend_traits<Backend>::i2c_capability().max_frequency_hz) &&
-           ((!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::i2c>) &&
-           ((!Config::enable_interrupts) || IsrCapableConcept<Backend, peripheral_kind::i2c>);
+    const auto capability = backend_traits<Backend>::i2c_capability();
+    return capability.transfer_modes.supports(configured_transfer_mode<Config>()) && (Config::clock_hz > 0U) &&
+           (Config::clock_hz <= capability.max_frequency_hz) &&
+           ((Config::address_mode != i2c_address_mode::ten_bit) || capability.ten_bit_addressing) &&
+           ((!serial_dma_enabled<Config>()) || DmaCapableConcept<Backend, peripheral_kind::i2c>) &&
+           ((!serial_interrupt_enabled<Config>()) || IsrCapableConcept<Backend, peripheral_kind::i2c>);
   }
 }
 
@@ -212,10 +279,11 @@ template <typename Backend, typename Config> consteval bool spi_config_compatibl
   }
   else
   {
-    return (Config::clock_hz > 0U) &&
+    return backend_traits<Backend>::spi_capability().transfer_modes.supports(configured_transfer_mode<Config>()) &&
+           (Config::clock_hz > 0U) &&
            (Config::clock_hz <= backend_traits<Backend>::spi_capability().max_frequency_hz) &&
-           ((!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::spi>) &&
-           ((!Config::enable_interrupts) || IsrCapableConcept<Backend, peripheral_kind::spi>);
+           ((!serial_dma_enabled<Config>()) || DmaCapableConcept<Backend, peripheral_kind::spi>) &&
+           ((!serial_interrupt_enabled<Config>()) || IsrCapableConcept<Backend, peripheral_kind::spi>);
   }
 }
 
@@ -225,7 +293,8 @@ template <typename Backend, typename Config> consteval bool qspi_config_compatib
   {
     return false;
   }
-  else if constexpr (!backend_traits<Backend>::qspi_capability().quad_mode)
+  else if constexpr (!backend_traits<Backend>::qspi_capability().quad_mode ||
+                     !backend_traits<Backend>::qspi_capability().command_transfer)
   {
     return false;
   }
@@ -243,7 +312,21 @@ template <typename Backend, typename Config> consteval bool qspi_config_compatib
   }
   else
   {
-    return (!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::qspi>;
+    constexpr bool dma_compatible = (!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::qspi>;
+    if constexpr (std::same_as<Backend, kinetis_espresso_tag> || std::same_as<Backend, zephyr_tag> ||
+                  std::same_as<Backend, nuttx_tag>)
+    {
+      return dma_compatible && requires(const qspi_command& command, const std::span<const std::uint8_t> tx,
+                                        const std::span<std::uint8_t> rx) {
+        typename Config::binding;
+        Config::binding::template initialize<Config>();
+        Config::binding::template command_write<Config>(command, tx);
+        Config::binding::template command_read<Config>(command, rx);
+        Config::binding::template enter_memory_mapped<Config>(command);
+        Config::binding::template exit_memory_mapped<Config>();
+      };
+    }
+    return dma_compatible;
   }
 }
 
@@ -271,10 +354,17 @@ template <typename Backend, typename Config> consteval bool uart_config_compatib
   }
   else
   {
-    return (Config::baud_rate > 0U) && ((!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::uart>) &&
-           ((!Config::enable_interrupts) || IsrCapableConcept<Backend, peripheral_kind::uart>) &&
+    const auto capability = backend_traits<Backend>::uart_capability();
+    return capability.transfer_modes.supports(configured_transfer_mode<Config>()) && (Config::baud_rate > 0U) &&
+           ((!serial_dma_enabled<Config>()) || DmaCapableConcept<Backend, peripheral_kind::uart>) &&
+           ((!serial_interrupt_enabled<Config>()) || IsrCapableConcept<Backend, peripheral_kind::uart>) &&
            ((!Config::require_fifo) || backend_traits<Backend>::uart_capability().fifo) &&
-           ((!Config::require_lpuart) || backend_traits<Backend>::uart_capability().lpuart);
+           ((!Config::require_lpuart) || capability.lpuart) &&
+           ((capability.max_baud_rate == 0U) || (Config::baud_rate <= capability.max_baud_rate)) &&
+           ((Config::parity == uart_parity::none) || capability.parity) &&
+           ((Config::stop_bits == uart_stop_bits::one) ||
+            ((Config::stop_bits == uart_stop_bits::two) && capability.two_stop_bits) ||
+            ((Config::stop_bits == uart_stop_bits::one_and_half) && capability.one_and_half_stop_bits));
   }
 }
 
@@ -300,7 +390,8 @@ template <typename Backend, typename Config> consteval bool timer_config_compati
   }
   else
   {
-    return (Config::clock_hz > 0U) && ((!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::timer>) &&
+    return (Config::clock_hz > 0U) &&
+           ((!serial_dma_enabled<Config>()) || DmaCapableConcept<Backend, peripheral_kind::timer>) &&
            ((!Config::enable_interrupts) || IsrCapableConcept<Backend, peripheral_kind::timer>);
   }
 }
@@ -322,7 +413,11 @@ template <typename Backend, typename Config> consteval bool flash_config_compati
   }
   else
   {
-    return (Config::program_alignment_bytes >= backend_traits<Backend>::flash_capability().alignment_bytes) &&
+    return (Config::program_alignment_bytes > 0U) && (Config::erase_size_bytes > 0U) &&
+           (backend_traits<Backend>::flash_capability().alignment_bytes > 0U) &&
+           (backend_traits<Backend>::flash_capability().erase_bytes > 0U) &&
+           (Config::program_alignment_bytes >= backend_traits<Backend>::flash_capability().alignment_bytes) &&
+           ((Config::program_alignment_bytes % backend_traits<Backend>::flash_capability().alignment_bytes) == 0U) &&
            (Config::erase_size_bytes >= backend_traits<Backend>::flash_capability().erase_bytes) &&
            ((Config::erase_size_bytes % backend_traits<Backend>::flash_capability().erase_bytes) == 0U) &&
            ((!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::flash>);
@@ -459,6 +554,10 @@ template <typename Backend, typename Config> consteval bool usb_config_compatibl
   {
     return false;
   }
+  else if constexpr (!backend_traits<Backend>::usb_capability().endpoint_transfer)
+  {
+    return false;
+  }
   else if constexpr (!(BindingBackedConfig<Config> || requires { Config::instance_index; }))
   {
     return false;
@@ -474,7 +573,27 @@ template <typename Backend, typename Config> consteval bool usb_config_compatibl
   }
   else
   {
-    return Config::device_mode || Config::host_mode || Config::otg_mode;
+    constexpr bool mode_valid = Config::device_mode || Config::host_mode || Config::otg_mode;
+    constexpr auto capability = backend_traits<Backend>::usb_capability();
+    constexpr bool speed_valid = ((Config::speed == usb_speed::low) || (Config::speed == usb_speed::full) ||
+                                  (Config::speed == usb_speed::high)) &&
+                                 ((Config::speed != usb_speed::high) || capability.high_speed);
+    constexpr bool role_valid = (!Config::device_mode || capability.device) &&
+                                (!Config::host_mode || capability.host) && (!Config::otg_mode || capability.otg);
+    if constexpr (std::same_as<Backend, kinetis_espresso_tag> || std::same_as<Backend, nuttx_tag>)
+    {
+      return mode_valid && speed_valid && role_valid &&
+             requires(const std::uint8_t endpoint, const std::span<const std::uint8_t> tx,
+                      const std::span<std::uint8_t> rx) {
+               typename Config::binding;
+               Config::binding::template initialize<Config>();
+               Config::binding::template connect<Config>();
+               Config::binding::template disconnect<Config>();
+               Config::binding::template endpoint_transmit<Config>(endpoint, tx);
+               Config::binding::template endpoint_receive<Config>(endpoint, rx);
+             };
+    }
+    return mode_valid && speed_valid && role_valid;
   }
 }
 
@@ -530,14 +649,29 @@ template <typename Backend, typename Config> consteval bool sd_config_compatible
   }
   else
   {
-    return (Config::clock_hz > 0U) && (Config::clock_hz <= backend_traits<Backend>::sd_capability().max_frequency_hz) &&
-           ((Config::bus_width != sd_bus_width::four) || backend_traits<Backend>::sd_capability().bus_width_4) &&
-           ((Config::bus_width != sd_bus_width::eight) || backend_traits<Backend>::sd_capability().bus_width_8) &&
-           ((Config::timing_mode != sd_timing_mode::high_speed) ||
-            backend_traits<Backend>::sd_capability().high_speed) &&
-           ((Config::timing_mode != sd_timing_mode::uhs) || backend_traits<Backend>::sd_capability().uhs) &&
-           ((!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::sd>) &&
-           ((!Config::enable_interrupts) || IsrCapableConcept<Backend, peripheral_kind::sd>);
+    constexpr bool config_valid =
+        backend_traits<Backend>::sd_capability().block_io && backend_traits<Backend>::sd_capability().capacity_query &&
+        (Config::clock_hz > 0U) && (Config::clock_hz <= backend_traits<Backend>::sd_capability().max_frequency_hz) &&
+        ((Config::bus_width != sd_bus_width::one) || backend_traits<Backend>::sd_capability().bus_width_1) &&
+        ((Config::bus_width != sd_bus_width::four) || backend_traits<Backend>::sd_capability().bus_width_4) &&
+        ((Config::bus_width != sd_bus_width::eight) || backend_traits<Backend>::sd_capability().bus_width_8) &&
+        ((Config::timing_mode != sd_timing_mode::high_speed) || backend_traits<Backend>::sd_capability().high_speed) &&
+        ((Config::timing_mode != sd_timing_mode::uhs) || backend_traits<Backend>::sd_capability().uhs) &&
+        ((!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::sd>) &&
+        ((!Config::enable_interrupts) || IsrCapableConcept<Backend, peripheral_kind::sd>);
+    if constexpr (std::same_as<Backend, kinetis_espresso_tag>)
+    {
+      return config_valid && requires(const std::uint32_t block, const std::uint32_t count,
+                                      const std::span<std::uint8_t> rx, const std::span<const std::uint8_t> tx) {
+        typename Config::binding;
+        Config::binding::template initialize<Config>();
+        Config::binding::read_blocks(block, rx);
+        Config::binding::write_blocks(block, tx);
+        Config::binding::erase_blocks(block, count);
+        Config::binding::capacity_blocks();
+      };
+    }
+    return config_valid;
   }
 }
 
@@ -639,7 +773,35 @@ template <typename Backend, typename Config> consteval bool i2s_config_compatibl
   }
   else
   {
-    return (Config::sample_rate > 0U) && ((!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::i2s>);
+    constexpr auto capability = backend_traits<Backend>::i2s_capability();
+    constexpr bool mode_valid =
+        ((Config::mode == i2s_mode::master_tx) || (Config::mode == i2s_mode::master_rx) ||
+         (Config::mode == i2s_mode::slave_tx) || (Config::mode == i2s_mode::slave_rx)) &&
+        (((Config::mode == i2s_mode::master_tx) || (Config::mode == i2s_mode::master_rx)) ? capability.master_mode
+                                                                                          : capability.slave_mode);
+    constexpr bool config_valid =
+        mode_valid && capability.transfer_modes.supports(configured_transfer_mode<Config>()) &&
+        (Config::sample_rate > 0U) && (Config::sample_rate <= capability.max_sample_rate) &&
+        (capability.sample_bits >= 16U) && (!Config::enable_master_clock || capability.master_clock_output) &&
+        ((!Config::enable_dma) || (capability.dma &&
+                                   ((configured_transfer_mode<Config>() == transfer_mode::automatic ||
+                                     Config::mode == i2s_mode::master_tx || Config::mode == i2s_mode::slave_tx)
+                                        ? capability.transmit_dma
+                                        : capability.receive_dma) &&
+                                   DmaCapableConcept<Backend, peripheral_kind::i2s>));
+    if constexpr ((std::same_as<Backend, kinetis_espresso_tag> || std::same_as<Backend, nuttx_tag>) &&
+                  configured_transfer_mode<Config>() == transfer_mode::automatic)
+    {
+      return config_valid && requires(const std::span<const std::uint16_t> tx, const std::span<std::uint16_t> rx) {
+        typename Config::binding;
+        Config::binding::template initialize<Config>();
+        Config::binding::template transmit_blocking<Config>(tx);
+        Config::binding::template receive_blocking<Config>(rx);
+      } && ((!Config::enable_dma) || requires(const std::span<const std::uint16_t> tx) {
+               Config::binding::template start_dma_tx<Config, nullptr>(tx);
+             });
+    }
+    return config_valid;
   }
 }
 
@@ -728,7 +890,12 @@ template <typename Backend, typename Config> consteval bool validate_i2c_config(
       }, "microHAL: I2C configuration must expose clock_hz, address_mode, enable_dma, and enable_interrupts.");
   static_assert((Config::clock_hz > 0U) &&
                     (Config::clock_hz <= backend_traits<Backend>::i2c_capability().max_frequency_hz),
+#if defined(__cpp_static_assert) && __cpp_static_assert >= 202306L
+                detail::clock_diagnostic(Config::clock_hz, std::to_array("microHAL: requested I2C clock "),
+                                         backend_traits<Backend>::i2c_capability().max_frequency_hz));
+#else
                 "microHAL: requested I2C clock exceeds backend capability.");
+#endif
   static_assert((!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::i2c>,
                 "microHAL: selected backend does not provide DMA-capable I2C.");
   static_assert((!Config::enable_interrupts) || IsrCapableConcept<Backend, peripheral_kind::i2c>,
@@ -758,7 +925,12 @@ template <typename Backend, typename Config> consteval bool validate_spi_config(
          "enable_dma, and enable_interrupts.");
   static_assert((Config::clock_hz > 0U) &&
                     (Config::clock_hz <= backend_traits<Backend>::spi_capability().max_frequency_hz),
+#if defined(__cpp_static_assert) && __cpp_static_assert >= 202306L
+                detail::clock_diagnostic(Config::clock_hz, std::to_array("microHAL: requested SPI clock "),
+                                         backend_traits<Backend>::spi_capability().max_frequency_hz));
+#else
                 "microHAL: requested SPI clock exceeds backend capability.");
+#endif
   static_assert((!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::spi>,
                 "microHAL: selected backend does not provide DMA-capable SPI.");
   static_assert((!Config::enable_interrupts) || IsrCapableConcept<Backend, peripheral_kind::spi>,
@@ -862,6 +1034,10 @@ template <typename Backend, typename Config> consteval bool validate_flash_confi
          "enable_interrupts.");
   static_assert(Config::program_alignment_bytes >= backend_traits<Backend>::flash_capability().alignment_bytes,
                 "microHAL: flash program alignment is smaller than backend minimum alignment.");
+  static_assert(Config::program_alignment_bytes > 0U, "microHAL: flash program alignment must be non-zero.");
+  static_assert((Config::program_alignment_bytes % backend_traits<Backend>::flash_capability().alignment_bytes) == 0U,
+                "microHAL: flash program alignment must be a multiple of the backend minimum alignment.");
+  static_assert(Config::erase_size_bytes > 0U, "microHAL: flash erase size must be non-zero.");
   static_assert(Config::erase_size_bytes >= backend_traits<Backend>::flash_capability().erase_bytes,
                 "microHAL: flash erase size is smaller than backend minimum erase granularity.");
   static_assert((Config::erase_size_bytes % backend_traits<Backend>::flash_capability().erase_bytes) == 0U,

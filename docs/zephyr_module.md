@@ -17,7 +17,7 @@ microHAL to `EXTRA_ZEPHYR_MODULES` when building outside a west workspace.
 board-owned Zephyr bindings. It demonstrates the intended boundary:
 
 - `binding::spec` for GPIO resources resolved from devicetree aliases such as `led0`
-- `binding::node_id` for device-backed peripherals resolved from chosen nodes such as `zephyr_console`
+- `binding::device` for device-backed peripherals resolved with `DEVICE_DT_GET()` from chosen nodes such as `zephyr_console`
 
 The header is consumed by the Zephyr Twister test application under
 `tests/zephyr/` so drift between the example binding pattern and the backend is

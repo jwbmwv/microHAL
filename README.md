@@ -1,6 +1,6 @@
 # microHAL
 
-A header-only, zero-overhead C++20 hardware abstraction layer for microcontrollers.
+A header-only, zero-overhead hardware abstraction layer for microcontrollers, requiring C++20 or newer.
 
 microHAL lets you write peripheral code once and compile it against STM32Cube HAL, STM32Cube LL,
 NXP MCUXpresso, Zephyr, or NuttX — without virtual dispatch, dynamic allocation, exceptions, RTTI,
@@ -62,7 +62,7 @@ Ethernet, SD/MMC, DMA, PWM, Watchdog, I2S, RCC, and CRC. Coverage varies by back
 
 ## Requirements
 
-- A C++20 compiler with concepts and `consteval` (GCC 11+, Clang 14+, `arm-none-eabi-g++` 11+)
+- A compiler supporting at least C++20, including concepts and `consteval` (GCC 11+, Clang 14+, `arm-none-eabi-g++` 11+)
 - CMake 3.24+
 - The vendor SDK for whichever backend you target (not vendored here)
 
@@ -72,6 +72,20 @@ Backend-specific SDK/environment requirements are documented in
 ## Using it
 
 microHAL is header-only and exports an INTERFACE target.
+
+C++20 is the minimum, not a fixed language mode. The exported target requests `cxx_std_20`;
+both `find_package` and `add_subdirectory` preserve a consuming target's newer standard.
+For microHAL's own builds, CMake defaults to C++20 unless `CMAKE_CXX_STANDARD` is already set:
+
+```sh
+cmake -S . -B build/cxx23 -DCMAKE_CXX_STANDARD=23
+```
+
+Host CI tests C++20 and C++23 with GCC and Clang, plus Clang's experimental C++26 mode.
+Newer modes still depend on the selected compiler, standard library, and vendor SDK.
+Newer features are used only when they materially improve microHAL without changing the
+public API or runtime behavior. When `__cpp_static_assert >= 202306L`, I2C/SPI clock validation
+reports the requested frequency and backend limit; older compilers retain fixed-string diagnostics.
 
 ```cmake
 find_package(microhal REQUIRED)
@@ -160,6 +174,10 @@ To cross-compile against real ST headers for STM32C0, STM32F4, and STM32G4:
 
 microHAL's own tests and examples build with `-Werror` (`MICROHAL_WERROR`, on by default). The
 `INTERFACE` target you link against never forces that on your project.
+
+The clock diagnostic fixture builds as `microhal_clock_i2c` and `microhal_clock_spi`, giving
+clang-tidy valid compilation-database entries for both configurations. The
+`microhal_clock_diagnostics` test separately checks invalid clocks and their compiler messages.
 
 ### Proving the abstraction is free
 

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <span>
 
 #include "microhal/core/concepts.hpp"
@@ -42,6 +43,9 @@ struct converter final
   static constexpr peripheral_kind kind{peripheral_kind::dac};
   static constexpr bool has_dual_mode{backend_traits<Backend>::dac_capability().dual_mode};
   static constexpr bool has_waveform{backend_traits<Backend>::dac_capability().waveform_generation};
+  static constexpr bool has_output_buffer{backend_traits<Backend>::dac_capability().output_buffer};
+  static constexpr bool has_voltage_conversion{backend_traits<Backend>::dac_capability().voltage_conversion};
+  static constexpr bool has_sequence_write{backend_traits<Backend>::dac_capability().sequence_write};
 
   [[nodiscard]] static inline status initialize() noexcept
   {
@@ -51,6 +55,37 @@ struct converter final
   [[nodiscard]] static inline status write_blocking(const std::uint16_t value) noexcept
   {
     return detail::as_status([value] { return dac_api_t<Backend>::template write_blocking<Config>(value); });
+  }
+
+  /** @brief Writes each sample in order, stopping at the first backend error. */
+  [[nodiscard]] static inline status write_sequence_blocking(const std::span<const std::uint16_t> samples) noexcept
+  {
+    for (const std::uint16_t sample : samples)
+    {
+      const status write_status = write_blocking(sample);
+      if (write_status != status::ok)
+      {
+        return write_status;
+      }
+    }
+    return status::ok;
+  }
+
+  /** @brief Converts millivolts to a DAC code using the configured resolution. */
+  [[nodiscard]] static inline status write_millivolts(const std::uint32_t millivolts,
+                                                      const std::uint32_t reference_mv) noexcept
+  {
+    if ((reference_mv == 0U) || (millivolts > reference_mv))
+    {
+      return status::invalid_argument;
+    }
+
+    constexpr std::uint32_t bits = static_cast<std::uint32_t>(Config::resolution);
+    static_assert((bits > 0U) && (bits <= 16U), "microHAL: unsupported DAC resolution.");
+    constexpr std::uint32_t max_code = (1U << bits) - 1U;
+    const std::uint64_t numerator = (static_cast<std::uint64_t>(millivolts) * max_code) + (reference_mv / 2U);
+    const auto code = static_cast<std::uint16_t>(numerator / reference_mv);
+    return write_blocking(code);
   }
 
   [[nodiscard]] static inline status write_dual(const std::uint16_t value1, const std::uint16_t value2) noexcept

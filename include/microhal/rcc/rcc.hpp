@@ -55,6 +55,16 @@ struct clock_controller final
     return detail::as_status([] { return rcc_api_t<Backend>::template configure<Config>(); });
   }
 
+  [[nodiscard]] static inline status configure_and_verify() noexcept
+  {
+    const status configured = configure();
+    if (configured != status::ok)
+    {
+      return configured;
+    }
+    return (get_system_clock_hz() == Config::system_clock_hz) ? status::ok : status::io_error;
+  }
+
   /// @return The measured system clock in hertz, not an operation status.
   [[nodiscard]] static inline std::uint32_t get_system_clock_hz() noexcept
   {

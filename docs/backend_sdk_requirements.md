@@ -9,10 +9,10 @@ This document defines what each microHAL backend needs from its vendor SDK or en
 | `microhal::stm32_hal_tag` | ST STM32Cube HAL + CMSIS device headers | Cube HAL family `Inc/` headers, CMSIS core/device headers, family + part macro (`STM32F4`, `STM32F407xx`, etc.) | HAL symbols for the used peripherals (`HAL_UART_*`, `HAL_I2C_*`, etc.) and `USE_HAL_DRIVER` | Peripheral identity through `binding::base_address` (or legacy instance fields); GPIO EXTI board hook for IRQ wiring |
 | `microhal::stm32_ll_tag` | ST STM32Cube LL + CMSIS device headers | Cube LL headers for selected family + CMSIS | LL symbols (`LL_USART_*`, `LL_I2C_*`, etc.) | Same binding model as STM32 HAL |
 | `microhal::kinetis_espresso_tag` | NXP MCUXpresso SDK (Kinetis or i.MX RT package) | `fsl_common.h` available in include path (backend auto-detects optional `fsl_*` headers) | Peripheral drivers are enabled by header presence + SoC symbols (`I2C0`, `LPI2C1`, `FTM0`, `PIT`, etc.) | Register-backed bindings (`binding::base_address`) and GPIO routing (`binding::port_index`, `binding::pin_index`, `binding::mux`) |
-| `microhal::nordic_nrf_tag` | Nordic bare-metal nrfx SDK | `nrfx.h` plus optional drivers (`nrfx_twim.h`, `nrfx_spim.h`, `nrfx_qspi.h`, `nrfx_sdhc.h`, `nrfx_uarte.h`, `nrfx_rtc.h`, `nrfx_timer.h`, `nrfx_saadc.h`, `nrfx_dac.h`, `nrfx_nvmc.h`, `nrfx_pwm.h`, `nrfx_wdt.h`) | Support is enabled per-driver by header discovery; no Zephyr dependency | Standard config fields and board-owned pin/clock routing for each peripheral instance |
-| `microhal::zephyr_tag` | Zephyr RTOS driver model | Zephyr include tree + generated headers (`autoconf.h`, devicetree-generated headers) | `CONFIG_*` gates and Zephyr driver APIs (`device`, `gpio`, `i2c`, `spi`, `adc`, etc.) | Device identity via `binding::device` or `binding::node_id`; peripheral-specific config (`gpio_dt_spec`, `spi_config`, etc.) |
-| `microhal::nuttx_tag` | NuttX RTOS | NuttX headers and board defconfig-selected subsystems | `__NUTTX__`, `CONFIG_*` feature macros, character/block device APIs (`open/read/write/ioctl`) | Device paths (for example `/dev/i2c0`, `/dev/spi0`, `/dev/mmcsd0`) via `binding::device_path` or `Config::device_path` |
-| `microhal::mock_tag` | Host test environment | No vendor SDK | C++20 host compiler only; full peripheral recorder surface | None |
+| `microhal::nordic_nrf_tag` | Nordic bare-metal nrfx SDK | Current stateful nrfx driver APIs, target CMSIS/system headers, and application nrfx glue/configuration; RTC requires API 4.1 | GPIO/GPIOTE, TWIM, SPIM, UARTE, TIMER, SAADC, PWM, WDT, I2S, and clock readback on selected targets; NVMC/QSPI/RTC additionally target-gated | Typed pin/channel bindings, linked nrfx drivers, clock ownership, IRQ dispatch, and DMA-accessible buffer lifetimes |
+| `microhal::zephyr_tag` | Zephyr RTOS driver model | Zephyr include tree + generated headers (`autoconf.h`, devicetree-generated headers) | `CONFIG_*` gates and Zephyr driver APIs (`device`, `gpio`, `i2c`, `spi`, `adc`, etc.) | Device identity via `binding::device` or `Config::device`, initialized with `DEVICE_DT_GET()` in board code; peripheral-specific config (`gpio_dt_spec`, `spi_config`, etc.) |
+| `microhal::nuttx_tag` | NuttX RTOS | NuttX headers and board defconfig-selected subsystems | `__NUTTX__`, generated `nuttx/config.h`, `CONFIG_*` feature macros, and character/block device or network socket APIs | Character-device paths (for example `/dev/i2c0`, `/dev/spi0`, `/dev/mmcsd0`) via `binding::device_path` or `Config::device_path`; flash requires a board-supplied `mtd_dev_s*` binding |
+| `microhal::mock_tag` | Host test environment | No vendor SDK | C++20 or newer host compiler; full peripheral recorder surface | None |
 
 ## Kinetis/MCUXpresso Family Coverage Model
 
@@ -28,6 +28,132 @@ What this means in practice:
 - Runtime capability still depends on which modules your selected SoC/SDK actually provides.
 
 ## Vendor Validation Inputs
+
+### Explicit serial transfer modes
+
+I2C, SPI, UART, and I2S configurations accept a final `microhal::transfer_mode`
+parameter: `automatic` (the backward-compatible default), `polled`, `interrupt`, or
+`dma`. Custom binding-backed configurations expose `transfer_mode_value` with the
+same enum. Explicit selection takes precedence over the older DMA/interrupt
+request flags. Query `backend_traits<Backend>::<peripheral>_capability().transfer_modes`
+to check the actual implemented engines; the older `dma`/`isr` booleans alone do
+not identify how a blocking call transfers data. Explicit modes are currently
+implemented for STM32 HAL/LL and supported MCUXpresso modules. Other backends
+retain their existing `automatic` paths, rather than claiming modes they cannot
+select.
+
+Blocking calls in interrupt/DMA mode start the selected engine and wait for its
+completion, bounded by `Config::timeout_ms` (1000 ms when absent). They need live
+interrupts and an advancing timeout clock; do not call them from a masked or
+higher-priority interrupt that prevents completion. Nonblocking calls return
+after submission: I2C/SPI offer `write_async`/`read_async`, I2C also
+`write_read_async`, SPI also `transfer_async`, UART uses
+`start_async_tx`/`start_async_rx`, and I2S offers
+`transmit_async`/`receive_async`. Callbacks accept `status` or no arguments and
+normally run in IRQ context; explicit cancellation may notify from the caller of
+`abort()`. Polled mode reports `unsupported` for async requests;
+it never runs a blocking operation disguised as async.
+
+Use one configuration/owner per physical peripheral and serialize application
+control calls between threads. Buffers must remain DMA-accessible, correctly aligned,
+and alive until completion or successful `abort()`. Cache maintenance and memory
+placement remain board/application responsibilities. Finite transfers, not
+circular/streaming DMA, are the contract. A failed submission does not generate
+a completion callback. `start_dma_tx` remains available for legacy I2S configs;
+with an explicit mode it only starts when that mode is `dma`.
+
+#### STM32 integration
+
+Explicit modes on both STM32 tags use the **same Cube HAL handles and engines**;
+LL forwards these operations to HAL, not to an independent native LL DMA driver.
+Enable the matching `HAL_I2C_MODULE_ENABLED`, `HAL_SPI_MODULE_ENABLED`,
+`HAL_UART_MODULE_ENABLED`, or `HAL_I2S_MODULE_ENABLED`. Interrupt/DMA modes also
+require the respective `USE_HAL_*_REGISTER_CALLBACKS=1` option in every translation
+unit, including the linked HAL driver C sources.
+
+Board MSP initialization must enable clocks, configure pins, initialize and link
+the appropriate `hdmatx`/`hdmarx` handles, select DMA/DMAMUX requests and enable the
+NVIC. Alternatively `Config::binding::configure_dma(handle)` may configure/link
+DMA after HAL initialization and return `status`, `bool`, or `void`. Both DMA
+handles are required before an I2C combined DMA transaction starts; two-line SPI
+master DMA receive also needs TX DMA. Circular DMA handles are rejected.
+
+Route peripheral IRQs through the facade's `handle_interrupt()` (I2C handles both
+event/error dispatch) and DMA IRQs through `HAL_DMA_IRQHandler` for the board's
+linked channels/streams. Clock ticks must continue while a blocking operation
+waits. Callback ownership is shared across handler instantiations and directions:
+one outstanding operation per configuration, including UART TX/RX. Completion
+and error callback pointers are restored before notifying the caller.
+
+`transfer_status()` reports `busy` while active and a terminal status afterward.
+Timeout/error cleanup and `abort()` stop the hardware; reinitialize after abort,
+an asynchronous hardware error, or failed hardware submission (not a preflight
+`unsupported`/`busy` result). If hardware refuses to
+abort, ownership stays busy and no terminal callback is issued:
+`transfer_status()`/`abort()` report the failure. Keep the buffers alive, recover
+the hardware and retry `abort()` before reusing them, including after a blocking
+call returns an abort error.
+
+I2C sequential interrupt/DMA APIs preserve repeated START. Arbitrary combined
+write/read in explicit **polled** mode currently reports `unsupported` instead
+of substituting STOP+START or secretly using interrupts. Individual polled reads
+and writes remain supported. An address-only `probe()` uses the HAL polling
+probe and shares the same busy guard, irrespective of the selected data engine.
+I2S applies configured TX/RX role, framing standard, sample rate and master-clock
+selection; the public sample format remains 16-bit. Receive DMA is exposed through
+`receive_async`/`receive_blocking` with an RX configuration.
+
+STM32 vendor-validation auto-setup enables serial callback registration in its
+generated HAL configuration and instantiates public polled/interrupt/DMA bodies
+against the real SDK. Host state-machine tests exercise callbacks, ownership,
+repeated-START phases, submission failure, timeout and abort recovery; this is
+not physical-board validation.
+
+### MCUXpresso explicit serial integration
+
+Native I2C/LPI2C, DSPI/LPSPI, UART/LPUART, and modern SAI (SDK API >= 2.4)
+implement polling, interrupt, and EDMA modes when their SDK headers are present.
+I2C/UART/LPUART also support the simple-DMA driver; EDMA takes precedence when
+both variants are available. SDK absence never enables a mode based only on
+silicon capability.
+
+`Config::binding` supplies a correctly typed peripheral `instance`, its enabled
+`source_clock_hz`, and a wrapping monotonic `now_ms()` returning `uint32_t` for
+synchronous calls. Optional `idle()` must be bounded. Board code owns pinmux,
+clocks, DMA/DMAMUX routing, IRQ priorities and cache maintenance. Provide reserved,
+initialized `edma_handle_t*` (or `dma_handle_t*`) resources as follows:
+
+| Peripheral | Binding DMA handles |
+| --- | --- |
+| I2C/LPI2C/SAI | `dma_handle` |
+| UART/LPUART | `tx_dma_handle`, `rx_dma_handle` |
+| DSPI | `rx_dma_handle`, `intermediary_dma_handle`, `tx_dma_handle` |
+| LPSPI | `rx_dma_handle`, `tx_dma_handle` |
+
+SPI/UART may additionally supply a typed `sdk_config`; SPI accepts native
+`transfer_flags`. Route peripheral IRQs through `handle_interrupt()` and DMA IRQs
+through the SDK handler for each reserved DMA channel. Blocking interrupt/DMA
+operations require live completion IRQs; polling uses register/FIFO flags, not
+an interrupt-driven operation in disguise.
+
+Polled combined I2C transactions remain unsupported, polled LPI2C receives are
+limited to 256 bytes, and LPI2C polling errors require reinitialization. SPI is
+eight-bit; polled DSPI uses CTAR0. SAI supports Philips stereo16/channel0 in
+master/slave TX/RX roles. Other SAI framing configurations are rejected. Legacy
+`automatic` I2S retains its complete-board-binding adapter contract.
+
+Kinetis `abort()` suppresses completion callbacks; inspect its return value and
+`transfer_status()` instead. Successful cancellation returns `ok` and leaves
+terminal transfer status `error`. Reinitialize classic I2C after cancellation or
+an error; cancellation disables local access without relying on a potentially
+unbounded SDK bus-abort loop, and a stuck bus reports `timeout`. DMA buffer
+quiescence relies on the selected SDK's DMA-abort guarantees. `now_ms()` is not
+required for initialization or asynchronous submission, only synchronous calls.
+
+The host suite builds no-SDK, common-header-only, IRQ, EDMA and simple-DMA fixture
+variants. These are deterministic SDK fixtures, **not real MCUXpresso vendor
+validation or physical-board testing**. Boundedness inside vendor start/IRQ
+routines has not been certified against a real SDK.
 
 ### STM32 vendor validation
 
@@ -57,9 +183,123 @@ Kinetis validation is SDK-discovery based:
 
 Nordic validation is nrfx-header-discovery based:
 
-- Ensure the include path exposes `nrfx.h` and the driver headers you intend to use (`nrfx_twim.h`, `nrfx_spim.h`, `nrfx_qspi.h`, `nrfx_sdhc.h`).
-- Define the target SoC symbols expected by your nrfx configuration (for example `NRF52840_XXAA`) so peripheral instance tables match the selected device.
-- Prefer `MICROHAL_VENDOR_VALIDATION_NORDIC_SUPPORT_ROOT` for auto-setup when using the local unified tree under `vendor-support/nrf-bm/v2.0.0`; explicit `MICROHAL_VENDOR_VALIDATION_NORDIC_INCLUDE_DIRS` remains supported for custom layouts.
+- Ensure the include path exposes `nrfx.h` and the driver headers available for the selected SoC.
+- Define the exact target SoC symbol (`NRF52840_XXAA`, `NRF5340_XXAA_APPLICATION`, or `NRF54L15_XXAA`) so peripheral instances and configuration match the selected device. nRF54L15 validation defaults to its application core (`NRF_APPLICATION`).
+- Prefer `MICROHAL_VENDOR_VALIDATION_NORDIC_SUPPORT_ROOT` for auto-setup when using the local unified tree under `vendor-support/nrf-bm/v2.0.1`; explicit `MICROHAL_VENDOR_VALIDATION_NORDIC_INCLUDE_DIRS` remains supported for custom layouts.
+
+### Nordic board integration
+
+The expanded native paths target **nRF52840**, **nRF5340 application core**, and **nRF54L15
+application core**. Header discovery alone does not enable them: enable the corresponding
+`NRFX_SPIM_ENABLED`, `NRFX_UARTE_ENABLED`, `NRFX_TIMER_ENABLED`, `NRFX_SAADC_ENABLED`,
+`NRFX_PWM_ENABLED`, `NRFX_WDT_ENABLED`, `NRFX_GPIOTE_ENABLED`, `NRFX_I2S_ENABLED`,
+`NRFX_QSPI_ENABLED`, and/or `NRFX_RTC_ENABLED` in your application's nrfx configuration.
+TWIM uses `NRFX_TWIM_ENABLED`. The implementation uses the current stateful nrfx instance API,
+not the older index-only driver ABI. Enable API 4.1 (`NRFX_CONFIG_API_VER_MINOR=1` with API
+major 4) for RTC.
+
+Link the selected nrfx C driver sources, normal nrfx support dependencies, CMSIS/system code,
+and your startup/vector implementation. Provide real nrfx IRQ/critical-section/atomic/cache
+glue; the SDK glue template is not a complete bare-metal integration. The glue under
+`tests/nordic/` is compile-validation infrastructure, not an application port.
+
+| API | Required `Config::binding` members |
+| --- | --- |
+| TWIM | `scl_pin`, `sda_pin` |
+| SPIM | `sck_pin`, `mosi_pin`, `miso_pin`; optional `ss_pin` |
+| UARTE | `tx_pin`, `rx_pin` |
+| PWM | `output_pin`; `Config::timer_index` selects the PWM instance, `channel` is 1-4 |
+| SAADC | `channels`, an array of `nrfx_saadc_channel_t` with channel indexes, analog pins, gain, reference, and acquisition settings |
+| QSPI | `configuration`, a complete `nrfx_qspi_config_t` for the connected memory |
+| I2S | `sck_pin`, `lrck_pin`, `sdout_pin`, `sdin_pin`; `mck_pin` when master-clock output is requested |
+
+Use Nordic encoded pin numbers (`NRF_GPIO_PIN_MAP(port, pin)`); pin ownership and actual board
+routing remain application decisions. SAADC binding settings, not the generic `sample_time`,
+control acquisition timing; callers supplying millivolt-conversion reference values must account
+for the configured gain. Only single-ended channels are supported.
+
+Logical instance indexes map as follows; do not assume that a logical index equals the register
+suffix on nRF54L15:
+
+| Peripheral | nRF52840 | nRF5340 app | nRF54L15 app |
+| --- | --- | --- | --- |
+| TWIM | 0,1 | 0,1,2,3 | 20,21,22,30 |
+| SPIM | 0,1,2,3 | 0,1,2,3,4 | 00,20,21,22,30 |
+| UARTE | 0,1 | 0,1,2,3 | 00,20,21,22,30 |
+| TIMER | 0,1,2,3,4 | 0,1,2 | 00,10,20,21,22,23,24 |
+| PWM | 0,1,2,3 | 0,1,2,3 | 20,21,22 |
+| WDT | WDT | 0,1 | 30 when exposed, then 31 |
+| RTC | 0,1,2 | 0,1 | unsupported (GRTC is different hardware) |
+| I2S | I2S | I2S0 | I2S20 |
+| QSPI | QSPI | QSPI | unsupported |
+
+Route the appropriate vectors to `microhal::backends::nordic::nrfx::*_api::handle_interrupt`.
+TWIM/I2C, SPIM/SPI, UARTE/UART, TIMER, and RTC dispatchers take the logical instance index;
+GPIO/GPIOTE, ADC/SAADC, and I2S dispatchers take no arguments. For example, an nRF52840
+application using SPIM3 routes its dedicated vector like this:
+
+```cpp
+extern "C" void SPIM3_IRQHandler()
+{
+  microhal::backends::nordic::nrfx::spi_api::handle_interrupt(3U);
+}
+```
+
+Keep the LFCLK running before initializing RTC; the board owns LFCLK/HFCLK and any required
+high-frequency clock requests. Clock-tree configuration and peripheral gating are not implemented;
+RCC only updates/reads CMSIS `SystemCoreClock`.
+
+Blocking I2C, SPI, UART, ADC, and I2S operations need a nonzero, accurate `SystemCoreClock` and
+working IRQ dispatch even though they return synchronously. `Config::timeout_ms` defaults to
+1000 when omitted. Timeouts bound polling delays, not interrupt/scheduling overhead. Do not block
+from an interrupt that prevents completion IRQs from running. SAADC submission failures and
+SAADC/QSPI/I2S timeouts uninitialize that peripheral to stop DMA safely; reinitialize before reuse.
+QSPI uses the nrfx driver's millisecond timeout (zero selects its vendor default).
+
+Callbacks run in interrupt context. Keep asynchronous buffers alive and DMA-accessible until
+completion, including any cache maintenance required by the target. Serialize all access to an
+instance; the transfer guards are not a multi-threaded peripheral-ownership framework. Do not run
+competing TWIM/SPIM/UARTE drivers on shared SERIAL registers: configure nrfx PRS where applicable
+or enforce ownership in board code.
+
+Current operation limits:
+
+- SPI supports full-duplex and one-direction transfers, not half-duplex. Maximum clock is
+  instance-specific; nrfx rejects unsupported clock settings. UART supports standard rates through
+  1 Mbaud, no/even parity, and one stop bit; flow control, odd parity, and autobaud are unsupported.
+  Each TWIM/SPIM/UARTE transfer phase is limited to 65535 bytes to fit these targets' DMA counters.
+- TIMER uses 32-bit up-counting/internal clock. `clock_hz / (prescaler + 1)` must be exact and
+  supported by nrfx. CC0 is reserved for period clear; facade compare channels 1/2 use CC1/CC2;
+  counter snapshots reserve CC3. Period changes reset the counter. Input capture is unsupported.
+- PWM supports one configured output per peripheral, exact realizable frequencies, and runtime
+  duty updates that stop/restart playback; complementary/dead-time outputs are unsupported.
+- SAADC supports 8/10/12/14-bit one-shot conversion and one-sample-per-channel DMA scans.
+  Scan channel indexes must be ascending and unique, with exactly one output per channel.
+  Negative single-ended raw values clamp to zero. Continuous acquisition is unsupported.
+- QSPI supports matching FASTREAD/READ2O/READ4O and PP/PP2O/PP4O configurations, plus
+  single-line custom instructions with at most eight data bytes. Native transfers require
+  word-aligned, DMA-accessible buffers and must fit the hardware count and 24/32-bit address
+  range. Read commands need eight dummy cycles; writes need none. Memory mapping is unsupported.
+  The external memory's quad-enable/write-enable/busy policy remains application-owned.
+- I2S supports finite, word-aligned 16-bit stereo TX/RX, not streaming/full-duplex or PCM.
+  Buffers require an even sample count, at least four samples, and must fit the target DMA count
+  (at most 32766 samples on nRF52840). Master sample rates use nrfx's nearest realizable
+  prescaler from a 32 MHz source, for requested rates of 8-48 kHz. A short silence TX/discard RX
+  tail prevents replaying the user's buffer while stopping; completion occurs only after STOPPED.
+- RTC provides time-of-day and one-shot next-occurrence alarms, not calendar/date, subsecond
+  facade reads, or periodic IRQs. WDT is independent/non-windowed and cannot be stopped after start.
+- USB remains unimplemented despite USBD hardware on nRF52840/nRF5340. DAC, CAN, Ethernet,
+  native SD/MMC, generic memory-copy DMA, and CRC/RNG are not advertised. nRF54L15 RRAM is
+  still a helper, not a public flash/erase facade.
+
+All three target configurations have been compile-validated against the local nrf-bm SDK,
+including actual enabled nrfx C drivers and public facade calls. This is not physical-board testing.
+
+### NuttX validation guidance
+
+- Configure NuttX for the target board and enabled drivers before compiling microHAL; generated `nuttx/config.h` is required.
+- Include the NuttX public headers, architecture headers, and board headers in `MICROHAL_VENDOR_VALIDATION_NUTTX_INCLUDE_DIRS`.
+- Nucleo-H743ZI targets can expose Ethernet through the NuttX network stack, but raw-frame access additionally requires packet sockets (`CONFIG_NET_PKT`). The `nucleo-h743zi:netnsh` configuration used for validation does not enable `CONFIG_I2C`, MTD, or packet sockets; enable and register the corresponding drivers before claiming those runtime paths on that configuration.
 
 ## Board Integration Contract (all backends)
 

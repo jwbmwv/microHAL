@@ -21,7 +21,8 @@ namespace microhal::spi
 template <std::uint8_t InstanceIndex, std::uint32_t ClockHz, spi_duplex_mode DuplexMode = spi_duplex_mode::full,
           spi_clock_polarity ClockPolarity = spi_clock_polarity::idle_low,
           spi_clock_phase ClockPhase = spi_clock_phase::first_edge, spi_bit_order BitOrder = spi_bit_order::msb_first,
-          bool EnableDma = false, bool EnableInterrupts = false, std::uint32_t TimeoutMs = 1000U>
+          bool EnableDma = false, bool EnableInterrupts = false, std::uint32_t TimeoutMs = 1000U,
+          transfer_mode Mode = transfer_mode::automatic>
 struct master_config final
 {
   static constexpr std::uint8_t instance_index{InstanceIndex};
@@ -30,8 +31,10 @@ struct master_config final
   static constexpr spi_clock_polarity clock_polarity{ClockPolarity};
   static constexpr spi_clock_phase clock_phase{ClockPhase};
   static constexpr spi_bit_order bit_order{BitOrder};
-  static constexpr bool enable_dma{EnableDma};
-  static constexpr bool enable_interrupts{EnableInterrupts};
+  static constexpr transfer_mode transfer_mode_value{Mode};
+  static constexpr bool enable_dma{Mode == transfer_mode::dma || (Mode == transfer_mode::automatic && EnableDma)};
+  static constexpr bool enable_interrupts{Mode == transfer_mode::interrupt ||
+                                          (Mode == transfer_mode::automatic && EnableInterrupts)};
   static constexpr std::uint32_t timeout_ms{TimeoutMs};
 };
 
@@ -46,17 +49,69 @@ struct master final
   using config_type = Config;
 
   static constexpr peripheral_kind kind{peripheral_kind::spi};
+  static constexpr transfer_mode mode{configured_transfer_mode<Config>()};
+  using mode_api = serial_mode_api<Backend, peripheral_kind::spi>;
 
   [[nodiscard]] static inline status initialize() noexcept
   {
-    return detail::as_status([] { return spi_api_t<Backend>::template initialize<Config>(); });
+    if constexpr (mode != transfer_mode::automatic)
+      return mode_api::template initialize<Config>();
+    else
+      return detail::as_status([] { return spi_api_t<Backend>::template initialize<Config>(); });
   }
 
   [[nodiscard]] static inline status transfer(const std::span<const std::uint8_t> tx_payload,
                                               const std::span<std::uint8_t> rx_payload) noexcept
   {
-    return detail::as_status([tx_payload, rx_payload]
-                             { return spi_api_t<Backend>::template transfer<Config>(tx_payload, rx_payload); });
+    if (tx_payload.size() != rx_payload.size())
+    {
+      return status::invalid_argument;
+    }
+    if (tx_payload.empty())
+    {
+      return status::ok;
+    }
+
+    if constexpr (mode != transfer_mode::automatic)
+      return mode_api::template transfer<Config, nullptr>(tx_payload, rx_payload);
+    else
+      return detail::as_status([tx_payload, rx_payload]
+                               { return spi_api_t<Backend>::template transfer<Config>(tx_payload, rx_payload); });
+  }
+
+  /**
+   * @brief Transmits bytes without requiring a receive buffer.
+   * @details Backends that cannot provide a transmit-only operation report @ref status::unsupported.
+   */
+  [[nodiscard]] static inline status write_blocking(const std::span<const std::uint8_t> payload) noexcept
+  {
+    if (payload.empty())
+    {
+      return status::ok;
+    }
+
+    if constexpr (mode != transfer_mode::automatic)
+      return mode_api::template write<Config, nullptr>(payload);
+    else
+      return detail::as_status([payload] { return spi_api_t<Backend>::template write_blocking<Config>(payload); });
+  }
+
+  /**
+   * @brief Receives bytes without requiring a transmit buffer.
+   * @details The backend supplies its documented dummy transmit value; unsupported paths report
+   *          @ref status::unsupported.
+   */
+  [[nodiscard]] static inline status read_blocking(const std::span<std::uint8_t> payload) noexcept
+  {
+    if (payload.empty())
+    {
+      return status::ok;
+    }
+
+    if constexpr (mode != transfer_mode::automatic)
+      return mode_api::template read<Config, nullptr>(payload);
+    else
+      return detail::as_status([payload] { return spi_api_t<Backend>::template read_blocking<Config>(payload); });
   }
 
   template <auto CompletionHandler>
@@ -64,9 +119,62 @@ struct master final
                                                     const std::span<std::uint8_t> rx_payload) noexcept
     requires IsrCapableConcept<Backend, peripheral_kind::spi>
   {
-    return detail::as_status(
-        [tx_payload, rx_payload]
-        { return spi_api_t<Backend>::template transfer_async<Config, CompletionHandler>(tx_payload, rx_payload); });
+    static_assert(mode == transfer_mode::automatic || valid_serial_completion_handler<CompletionHandler>());
+    if (tx_payload.size() != rx_payload.size())
+    {
+      return status::invalid_argument;
+    }
+    if (tx_payload.empty())
+    {
+      if constexpr (mode != transfer_mode::automatic)
+        return status::invalid_argument;
+      return status::ok;
+    }
+
+    if constexpr (mode != transfer_mode::automatic)
+      return mode_api::template transfer<Config, CompletionHandler>(tx_payload, rx_payload);
+    else
+      return detail::as_status(
+          [tx_payload, rx_payload]
+          { return spi_api_t<Backend>::template transfer_async<Config, CompletionHandler>(tx_payload, rx_payload); });
+  }
+
+  template <auto CompletionHandler>
+  [[nodiscard]] static status write_async(const std::span<const std::uint8_t> payload) noexcept
+  {
+    static_assert(valid_serial_completion_handler<CompletionHandler>());
+    if (payload.empty())
+      return status::invalid_argument;
+    return mode_api::template write<Config, CompletionHandler>(payload);
+  }
+  template <auto CompletionHandler>
+  [[nodiscard]] static status read_async(const std::span<std::uint8_t> payload) noexcept
+  {
+    static_assert(valid_serial_completion_handler<CompletionHandler>());
+    if (payload.empty())
+      return status::invalid_argument;
+    return mode_api::template read<Config, CompletionHandler>(payload);
+  }
+  [[nodiscard]] static status abort() noexcept
+  {
+    if constexpr (mode == transfer_mode::automatic)
+      return status::unsupported;
+    else
+      return mode_api::template abort<Config>();
+  }
+  [[nodiscard]] static status transfer_status() noexcept
+  {
+    if constexpr (mode == transfer_mode::automatic)
+      return status::unsupported;
+    else
+      return mode_api::template transfer_status<Config>();
+  }
+  [[nodiscard]] static status handle_interrupt() noexcept
+  {
+    if constexpr (mode == transfer_mode::automatic)
+      return status::unsupported;
+    else
+      return detail::as_status([] { return mode_api::template handle_interrupt<Config>(); });
   }
 };
 

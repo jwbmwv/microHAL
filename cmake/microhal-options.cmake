@@ -28,11 +28,13 @@ set(MICROHAL_VENDOR_VALIDATION_ZEPHYR_DEFINITIONS
 set(MICROHAL_VENDOR_VALIDATION_NORDIC_INCLUDE_DIRS "" CACHE STRING
 	"Semicolon-separated Nordic nrfx include directories for vendor-validation builds")
 set(MICROHAL_VENDOR_VALIDATION_NORDIC_SUPPORT_ROOT "" CACHE PATH
-	"Path to a Nordic support tree (for example vendor-support/nrf-bm/v2.0.0 or vendor-support) used to derive nrfx include directories automatically")
+	"Path to a Nordic support tree (for example vendor-support/nrf-bm/v2.0.1 or vendor-support) used to derive nrfx include directories automatically")
 set(MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS "NRF52840_XXAA"
 	CACHE STRING
 	"Semicolon-separated compile definitions used for Nordic nrfx vendor-validation builds")
-set_property(CACHE MICROHAL_VENDOR_VALIDATION_PROVIDER PROPERTY STRINGS STM32 ZEPHYR NORDIC)
+set(MICROHAL_VENDOR_VALIDATION_NUTTX_INCLUDE_DIRS "" CACHE STRING
+	"Semicolon-separated NuttX include directories, including generated config and board headers")
+set_property(CACHE MICROHAL_VENDOR_VALIDATION_PROVIDER PROPERTY STRINGS STM32 ZEPHYR NORDIC NUTTX)
 set_property(CACHE MICROHAL_VENDOR_VALIDATION_STM32_FAMILY PROPERTY STRINGS
 			 STM32C0 STM32F0 STM32F1 STM32F2 STM32F3 STM32F4 STM32F7 STM32G0 STM32G4
 			 STM32H5 STM32H7 STM32H7RS STM32L0 STM32L1 STM32L4 STM32L5 STM32N6

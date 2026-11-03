@@ -65,7 +65,7 @@ using user_button = microhal::gpio::pin<microhal::zephyr_tag, user_button_cfg>;
 
 struct console_uart_binding final
 {
-  static constexpr auto node_id = DT_CHOSEN(zephyr_console);
+  static constexpr const struct device* device{DEVICE_DT_GET(DT_CHOSEN(zephyr_console))};
 };
 
 struct console_uart_cfg final

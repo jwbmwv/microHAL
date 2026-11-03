@@ -9,399 +9,975 @@
 #pragma once
 
 #include <array>
+#include <cerrno>
 #include <cstdint>
 #include <cstring>
 #include <span>
 
-#if __has_include("nrfx.h")
+#if __has_include(<nrfx.h>)
+#include <nrfx.h>
 #define MICROHAL_NORDIC_NRFX_PRESENT 1
 #else
 #define MICROHAL_NORDIC_NRFX_PRESENT 0
 #endif
 
-#if __has_include("nrfx_twim.h")
+#if MICROHAL_NORDIC_NRFX_PRESENT && __has_include(<nrfx_twim.h>)
+#include <nrfx_twim.h>
+#if defined(NRF52840_XXAA) && __has_include(<system_nrf52840.h>)
+#include <system_nrf52840.h>
+#define MICROHAL_NORDIC_SYSTEM_CORE_CLOCK 1
+#elif defined(NRF5340_XXAA_APPLICATION) && __has_include(<system_nrf5340_application.h>)
+#include <system_nrf5340_application.h>
+#define MICROHAL_NORDIC_SYSTEM_CORE_CLOCK 1
+#elif defined(NRF5340_XXAA_NETWORK) && __has_include(<system_nrf5340_network.h>)
+#include <system_nrf5340_network.h>
+#define MICROHAL_NORDIC_SYSTEM_CORE_CLOCK 1
+#elif defined(NRF54L15_XXAA) && __has_include(<system_nrf54l.h>)
+#include <system_nrf54l.h>
+#define MICROHAL_NORDIC_SYSTEM_CORE_CLOCK 1
+#elif defined(NRF54H20_XXAA) && __has_include(<system_nrf54h.h>)
+#include <system_nrf54h.h>
+#define MICROHAL_NORDIC_SYSTEM_CORE_CLOCK 1
+#else
+#define MICROHAL_NORDIC_SYSTEM_CORE_CLOCK 0
+#endif
+#if MICROHAL_NORDIC_SYSTEM_CORE_CLOCK
+#include <lib/nrfx_coredep.h>
+#endif
+#if (defined(NRF_TWIM0) && defined(NRF_TWIM1)) || defined(NRF54L15_XXAA)
+#define MICROHAL_NORDIC_TWIM_API_AVAILABLE 1
+#else
+#define MICROHAL_NORDIC_TWIM_API_AVAILABLE 0
+#endif
+#else
+#define MICROHAL_NORDIC_SYSTEM_CORE_CLOCK 0
+#define MICROHAL_NORDIC_TWIM_API_AVAILABLE 0
+#endif
+
+#if MICROHAL_NORDIC_TWIM_API_AVAILABLE && defined(NRFX_TWIM_ENABLED) && NRFX_TWIM_ENABLED
 #define MICROHAL_NORDIC_HAS_TWIM 1
 #else
 #define MICROHAL_NORDIC_HAS_TWIM 0
 #endif
 
-#if __has_include("nrfx_spim.h")
-#define MICROHAL_NORDIC_HAS_SPIM 1
+#if MICROHAL_NORDIC_NRFX_PRESENT && defined(NRF54L15_XXAA) && __has_include(<nrfx_rramc.h>)
+#include <nrfx_rramc.h>
+#define MICROHAL_NORDIC_RRAMC_API_AVAILABLE 1
 #else
-#define MICROHAL_NORDIC_HAS_SPIM 0
+#define MICROHAL_NORDIC_RRAMC_API_AVAILABLE 0
 #endif
 
-#if __has_include("nrfx_qspi.h")
-#define MICROHAL_NORDIC_HAS_QSPI 1
+#if MICROHAL_NORDIC_RRAMC_API_AVAILABLE && defined(NRFX_RRAMC_ENABLED) && NRFX_RRAMC_ENABLED
+#define MICROHAL_NORDIC_HAS_RRAMC 1
 #else
-#define MICROHAL_NORDIC_HAS_QSPI 0
+#define MICROHAL_NORDIC_HAS_RRAMC 0
 #endif
 
-#if __has_include("nrfx_sdhc.h")
-#define MICROHAL_NORDIC_HAS_SDHC 1
-#else
-#define MICROHAL_NORDIC_HAS_SDHC 0
-#endif
-
-#if __has_include("nrfx_uarte.h")
-#define MICROHAL_NORDIC_HAS_UARTE 1
-#else
-#define MICROHAL_NORDIC_HAS_UARTE 0
-#endif
-
-#if __has_include("nrfx_rtc.h")
-#define MICROHAL_NORDIC_HAS_RTC 1
-#else
-#define MICROHAL_NORDIC_HAS_RTC 0
-#endif
-
-#if __has_include("nrfx_timer.h")
-#define MICROHAL_NORDIC_HAS_TIMER 1
-#else
-#define MICROHAL_NORDIC_HAS_TIMER 0
-#endif
-
-#if __has_include("nrfx_saadc.h")
-#define MICROHAL_NORDIC_HAS_SAADC 1
-#else
-#define MICROHAL_NORDIC_HAS_SAADC 0
-#endif
-
-#if __has_include("nrfx_dac.h")
-#define MICROHAL_NORDIC_HAS_DAC 1
-#else
-#define MICROHAL_NORDIC_HAS_DAC 0
-#endif
-
-#if __has_include("nrfx_nvmc.h")
+#if MICROHAL_NORDIC_NRFX_PRESENT && defined(NRFX_NVMC_ENABLED) && NRFX_NVMC_ENABLED && __has_include(<nrfx_nvmc.h>) && \
+    (defined(NRF52840_XXAA) || defined(NRF5340_XXAA_APPLICATION))
+#include <nrfx_nvmc.h>
 #define MICROHAL_NORDIC_HAS_NVMC 1
 #else
 #define MICROHAL_NORDIC_HAS_NVMC 0
 #endif
 
-#if __has_include("nrfx_pwm.h")
-#define MICROHAL_NORDIC_HAS_PWM 1
+#if MICROHAL_NORDIC_NRFX_PRESENT && __has_include(<hal/nrf_gpio.h>)
+#include <hal/nrf_gpio.h>
+#define MICROHAL_NORDIC_HAS_GPIO 1
 #else
-#define MICROHAL_NORDIC_HAS_PWM 0
+#define MICROHAL_NORDIC_HAS_GPIO 0
 #endif
 
-#if __has_include("nrfx_wdt.h")
-#define MICROHAL_NORDIC_HAS_WDT 1
-#else
-#define MICROHAL_NORDIC_HAS_WDT 0
-#endif
-
+#include "microhal/backends/nordic/nrfx/peripherals.hpp"
 #include "microhal/core/traits.hpp"
 
 namespace microhal::backends::nordic::nrfx
 {
 
-struct state final
+namespace detail
 {
-  inline static std::uint32_t timer_counter{0U};
-  inline static std::uint8_t rtc_hour{0U};
-  inline static std::uint8_t rtc_minute{0U};
-  inline static std::uint8_t rtc_second{0U};
-  inline static std::array<std::uint8_t, 64U * 1024U> flash_storage{};
-  inline static std::uint16_t dac_last_a{0U};
-  inline static std::uint16_t dac_last_b{0U};
-  inline static std::uint16_t pwm_last_duty{0U};
+
+inline constexpr std::uint32_t nordic_gpio_port_count =
+#if defined(NRF54L15_XXAA)
+    3U;
+#else
+    2U;
+#endif
+
+#if MICROHAL_NORDIC_TWIM_API_AVAILABLE
+struct twim_transfer_state final
+{
+  std::atomic<bool> complete{false};
+  status result{status::error};
+  void (*completion)(status) noexcept {nullptr};
 };
+
+inline std::array<twim_transfer_state, 4U> twim_states{};
+
+#if defined(NRF54L15_XXAA)
+inline nrfx_twim_t twim0{NRF_TWIM20, {}};
+inline nrfx_twim_t twim1{NRF_TWIM21, {}};
+inline nrfx_twim_t twim2{NRF_TWIM22, {}};
+inline nrfx_twim_t twim3{NRF_TWIM30, {}};
+inline constexpr std::uint32_t twim_instance_count = 4U;
+#else
+inline nrfx_twim_t twim0{NRF_TWIM0, {}};
+inline nrfx_twim_t twim1{NRF_TWIM1, {}};
+#if defined(NRF5340_XXAA_APPLICATION)
+inline nrfx_twim_t twim2{NRF_TWIM2, {}};
+inline nrfx_twim_t twim3{NRF_TWIM3, {}};
+inline constexpr std::uint32_t twim_instance_count = 4U;
+#else
+inline constexpr std::uint32_t twim_instance_count = 2U;
+#endif
+#endif
+
+inline nrfx_twim_t* twim_instance(const std::uint8_t index) noexcept
+{
+#if defined(NRF54L15_XXAA) || defined(NRF5340_XXAA_APPLICATION)
+  switch (index)
+  {
+  case 0U:
+    return &twim0;
+  case 1U:
+    return &twim1;
+  case 2U:
+    return &twim2;
+  case 3U:
+    return &twim3;
+  default:
+    return nullptr;
+  }
+#else
+  switch (index)
+  {
+  case 0U:
+    return &twim0;
+  case 1U:
+    return &twim1;
+  default:
+    return nullptr;
+  }
+#endif
+}
+
+inline void twim_event_handler(nrfx_twim_event_t const* event, void* context) noexcept
+{
+  auto* transfer = static_cast<twim_transfer_state*>(context);
+  transfer->result = (event->type == NRFX_TWIM_EVT_DONE) ? status::ok : status::io_error;
+  transfer->complete = true;
+  const auto completion = transfer->completion;
+  transfer->completion = nullptr;
+  if (completion != nullptr)
+    completion(transfer->result);
+}
+
+inline nrf_twim_frequency_t twim_frequency(const std::uint32_t clock_hz) noexcept
+{
+  switch (clock_hz)
+  {
+  case 100'000U:
+    return NRF_TWIM_FREQ_100K;
+  case 250'000U:
+    return NRF_TWIM_FREQ_250K;
+  case 400'000U:
+    return NRF_TWIM_FREQ_400K;
+#if NRF_TWIM_HAS_1000_KHZ_FREQ
+  case 1'000'000U:
+    return NRF_TWIM_FREQ_1000K;
+#endif
+  default:
+    return static_cast<nrf_twim_frequency_t>(0U);
+  }
+}
+
+template <typename Config> constexpr bool twim_pins_available() noexcept
+{
+  return requires {
+    Config::scl_pin;
+    Config::sda_pin;
+  } || requires {
+    Config::binding::scl_pin;
+    Config::binding::sda_pin;
+  };
+}
+
+template <typename Config> constexpr std::uint32_t twim_scl_pin() noexcept
+{
+  if constexpr (requires { Config::scl_pin; })
+  {
+    return Config::scl_pin;
+  }
+  else
+  {
+    return Config::binding::scl_pin;
+  }
+}
+
+template <typename Config> constexpr std::uint32_t twim_sda_pin() noexcept
+{
+  if constexpr (requires { Config::sda_pin; })
+  {
+    return Config::sda_pin;
+  }
+  else
+  {
+    return Config::binding::sda_pin;
+  }
+}
+
+template <typename Config> status initialize_twim() noexcept
+{
+  if constexpr (!twim_pins_available<Config>())
+  {
+    return status::unsupported;
+  }
+  else
+  {
+    if (Config::instance_index >= twim_instance_count)
+    {
+      return status::invalid_argument;
+    }
+
+    const nrf_twim_frequency_t frequency = twim_frequency(Config::clock_hz);
+    if (frequency == static_cast<nrf_twim_frequency_t>(0U))
+    {
+      return status::unsupported;
+    }
+
+    nrfx_twim_t* instance = twim_instance(Config::instance_index);
+    auto& transfer = twim_states[Config::instance_index];
+    nrfx_twim_config_t config{};
+    config.scl_pin = twim_scl_pin<Config>();
+    config.sda_pin = twim_sda_pin<Config>();
+    config.interrupt_priority = 7U;
+    config.frequency = frequency;
+
+    if (nrfx_twim_init_check(instance))
+    {
+      if (nrfx_twim_reconfigure(instance, &config) != 0)
+      {
+        return status::busy;
+      }
+      if (nrfx_twim_callback_set(instance, twim_event_handler, &transfer) != 0)
+      {
+        return status::busy;
+      }
+      return status::ok;
+    }
+
+    const int result = nrfx_twim_init(instance, &config, twim_event_handler, &transfer);
+    return (result == 0) ? status::ok : status::error;
+  }
+}
+
+inline status twim_result(int result) noexcept;
+
+template <typename Config>
+inline status twim_start_and_wait(nrfx_twim_t* instance, twim_transfer_state& transfer,
+                                  const nrfx_twim_xfer_desc_t& descriptor) noexcept
+{
+#if MICROHAL_NORDIC_SYSTEM_CORE_CLOCK
+  if (SystemCoreClock == 0U)
+  {
+    return status::error;
+  }
+  if (nrfx_twim_is_busy(instance))
+  {
+    return status::busy;
+  }
+  transfer.complete = false;
+  transfer.completion = nullptr;
+  transfer.result = status::error;
+  const int result = nrfx_twim_xfer(instance, &descriptor, 0U);
+  if (result != 0)
+  {
+    return twim_result(result);
+  }
+
+  constexpr std::uint32_t timeout_ms = []() consteval -> std::uint32_t
+  {
+    if constexpr (requires { Config::timeout_ms; })
+    {
+      return static_cast<std::uint32_t>(Config::timeout_ms);
+    }
+    return 1000U;
+  }();
+
+  for (std::uint32_t elapsed_ms = 0U; elapsed_ms < timeout_ms; ++elapsed_ms)
+  {
+    if (transfer.complete)
+    {
+      return transfer.result;
+    }
+    nrfx_coredep_delay_us(1000U);
+  }
+  if (transfer.complete)
+  {
+    return transfer.result;
+  }
+
+  nrfx_twim_disable(instance);
+  if (transfer.complete)
+  {
+    return transfer.result;
+  }
+  nrfx_twim_enable(instance);
+  transfer.result = status::timeout;
+  transfer.complete = true;
+  return status::timeout;
+#else
+  (void)instance;
+  (void)transfer;
+  (void)descriptor;
+  return status::unsupported;
+#endif
+}
+
+inline status twim_result(const int result) noexcept
+{
+  switch (result)
+  {
+  case -EINVAL:
+    return status::invalid_argument;
+  case -EBUSY:
+    return status::busy;
+  case -ETIMEDOUT:
+    return status::timeout;
+  case -EFAULT:
+  case -EAGAIN:
+  case -EIO:
+    return status::io_error;
+#ifdef ENOTSUP
+  case -ENOTSUP:
+    return status::unsupported;
+#endif
+  default:
+    break;
+  }
+  return status::error;
+}
+#else
+inline constexpr std::uint32_t twim_instance_count = 0U;
+#endif
+
+} // namespace detail
 
 struct gpio_api final
 {
   template <typename PinConfig> static bool configure() noexcept
   {
+#if MICROHAL_NORDIC_HAS_GPIO
+    if constexpr ((MICROHAL_NORDIC_HAS_GPIO != 0) && requires {
+                    PinConfig::port_index;
+                    PinConfig::pin_index;
+                    PinConfig::mode;
+                    PinConfig::pull;
+                  })
+    {
+      constexpr std::uint32_t pin = static_cast<std::uint32_t>(PinConfig::port_index) * 32U + PinConfig::pin_index;
+      if constexpr (PinConfig::mode == gpio_mode::output)
+      {
+        nrf_gpio_cfg_output(pin);
+        return true;
+      }
+      else if constexpr (PinConfig::mode == gpio_mode::input)
+      {
+        constexpr nrf_gpio_pin_pull_t pull = (PinConfig::pull == gpio_pull::up)     ? NRF_GPIO_PIN_PULLUP
+                                             : (PinConfig::pull == gpio_pull::down) ? NRF_GPIO_PIN_PULLDOWN
+                                                                                    : NRF_GPIO_PIN_NOPULL;
+        nrf_gpio_cfg_input(pin, pull);
+        return true;
+      }
+      return false;
+    }
+#else
     (void)sizeof(PinConfig);
-    return MICROHAL_NORDIC_NRFX_PRESENT != 0;
+    return false;
+#endif
   }
 
   template <typename PinConfig> static void write(const bool level) noexcept
   {
+#if MICROHAL_NORDIC_HAS_GPIO
+    if constexpr ((MICROHAL_NORDIC_HAS_GPIO != 0) && requires {
+                    PinConfig::port_index;
+                    PinConfig::pin_index;
+                    PinConfig::mode;
+                  })
+    {
+      constexpr std::uint32_t pin = static_cast<std::uint32_t>(PinConfig::port_index) * 32U + PinConfig::pin_index;
+      if constexpr (PinConfig::mode == gpio_mode::output)
+      {
+        level ? nrf_gpio_pin_set(pin) : nrf_gpio_pin_clear(pin);
+      }
+    }
+#else
     (void)sizeof(PinConfig);
     (void)level;
+#endif
   }
 
   template <typename PinConfig> static bool read() noexcept
   {
+#if MICROHAL_NORDIC_HAS_GPIO
+    if constexpr ((MICROHAL_NORDIC_HAS_GPIO != 0) && requires {
+                    PinConfig::port_index;
+                    PinConfig::pin_index;
+                  })
+    {
+      constexpr std::uint32_t pin = static_cast<std::uint32_t>(PinConfig::port_index) * 32U + PinConfig::pin_index;
+      return nrf_gpio_pin_read(pin) != 0U;
+    }
+    return false;
+#else
     (void)sizeof(PinConfig);
     return false;
+#endif
   }
 
-  template <typename PinConfig, auto Handler> static bool enable_interrupt() noexcept
+  template <typename PinConfig> static status toggle() noexcept
   {
-    (void)sizeof(PinConfig);
-    (void)Handler;
-    return MICROHAL_NORDIC_NRFX_PRESENT != 0;
+#if MICROHAL_NORDIC_HAS_GPIO
+    if constexpr (PinConfig::mode != gpio_mode::output)
+      return status::invalid_argument;
+    const std::uint32_t pin = PinConfig::port_index * 32U + PinConfig::pin_index;
+    if (!nrf_gpio_pin_present_check(pin))
+      return status::invalid_argument;
+    nrf_gpio_pin_toggle(pin);
+    return status::ok;
+#else
+    return status::unsupported;
+#endif
+  }
+
+  template <typename PinConfig, auto Handler> static status enable_interrupt() noexcept
+  {
+#if MICROHAL_NORDIC_HAS_GPIOTE
+    if constexpr (PinConfig::mode != gpio_mode::input || PinConfig::interrupt_trigger == gpio_interrupt_trigger::none)
+      return status::invalid_argument;
+    const std::uint32_t pin = PinConfig::port_index * 32U + PinConfig::pin_index;
+    if (!nrf_gpio_pin_present_check(pin))
+      return status::invalid_argument;
+    auto& instance = detail::gpiote_instance;
+    if (!nrfx_gpiote_init_check(&instance))
+    {
+      const auto result = detail::driver_result(nrfx_gpiote_init(&instance, 7U));
+      if (result != status::ok)
+        return result;
+    }
+    nrfx_gpiote_trigger_config_t trigger{};
+    trigger.trigger = PinConfig::interrupt_trigger == gpio_interrupt_trigger::rising    ? NRFX_GPIOTE_TRIGGER_LOTOHI
+                      : PinConfig::interrupt_trigger == gpio_interrupt_trigger::falling ? NRFX_GPIOTE_TRIGGER_HITOLO
+                                                                                        : NRFX_GPIOTE_TRIGGER_TOGGLE;
+    nrfx_gpiote_handler_config_t handler{};
+    handler.handler = [](nrfx_gpiote_pin_t, nrfx_gpiote_trigger_t, void*) { detail::notify<Handler>(status::ok); };
+    const nrf_gpio_pin_pull_t pull = PinConfig::pull == gpio_pull::up     ? NRF_GPIO_PIN_PULLUP
+                                     : PinConfig::pull == gpio_pull::down ? NRF_GPIO_PIN_PULLDOWN
+                                                                          : NRF_GPIO_PIN_NOPULL;
+    nrfx_gpiote_input_pin_config_t config{&pull, &trigger, &handler};
+    const auto result = detail::driver_result(nrfx_gpiote_input_configure(&instance, pin, &config));
+    if (result == status::ok)
+      nrfx_gpiote_trigger_enable(&instance, pin, true);
+    return result;
+#else
+    return status::unsupported;
+#endif
+  }
+
+  static void handle_interrupt() noexcept
+  {
+#if MICROHAL_NORDIC_HAS_GPIOTE
+    nrfx_gpiote_irq_handler(&detail::gpiote_instance);
+#endif
   }
 };
 
 struct i2c_api final
 {
-  template <typename Config> static bool initialize() noexcept
+  template <typename Config> static status initialize() noexcept
   {
+#if MICROHAL_NORDIC_TWIM_API_AVAILABLE
+    if constexpr (MICROHAL_NORDIC_HAS_TWIM != 0)
+    {
+      return detail::initialize_twim<Config>();
+    }
+#else
     (void)sizeof(Config);
-    return MICROHAL_NORDIC_HAS_TWIM != 0;
+#endif
+    return status::unsupported;
   }
 
   template <typename Config>
-  static bool write_blocking(const std::span<const std::uint8_t> payload, const std::uint16_t address) noexcept
+  static status write_blocking(const std::span<const std::uint8_t> payload, const std::uint16_t address) noexcept
   {
+#if MICROHAL_NORDIC_TWIM_API_AVAILABLE
+    if constexpr (MICROHAL_NORDIC_HAS_TWIM != 0)
+    {
+      if (payload.empty() || !detail::serial_count_valid(payload.size()) || address > 0x7FU ||
+          Config::instance_index >= detail::twim_instance_count)
+      {
+        return status::invalid_argument;
+      }
+      if (!nrfx_twim_init_check(detail::twim_instance(Config::instance_index)))
+      {
+        return status::unsupported;
+      }
+
+      const nrfx_twim_xfer_desc_t descriptor = NRFX_TWIM_XFER_DESC_TX(
+          static_cast<std::uint8_t>(address), const_cast<std::uint8_t*>(payload.data()), payload.size());
+      return detail::twim_start_and_wait<Config>(detail::twim_instance(Config::instance_index),
+                                                 detail::twim_states[Config::instance_index], descriptor);
+    }
+#else
     (void)sizeof(Config);
     (void)payload;
     (void)address;
-    return MICROHAL_NORDIC_HAS_TWIM != 0;
+#endif
+    return status::unsupported;
   }
 
   template <typename Config>
-  static bool read_blocking(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
+  static status read_blocking(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
   {
-    for (std::uint8_t& byte : payload)
+#if MICROHAL_NORDIC_TWIM_API_AVAILABLE
+    if constexpr (MICROHAL_NORDIC_HAS_TWIM != 0)
     {
-      byte = 0U;
-    }
-    (void)sizeof(Config);
-    (void)address;
-    return MICROHAL_NORDIC_HAS_TWIM != 0;
-  }
+      if (payload.empty() || !detail::serial_count_valid(payload.size()) || address > 0x7FU ||
+          Config::instance_index >= detail::twim_instance_count)
+      {
+        return status::invalid_argument;
+      }
+      if (!nrfx_twim_init_check(detail::twim_instance(Config::instance_index)))
+      {
+        return status::unsupported;
+      }
 
-  template <typename Config, auto Handler>
-  static bool start_transfer(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
-  {
+      const nrfx_twim_xfer_desc_t descriptor =
+          NRFX_TWIM_XFER_DESC_RX(static_cast<std::uint8_t>(address), payload.data(), payload.size());
+      return detail::twim_start_and_wait<Config>(detail::twim_instance(Config::instance_index),
+                                                 detail::twim_states[Config::instance_index], descriptor);
+    }
+#else
     (void)sizeof(Config);
     (void)payload;
     (void)address;
-    (void)Handler;
-    return MICROHAL_NORDIC_HAS_TWIM != 0;
-  }
-};
-
-struct spi_api final
-{
-  template <typename Config> static bool initialize() noexcept
-  {
-    (void)sizeof(Config);
-    return MICROHAL_NORDIC_HAS_SPIM != 0;
-  }
-
-  template <typename Config>
-  static bool transfer(const std::span<const std::uint8_t> tx_payload,
-                       const std::span<std::uint8_t> rx_payload) noexcept
-  {
-    const std::size_t count = (tx_payload.size() < rx_payload.size()) ? tx_payload.size() : rx_payload.size();
-    for (std::size_t index = 0U; index < count; ++index)
-    {
-      rx_payload[index] = tx_payload[index];
-    }
-    (void)sizeof(Config);
-    return MICROHAL_NORDIC_HAS_SPIM != 0;
+#endif
+    return status::unsupported;
   }
 
   template <typename Config, auto Handler>
-  static bool transfer_async(const std::span<const std::uint8_t> tx_payload,
-                             const std::span<std::uint8_t> rx_payload) noexcept
+  static status start_transfer(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
   {
-    (void)Handler;
-    return transfer<Config>(tx_payload, rx_payload);
-  }
-};
-
-struct qspi_api final
-{
-  template <typename Config> static bool initialize() noexcept
-  {
-    (void)sizeof(Config);
-    return MICROHAL_NORDIC_HAS_QSPI != 0;
-  }
-};
-
-struct uart_api final
-{
-  template <typename Config> static bool initialize() noexcept
-  {
-    (void)sizeof(Config);
-    return MICROHAL_NORDIC_HAS_UARTE != 0;
-  }
-
-  template <typename Config> static bool write_blocking(const std::span<const std::uint8_t> payload) noexcept
-  {
-    (void)sizeof(Config);
-    return (MICROHAL_NORDIC_HAS_UARTE != 0) && !payload.empty();
+#if MICROHAL_NORDIC_HAS_TWIM
+    if (payload.empty() || !detail::serial_count_valid(payload.size()) || address > 0x7FU ||
+        Config::instance_index >= detail::twim_instance_count)
+      return status::invalid_argument;
+    auto* instance = detail::twim_instance(Config::instance_index);
+    if (!nrfx_twim_init_check(instance))
+      return status::unsupported;
+    if (nrfx_twim_is_busy(instance))
+      return status::busy;
+    auto& transfer = detail::twim_states[Config::instance_index];
+    transfer.complete = false;
+    transfer.result = status::error;
+    transfer.completion = detail::notify<Handler>;
+    const nrfx_twim_xfer_desc_t descriptor =
+        NRFX_TWIM_XFER_DESC_TX(static_cast<std::uint8_t>(address), payload.data(), payload.size());
+    const int error = nrfx_twim_xfer(instance, &descriptor, 0U);
+    if (error != 0)
+      transfer.completion = nullptr;
+    return error == 0 ? status::ok : detail::twim_result(error);
+#else
+    (void)payload;
+    (void)address;
+    return status::unsupported;
+#endif
   }
 
-  template <typename Config> static bool read_blocking(const std::span<std::uint8_t> payload) noexcept
+  template <typename Config> static status probe(const std::uint16_t address) noexcept
   {
-    (void)sizeof(Config);
-    for (std::uint8_t& byte : payload)
+#if MICROHAL_NORDIC_HAS_TWIM
+    if (address > 0x7FU || Config::instance_index >= detail::twim_instance_count)
+      return status::invalid_argument;
+    auto* instance = detail::twim_instance(Config::instance_index);
+    if (!nrfx_twim_init_check(instance))
+      return status::unsupported;
+    const nrfx_twim_xfer_desc_t descriptor = NRFX_TWIM_XFER_DESC_TX(static_cast<std::uint8_t>(address), nullptr, 0U);
+    return detail::twim_start_and_wait<Config>(instance, detail::twim_states[Config::instance_index], descriptor);
+#else
+    (void)address;
+    return status::unsupported;
+#endif
+  }
+
+  static void handle_interrupt(const std::uint8_t index) noexcept
+  {
+#if MICROHAL_NORDIC_HAS_TWIM
+    if (index < detail::twim_instance_count)
+      nrfx_twim_irq_handler(detail::twim_instance(index));
+#else
+    (void)index;
+#endif
+  }
+
+  template <typename Config>
+  static status write_read_blocking(const std::span<const std::uint8_t> tx_payload,
+                                    const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
+  {
+#if MICROHAL_NORDIC_TWIM_API_AVAILABLE
+    if constexpr (MICROHAL_NORDIC_HAS_TWIM != 0)
     {
-      byte = 0U;
-    }
-    return MICROHAL_NORDIC_HAS_UARTE != 0;
-  }
+      if ((tx_payload.empty()) || (rx_payload.empty()) || !detail::serial_count_valid(tx_payload.size()) ||
+          !detail::serial_count_valid(rx_payload.size()) || (address > 0x7FU) ||
+          (Config::instance_index >= detail::twim_instance_count))
+      {
+        return status::invalid_argument;
+      }
+      nrfx_twim_t* instance = detail::twim_instance(Config::instance_index);
+      if (!nrfx_twim_init_check(instance))
+      {
+        return status::unsupported;
+      }
 
-  template <typename Config, auto Handler> static bool start_async_rx(const std::span<std::uint8_t> payload) noexcept
-  {
-    (void)Handler;
-    return read_blocking<Config>(payload);
+      const nrfx_twim_xfer_desc_t descriptor =
+          NRFX_TWIM_XFER_DESC_TXRX(static_cast<std::uint8_t>(address), const_cast<std::uint8_t*>(tx_payload.data()),
+                                   tx_payload.size(), rx_payload.data(), rx_payload.size());
+      return detail::twim_start_and_wait<Config>(instance, detail::twim_states[Config::instance_index], descriptor);
+    }
+#else
+    (void)sizeof(Config);
+    (void)tx_payload;
+    (void)rx_payload;
+    (void)address;
+#endif
+    return status::unsupported;
   }
 
   template <typename Config, auto Handler>
-  static bool start_async_tx(const std::span<const std::uint8_t> payload) noexcept
+  static status write_read_async(const std::span<const std::uint8_t> tx_payload,
+                                 const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
   {
-    (void)Handler;
-    return write_blocking<Config>(payload);
-  }
+#if MICROHAL_NORDIC_TWIM_API_AVAILABLE
+    if constexpr (MICROHAL_NORDIC_HAS_TWIM != 0)
+    {
+      if ((tx_payload.empty()) || (rx_payload.empty()) || !detail::serial_count_valid(tx_payload.size()) ||
+          !detail::serial_count_valid(rx_payload.size()) || (address > 0x7FU) ||
+          (Config::instance_index >= detail::twim_instance_count))
+      {
+        return status::invalid_argument;
+      }
+      nrfx_twim_t* instance = detail::twim_instance(Config::instance_index);
+      auto& transfer = detail::twim_states[Config::instance_index];
+      if (!nrfx_twim_init_check(instance))
+      {
+        return status::unsupported;
+      }
+      if (nrfx_twim_is_busy(instance))
+      {
+        return status::busy;
+      }
 
-  template <typename UartConfig, typename AutobaudConfig> static bool arm_autobaud() noexcept
-  {
-    (void)sizeof(UartConfig);
-    (void)sizeof(AutobaudConfig);
-    return false;
-  }
-
-  template <typename UartConfig> static bool apply_autobaud(const std::uint32_t baud_rate) noexcept
-  {
-    (void)sizeof(UartConfig);
-    (void)baud_rate;
-    return false;
-  }
-};
-
-struct rtc_api final
-{
-  template <typename Config> static bool initialize() noexcept
-  {
+      transfer.complete = false;
+      transfer.result = status::error;
+      transfer.completion = [](const status result) noexcept
+      {
+        if constexpr (requires { Handler(result); })
+        {
+          Handler(result);
+        }
+        else if constexpr (requires { Handler(); })
+        {
+          Handler();
+        }
+      };
+      const nrfx_twim_xfer_desc_t descriptor =
+          NRFX_TWIM_XFER_DESC_TXRX(static_cast<std::uint8_t>(address), const_cast<std::uint8_t*>(tx_payload.data()),
+                                   tx_payload.size(), rx_payload.data(), rx_payload.size());
+      const int result = nrfx_twim_xfer(instance, &descriptor, 0U);
+      if (result != 0)
+      {
+        transfer.completion = nullptr;
+        return detail::twim_result(result);
+      }
+      return status::ok;
+    }
+#else
     (void)sizeof(Config);
-    state::rtc_hour = 0U;
-    state::rtc_minute = 0U;
-    state::rtc_second = 0U;
-    return MICROHAL_NORDIC_HAS_RTC != 0;
-  }
-
-  template <typename Config>
-  static bool set_time(const std::uint8_t hours, const std::uint8_t minutes, const std::uint8_t seconds) noexcept
-  {
-    (void)sizeof(Config);
-    state::rtc_hour = hours;
-    state::rtc_minute = minutes;
-    state::rtc_second = seconds;
-    return MICROHAL_NORDIC_HAS_RTC != 0;
-  }
-
-  template <typename Config>
-  static bool get_time(std::uint8_t& hours, std::uint8_t& minutes, std::uint8_t& seconds) noexcept
-  {
-    (void)sizeof(Config);
-    hours = state::rtc_hour;
-    minutes = state::rtc_minute;
-    seconds = state::rtc_second;
-    return MICROHAL_NORDIC_HAS_RTC != 0;
-  }
-
-  template <typename Config, auto Handler, typename AlarmTime> static bool enable_alarm(const AlarmTime&) noexcept
-  {
-    (void)sizeof(Config);
-    (void)Handler;
-    return MICROHAL_NORDIC_HAS_RTC != 0;
+    (void)tx_payload;
+    (void)rx_payload;
+    (void)address;
+#endif
+    return status::unsupported;
   }
 };
 
 struct flash_api final
 {
-  template <typename Config> static bool erase(const std::uint32_t address, const std::uint32_t bytes) noexcept
+  template <typename Config> static status erase(const std::uint32_t address, const std::uint32_t bytes) noexcept
   {
     (void)sizeof(Config);
-    if ((address + bytes) > state::flash_storage.size())
+#if MICROHAL_NORDIC_HAS_NVMC
+    const std::uint32_t page_size = nrfx_nvmc_flash_page_size_get();
+    const std::uint32_t flash_size = nrfx_nvmc_flash_size_get();
+    if ((page_size == 0U) || (bytes == 0U) || ((address % page_size) != 0U) || ((bytes % page_size) != 0U) ||
+        (address >= flash_size) || (static_cast<std::uint64_t>(address) + bytes > flash_size) ||
+        !nrfx_nvmc_fits_memory_check(address, false, bytes))
     {
-      return false;
+      return status::invalid_argument;
     }
-    for (std::uint32_t index = 0U; index < bytes; ++index)
+    for (std::uint32_t offset = 0U; offset < bytes; offset += page_size)
     {
-      state::flash_storage[address + index] = 0xFFU;
+      if (nrfx_nvmc_page_erase(address + offset) != 0)
+      {
+        return status::io_error;
+      }
     }
-    return MICROHAL_NORDIC_HAS_NVMC != 0;
+    return status::ok;
+#else
+    (void)address;
+    (void)bytes;
+    return status::unsupported;
+#endif
   }
 
   template <typename Config>
-  static bool program(const std::uint32_t address, const std::span<const std::uint8_t> data) noexcept
+  static status program(const std::uint32_t address, const std::span<const std::uint8_t> data) noexcept
   {
     (void)sizeof(Config);
-    if ((address + data.size()) > state::flash_storage.size())
+#if MICROHAL_NORDIC_HAS_NVMC
+    const std::uint32_t flash_size = nrfx_nvmc_flash_size_get();
+    if (data.empty() || (data.size() > UINT32_MAX) || ((address & 0x3U) != 0U) || ((data.size() & 0x3U) != 0U) ||
+        (address >= flash_size) || (static_cast<std::uint64_t>(address) + data.size() > flash_size) ||
+        !nrfx_nvmc_fits_memory_check(address, false, static_cast<std::uint32_t>(data.size())))
     {
-      return false;
+      return status::invalid_argument;
     }
-    std::memcpy(state::flash_storage.data() + address, data.data(), data.size());
-    return MICROHAL_NORDIC_HAS_NVMC != 0;
+    nrfx_nvmc_bytes_write(address, data.data(), static_cast<std::uint32_t>(data.size()));
+    return nrfx_nvmc_write_done_check() ? status::ok : status::io_error;
+#else
+    (void)address;
+    (void)data;
+    return status::unsupported;
+#endif
   }
 
-  template <typename Config> static bool read(const std::uint32_t address, const std::span<std::uint8_t> data) noexcept
+  template <typename Config>
+  static status read(const std::uint32_t address, const std::span<std::uint8_t> data) noexcept
   {
     (void)sizeof(Config);
-    if ((address + data.size()) > state::flash_storage.size())
+#if MICROHAL_NORDIC_HAS_NVMC
+    const std::uint32_t flash_size = nrfx_nvmc_flash_size_get();
+    if (data.empty() || (data.size() > UINT32_MAX) || (address >= flash_size) ||
+        (static_cast<std::uint64_t>(address) + data.size() > flash_size) ||
+        !nrfx_nvmc_fits_memory_check(address, false, static_cast<std::uint32_t>(data.size())))
     {
-      return false;
+      return status::invalid_argument;
     }
-    std::memcpy(data.data(), state::flash_storage.data() + address, data.size());
-    return MICROHAL_NORDIC_HAS_NVMC != 0;
+    std::memcpy(data.data(), reinterpret_cast<const void*>(static_cast<std::uintptr_t>(address)), data.size());
+    return status::ok;
+#else
+    (void)address;
+    (void)data;
+    return status::unsupported;
+#endif
+  }
+
+  template <typename Config> static result<flash_erase_region> erase_region(const std::uint32_t address) noexcept
+  {
+    (void)sizeof(Config);
+#if MICROHAL_NORDIC_HAS_NVMC
+    const std::uint32_t page_size = nrfx_nvmc_flash_page_size_get();
+    const std::uint32_t flash_size = nrfx_nvmc_flash_size_get();
+    if ((page_size == 0U) || (address >= flash_size) || !nrfx_nvmc_fits_memory_check(address, false, 1U))
+    {
+      return status::invalid_argument;
+    }
+    return flash_erase_region{.start_address = address - (address % page_size), .size_bytes = page_size};
+#else
+    (void)address;
+    return status::unsupported;
+#endif
   }
 };
 
-struct timer_api final
+struct rram_api final
 {
-  template <typename Config> static bool initialize() noexcept
+  static std::uint32_t size_bytes() noexcept
   {
-    (void)sizeof(Config);
-    state::timer_counter = 0U;
-    return MICROHAL_NORDIC_HAS_TIMER != 0;
+#if MICROHAL_NORDIC_HAS_RRAMC
+    return nrfx_rramc_memory_size_get();
+#else
+    return 0U;
+#endif
   }
 
-  template <typename Config> static std::uint32_t counter() noexcept
+  static status initialize() noexcept
   {
-    (void)sizeof(Config);
-    return state::timer_counter++;
-  }
-};
-
-struct adc_api final
-{
-  template <typename Config> static bool initialize() noexcept
-  {
-    (void)sizeof(Config);
-    return MICROHAL_NORDIC_HAS_SAADC != 0;
-  }
-
-  template <typename Config> static std::uint16_t read_blocking(const std::uint8_t channel) noexcept
-  {
-    (void)sizeof(Config);
-    return static_cast<std::uint16_t>(0x100U + channel);
-  }
-
-  template <typename Config> static bool start_continuous(const std::span<const std::uint8_t> channels) noexcept
-  {
-    (void)sizeof(Config);
-    return (MICROHAL_NORDIC_HAS_SAADC != 0) && !channels.empty();
-  }
-
-  template <typename Config, auto Handler> static bool start_async(const std::uint8_t channel) noexcept
-  {
-    (void)sizeof(Config);
-    (void)channel;
-    (void)Handler;
-    return MICROHAL_NORDIC_HAS_SAADC != 0;
-  }
-
-  template <typename Config, auto Handler>
-  static bool start_dma_scan(const std::span<const std::uint8_t> channels,
-                             const std::span<std::uint16_t> buffer) noexcept
-  {
-    (void)sizeof(Config);
-    (void)Handler;
-    const std::size_t count = (channels.size() < buffer.size()) ? channels.size() : buffer.size();
-    for (std::size_t index = 0U; index < count; ++index)
+#if MICROHAL_NORDIC_HAS_RRAMC
+    static bool initialized = false;
+    if (initialized)
     {
-      buffer[index] = static_cast<std::uint16_t>(0x200U + channels[index]);
+      return status::ok;
     }
-    return MICROHAL_NORDIC_HAS_SAADC != 0;
+
+    nrfx_rramc_config_t config = NRFX_RRAMC_DEFAULT_CONFIG(0U);
+    const int result = nrfx_rramc_init(&config, nullptr);
+    if (result == -EALREADY)
+    {
+      initialized = true;
+      return status::ok;
+    }
+    if (result != 0)
+    {
+      return status::busy;
+    }
+    initialized = true;
+    return status::ok;
+#else
+    return status::unsupported;
+#endif
+  }
+
+  static status erase(std::uint32_t address, std::uint32_t bytes) noexcept
+  {
+    (void)address;
+    (void)bytes;
+    return status::unsupported;
+  }
+
+  static bool range_accessible(const std::uint32_t address, const std::uint32_t bytes, const bool write) noexcept
+  {
+#if MICROHAL_NORDIC_HAS_RRAMC
+    const std::uint64_t end = static_cast<std::uint64_t>(address) + bytes;
+    std::uint64_t cursor = address;
+    while (cursor < end)
+    {
+      bool matched = false;
+      std::uint64_t region_end = 0U;
+      for (std::uint8_t index = 0U; index < 5U; ++index)
+      {
+        nrf_rramc_region_config_t region{};
+        nrf_rramc_region_config_get(NRF_RRAMC, index, &region);
+        const std::uint64_t start = region.address;
+        const std::uint64_t limit = start + (static_cast<std::uint64_t>(region.size_kb) * 1024U);
+        if ((region.size_kb == 0U) || (cursor < start) || (cursor >= limit))
+        {
+          continue;
+        }
+        if (matched)
+        {
+          return false;
+        }
+
+        const std::uint32_t required_permission =
+            write ? NRF_RRAMC_REGION_PERM_WRITE_MASK : NRF_RRAMC_REGION_PERM_READ_MASK;
+        if (((region.permissions & required_permission) == 0U) || (write && (region.lock || region.writeonce)))
+        {
+          return false;
+        }
+#if defined(NRF_TRUSTZONE_NONSECURE) && NRF_RRAMC_HAS_SECURE_CONFIG
+        if ((region.permissions & NRF_RRAMC_REGION_PERM_SECURE_MASK) != 0U)
+        {
+          return false;
+        }
+#endif
+        matched = true;
+        region_end = limit;
+      }
+
+      if (!matched)
+      {
+        return false;
+      }
+      cursor = (region_end < end) ? region_end : end;
+    }
+    return true;
+#else
+    (void)address;
+    (void)bytes;
+    (void)write;
+    return false;
+#endif
+  }
+
+  static status program(const std::uint32_t address, const std::span<const std::uint8_t> data) noexcept
+  {
+#if MICROHAL_NORDIC_HAS_RRAMC
+    if (data.empty() || (data.size() > UINT32_MAX))
+    {
+      return status::invalid_argument;
+    }
+    const status initialized = initialize();
+    if (initialized != status::ok)
+    {
+      return initialized;
+    }
+    const std::uint32_t size = nrfx_rramc_memory_size_get();
+    const std::uint32_t base = NRFY_RRAMC_RRAM_BASE_ADDRESS;
+    if ((address < base) ||
+        (static_cast<std::uint64_t>(address) + data.size() > static_cast<std::uint64_t>(base) + size))
+    {
+      return status::invalid_argument;
+    }
+    if (!range_accessible(address, static_cast<std::uint32_t>(data.size()), true))
+    {
+      return status::unsupported;
+    }
+
+    nrf_rramc_config_t saved_config{};
+    nrf_rramc_config_get(NRF_RRAMC, &saved_config);
+    if (!saved_config.mode_write)
+    {
+      nrfx_rramc_write_enable_set(true, saved_config.write_buff_size);
+    }
+    nrfx_rramc_bytes_write(address, data.data(), static_cast<std::uint32_t>(data.size()));
+    if (saved_config.write_buff_size != 0U)
+    {
+      nrfx_rramc_write_buffer_commit();
+    }
+    while (!nrfx_rramc_ready_check())
+    {
+    }
+    if (!saved_config.mode_write)
+    {
+      nrfx_rramc_write_enable_set(false, saved_config.write_buff_size);
+    }
+
+    const auto* readback = reinterpret_cast<const std::uint8_t*>(static_cast<std::uintptr_t>(address));
+    return (std::memcmp(readback, data.data(), data.size()) == 0) ? status::ok : status::io_error;
+#else
+    (void)address;
+    (void)data;
+    return status::unsupported;
+#endif
+  }
+
+  static status read(const std::uint32_t address, const std::span<std::uint8_t> data) noexcept
+  {
+#if MICROHAL_NORDIC_HAS_RRAMC
+    if (data.empty() || (data.size() > UINT32_MAX))
+    {
+      return status::invalid_argument;
+    }
+    const std::uint32_t size = nrfx_rramc_memory_size_get();
+    const std::uint32_t base = NRFY_RRAMC_RRAM_BASE_ADDRESS;
+    if ((address < base) ||
+        (static_cast<std::uint64_t>(address) + data.size() > static_cast<std::uint64_t>(base) + size))
+    {
+      return status::invalid_argument;
+    }
+    if (!range_accessible(address, static_cast<std::uint32_t>(data.size()), false))
+    {
+      return status::unsupported;
+    }
+    std::memcpy(data.data(), reinterpret_cast<const void*>(static_cast<std::uintptr_t>(address)), data.size());
+    return status::ok;
+#else
+    (void)address;
+    (void)data;
+    return status::unsupported;
+#endif
   }
 };
 
@@ -410,23 +986,22 @@ struct dac_api final
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
-    return MICROHAL_NORDIC_HAS_DAC != 0;
+    return false;
   }
 
   template <typename Config> static bool write_blocking(const std::uint16_t value) noexcept
   {
     (void)sizeof(Config);
-    state::dac_last_a = value;
-    state::dac_last_b = value;
-    return MICROHAL_NORDIC_HAS_DAC != 0;
+    (void)value;
+    return false;
   }
 
   template <typename Config> static bool write_dual(const std::uint16_t a, const std::uint16_t b) noexcept
   {
     (void)sizeof(Config);
-    state::dac_last_a = a;
-    state::dac_last_b = b;
-    return MICROHAL_NORDIC_HAS_DAC != 0;
+    (void)a;
+    (void)b;
+    return false;
   }
 
   template <typename Config, auto Handler>
@@ -434,13 +1009,8 @@ struct dac_api final
   {
     (void)sizeof(Config);
     (void)Handler;
-    if (waveform.empty())
-    {
-      return false;
-    }
-    state::dac_last_a = waveform.front();
-    state::dac_last_b = waveform.back();
-    return MICROHAL_NORDIC_HAS_DAC != 0;
+    (void)waveform;
+    return false;
   }
 };
 
@@ -565,7 +1135,7 @@ struct sd_api final
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
-    return MICROHAL_NORDIC_HAS_SDHC != 0;
+    return false;
   }
 
   template <typename Config>
@@ -573,11 +1143,8 @@ struct sd_api final
   {
     (void)sizeof(Config);
     (void)start_block;
-    for (std::uint8_t& byte : buffer)
-    {
-      byte = 0U;
-    }
-    return MICROHAL_NORDIC_HAS_SDHC != 0;
+    (void)buffer;
+    return false;
   }
 
   template <typename Config>
@@ -586,7 +1153,7 @@ struct sd_api final
     (void)sizeof(Config);
     (void)start_block;
     (void)buffer;
-    return MICROHAL_NORDIC_HAS_SDHC != 0;
+    return false;
   }
 
   template <typename Config>
@@ -595,13 +1162,13 @@ struct sd_api final
     (void)sizeof(Config);
     (void)start_block;
     (void)block_count;
-    return MICROHAL_NORDIC_HAS_SDHC != 0;
+    return false;
   }
 
   template <typename Config> static std::uint32_t capacity_blocks() noexcept
   {
     (void)sizeof(Config);
-    return (MICROHAL_NORDIC_HAS_SDHC != 0) ? 65'536U : 0U;
+    return 0U;
   }
 };
 
@@ -610,7 +1177,7 @@ struct dma_api final
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
-    return MICROHAL_NORDIC_NRFX_PRESENT != 0;
+    return false;
   }
 
   template <typename Config, auto Handler>
@@ -619,131 +1186,52 @@ struct dma_api final
   {
     (void)sizeof(Config);
     (void)Handler;
-    if ((src_addr == 0U) || (dst_addr == 0U) || (length == 0U))
-    {
-      return false;
-    }
-    std::memcpy(reinterpret_cast<void*>(dst_addr), reinterpret_cast<const void*>(src_addr), length);
-    return MICROHAL_NORDIC_NRFX_PRESENT != 0;
+    (void)src_addr;
+    (void)dst_addr;
+    (void)length;
+    return false;
   }
 
   template <typename Config> static bool abort() noexcept
   {
     (void)sizeof(Config);
-    return MICROHAL_NORDIC_NRFX_PRESENT != 0;
-  }
-};
-
-struct pwm_api final
-{
-  template <typename Config> static bool initialize() noexcept
-  {
-    (void)sizeof(Config);
-    state::pwm_last_duty = 0U;
-    return MICROHAL_NORDIC_HAS_PWM != 0;
-  }
-
-  template <typename Config> static bool set_duty_cycle(const std::uint16_t duty_permille) noexcept
-  {
-    (void)sizeof(Config);
-    state::pwm_last_duty = duty_permille;
-    return (MICROHAL_NORDIC_HAS_PWM != 0) && (duty_permille <= 1000U);
-  }
-
-  template <typename Config> static bool start() noexcept
-  {
-    (void)sizeof(Config);
-    return MICROHAL_NORDIC_HAS_PWM != 0;
-  }
-
-  template <typename Config> static bool stop() noexcept
-  {
-    (void)sizeof(Config);
-    return MICROHAL_NORDIC_HAS_PWM != 0;
-  }
-};
-
-struct watchdog_api final
-{
-  template <typename Config> static bool initialize() noexcept
-  {
-    (void)sizeof(Config);
-    return MICROHAL_NORDIC_HAS_WDT != 0;
-  }
-
-  template <typename Config> static bool start() noexcept
-  {
-    (void)sizeof(Config);
-    return MICROHAL_NORDIC_HAS_WDT != 0;
-  }
-
-  template <typename Config> static bool refresh() noexcept
-  {
-    (void)sizeof(Config);
-    return MICROHAL_NORDIC_HAS_WDT != 0;
-  }
-};
-
-struct i2s_api final
-{
-  template <typename Config> static bool initialize() noexcept
-  {
-    (void)sizeof(Config);
-    return false;
-  }
-
-  template <typename Config> static bool transmit_blocking(const std::span<const std::uint16_t> samples) noexcept
-  {
-    (void)sizeof(Config);
-    (void)samples;
-    return false;
-  }
-
-  template <typename Config> static bool receive_blocking(const std::span<std::uint16_t> samples) noexcept
-  {
-    (void)sizeof(Config);
-    (void)samples;
-    return false;
-  }
-
-  template <typename Config, auto Handler>
-  static bool start_dma_tx(const std::span<const std::uint16_t> samples) noexcept
-  {
-    (void)sizeof(Config);
-    (void)samples;
-    (void)Handler;
     return false;
   }
 };
 
 struct rcc_api final
 {
-  template <typename Config> static bool configure() noexcept
+  template <typename Config> static status configure() noexcept
   {
-    (void)sizeof(Config);
-    return false;
+    return status::unsupported;
   }
 
   template <typename Config> static std::uint32_t get_system_clock_hz() noexcept
   {
-    (void)sizeof(Config);
+#if MICROHAL_NORDIC_SYSTEM_CORE_CLOCK
+    SystemCoreClockUpdate();
+    return SystemCoreClock;
+#else
     return 0U;
+#endif
   }
 
   template <typename Config>
-  static void enable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
+  static status enable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
   {
     (void)sizeof(Config);
     (void)peripheral;
     (void)instance;
+    return status::unsupported;
   }
 
   template <typename Config>
-  static void disable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
+  static status disable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
   {
     (void)sizeof(Config);
     (void)peripheral;
     (void)instance;
+    return status::unsupported;
   }
 };
 
@@ -789,6 +1277,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
   using uart_api = backends::nordic::nrfx::uart_api;
   using rtc_api = backends::nordic::nrfx::rtc_api;
   using flash_api = backends::nordic::nrfx::flash_api;
+  using rram_api = backends::nordic::nrfx::rram_api;
   using timer_api = backends::nordic::nrfx::timer_api;
   using adc_api = backends::nordic::nrfx::adc_api;
   using dac_api = backends::nordic::nrfx::dac_api;
@@ -806,78 +1295,96 @@ template <> struct backend_traits<nordic_nrf_tag> final
   static constexpr vendor_kind vendor = vendor_kind::nordic_nrf;
   static constexpr backend_kind kind = backend_kind::nordic_nrfx;
   static constexpr std::string_view name{"nordic-nrfx"};
-  static constexpr std::uint32_t gpio_port_count{2U};
+  static constexpr std::uint32_t gpio_port_count{backends::nordic::nrfx::detail::nordic_gpio_port_count};
   static constexpr std::uint32_t gpio_pins_per_port{32U};
   static constexpr std::uint32_t gpio_alternate_function_count{16U};
 
   static consteval struct gpio_capability gpio_capability() noexcept
   {
-    return {.supported = MICROHAL_NORDIC_NRFX_PRESENT != 0,
-            .blocking = true,
-            .non_blocking = true,
-            .isr = true,
+    constexpr bool supported = MICROHAL_NORDIC_HAS_GPIO != 0;
+    return {.supported = supported,
+            .blocking = supported,
+            .non_blocking = MICROHAL_NORDIC_HAS_GPIOTE != 0,
+            .isr = MICROHAL_NORDIC_HAS_GPIOTE != 0,
             .dma = false,
-            .instance_count = gpio_port_count,
+            .instance_count = supported ? gpio_port_count : 0U,
             .max_frequency_hz = 0U,
-            .alternate_function = true,
-            .alternate_function_count = gpio_alternate_function_count,
-            .port_count = gpio_port_count,
-            .pins_per_port = gpio_pins_per_port};
+            .alternate_function = false,
+            .alternate_function_count = 0U,
+            .port_count = supported ? gpio_port_count : 0U,
+            .pins_per_port = supported ? gpio_pins_per_port : 0U,
+            .output_toggle = supported};
   }
 
   static consteval struct i2c_capability i2c_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_TWIM != 0;
     return {.supported = supported,
-            .blocking = supported,
+            .blocking = supported && (MICROHAL_NORDIC_SYSTEM_CORE_CLOCK != 0),
             .non_blocking = supported,
             .isr = supported,
-            .dma = false,
-            .instance_count = supported ? 2U : 0U,
-            .max_frequency_hz = 1'000'000U};
+            .dma = supported,
+            .instance_count = supported ? backends::nordic::nrfx::detail::twim_instance_count : 0U,
+            .max_frequency_hz =
+#if defined(NRF52840_XXAA)
+                supported ? 400'000U : 0U,
+#else
+                supported ? 1'000'000U : 0U,
+#endif
+            .ten_bit_addressing = false,
+            .repeated_start = supported,
+            .address_probe = supported && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK};
   }
 
   static consteval struct spi_capability spi_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_SPIM != 0;
     return {.supported = supported,
-            .blocking = supported,
+            .blocking = supported && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK,
             .non_blocking = supported,
             .isr = supported,
             .dma = supported,
-            .instance_count = supported ? 4U : 0U,
-            .max_frequency_hz = 32'000'000U};
+#if MICROHAL_NORDIC_HAS_SPIM
+            .instance_count = std::size(backends::nordic::nrfx::detail::spim_instances),
+#endif
+            .max_frequency_hz = supported ? 32'000'000U : 0U,
+            .transmit_only = supported,
+            .receive_only = supported,
+            .async_transfer = supported};
   }
 
   static consteval struct qspi_capability qspi_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_QSPI != 0;
+    constexpr std::uint32_t maximum =
+#if defined(NRF5340_XXAA_APPLICATION)
+        96'000'000U;
+#else
+        32'000'000U;
+#endif
     return {.supported = supported,
             .blocking = supported,
-            .non_blocking = false,
-            .isr = false,
-            .dma = supported,
             .instance_count = supported ? 1U : 0U,
-            .max_frequency_hz = 96'000'000U,
+            .max_frequency_hz = supported ? maximum : 0U,
             .quad_mode = supported,
-            .octo_mode = false,
-            .ddr_mode = false};
+            .dual_mode = supported,
+            .command_transfer = supported,
+            .max_address_bytes = supported ? std::uint8_t{4U} : std::uint8_t{0U}};
   }
 
   static consteval struct uart_capability uart_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_UARTE != 0;
     return {.supported = supported,
-            .blocking = supported,
+            .blocking = supported && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK,
             .non_blocking = supported,
             .isr = supported,
             .dma = supported,
-            .instance_count = supported ? 2U : 0U,
-            .max_frequency_hz = 8'000'000U,
-            .fifo = supported,
-            .lpuart = false,
-            .autobaud = false,
-            .fifo_depth = supported ? 8U : 0U};
+#if MICROHAL_NORDIC_HAS_UARTE
+            .instance_count = std::size(backends::nordic::nrfx::detail::uarte_instances),
+#endif
+            .parity = supported,
+            .max_baud_rate = supported ? 1'000'000U : 0U};
   }
 
   static consteval struct rtc_capability rtc_capability() noexcept
@@ -887,16 +1394,22 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .blocking = supported,
             .non_blocking = supported,
             .isr = supported,
-            .dma = false,
-            .instance_count = supported ? 3U : 0U,
-            .max_frequency_hz = 32'768U,
-            .periodic = supported,
+#if MICROHAL_NORDIC_HAS_RTC
+            .instance_count = std::size(backends::nordic::nrfx::detail::rtc_instances),
+#endif
+            .max_frequency_hz = supported ? 8U : 0U,
             .alarm = supported};
   }
 
   static consteval struct flash_capability flash_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_NVMC != 0;
+    constexpr std::uint32_t flash_kb =
+#if defined(NRF52840_XXAA) || defined(NRF5340_XXAA_APPLICATION)
+        1024U;
+#else
+        0U;
+#endif
     return {.supported = supported,
             .blocking = supported,
             .non_blocking = false,
@@ -904,9 +1417,11 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .dma = false,
             .instance_count = supported ? 1U : 0U,
             .max_frequency_hz = 0U,
-            .alignment_bytes = 4U,
-            .erase_bytes = 4096U,
-            .total_size_kb = 64U};
+            .alignment_bytes = supported ? 4U : 0U,
+            .erase_bytes = supported ? 4096U : 0U,
+            .total_size_kb = supported ? flash_kb : 0U,
+            .erase_region_query = supported,
+            .program_readback = supported};
   }
 
   static consteval struct timer_capability timer_capability() noexcept
@@ -914,48 +1429,37 @@ template <> struct backend_traits<nordic_nrf_tag> final
     constexpr bool supported = MICROHAL_NORDIC_HAS_TIMER != 0;
     return {.supported = supported,
             .blocking = supported,
-            .non_blocking = false,
-            .isr = false,
-            .dma = false,
-            .instance_count = supported ? 5U : 0U,
-            .max_frequency_hz = 16'000'000U,
+            .non_blocking = supported,
+            .isr = supported,
+#if MICROHAL_NORDIC_HAS_TIMER
+            .instance_count = std::size(backends::nordic::nrfx::detail::timer_instances),
+#endif
+            .max_frequency_hz = supported ? 16'000'000U : 0U,
             .capture_compare = supported,
             .periodic = supported,
-            .pwm = false,
-            .channel_count = supported ? 4U : 0U};
+            .channel_count = supported ? 2U : 0U,
+            .period_readback = supported,
+            .counter_reset = supported};
   }
 
   static consteval struct adc_capability adc_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_SAADC != 0;
     return {.supported = supported,
-            .blocking = supported,
+            .blocking = supported && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK,
             .non_blocking = supported,
             .isr = supported,
             .dma = supported,
             .instance_count = supported ? 1U : 0U,
-            .max_frequency_hz = 200'000U,
-            .resolution_bits = 12U,
+            .resolution_bits = supported ? 14U : 0U,
             .channel_count = supported ? 8U : 0U,
-            .differential = supported,
-            .oversampling = supported,
-            .injected = false};
+            .sequential_scan = supported,
+            .voltage_conversion = supported};
   }
 
   static consteval struct dac_capability dac_capability() noexcept
   {
-    constexpr bool supported = MICROHAL_NORDIC_HAS_DAC != 0;
-    return {.supported = supported,
-            .blocking = supported,
-            .non_blocking = supported,
-            .isr = supported,
-            .dma = supported,
-            .instance_count = supported ? 1U : 0U,
-            .max_frequency_hz = 1'000'000U,
-            .resolution_bits = 12U,
-            .channel_count = supported ? 2U : 0U,
-            .dual_mode = supported,
-            .waveform_generation = supported};
+    return {};
   }
 
   static consteval struct can_capability can_capability() noexcept
@@ -975,36 +1479,12 @@ template <> struct backend_traits<nordic_nrf_tag> final
 
   static consteval struct sd_capability sd_capability() noexcept
   {
-    constexpr bool supported = MICROHAL_NORDIC_HAS_SDHC != 0;
-    return {.supported = supported,
-            .blocking = supported,
-            .non_blocking = supported,
-            .isr = supported,
-            .dma = supported,
-            .instance_count = supported ? 1U : 0U,
-            .max_frequency_hz = 50'000'000U,
-            .high_speed = supported,
-            .uhs = false,
-            .bus_width_4 = supported,
-            .bus_width_8 = false,
-            .block_size_bytes = 512U};
+    return {};
   }
 
   static consteval struct dma_capability dma_capability() noexcept
   {
-    constexpr bool supported = MICROHAL_NORDIC_NRFX_PRESENT != 0;
-    return {.supported = supported,
-            .blocking = false,
-            .non_blocking = supported,
-            .isr = supported,
-            .dma = false,
-            .instance_count = supported ? 1U : 0U,
-            .max_frequency_hz = 0U,
-            .stream_count = supported ? 16U : 0U,
-            .channel_count = supported ? 16U : 0U,
-            .mem_to_mem = supported,
-            .fifo = false,
-            .double_buffer = false};
+    return {};
   }
 
   static consteval struct pwm_capability pwm_capability() noexcept
@@ -1012,14 +1492,13 @@ template <> struct backend_traits<nordic_nrf_tag> final
     constexpr bool supported = MICROHAL_NORDIC_HAS_PWM != 0;
     return {.supported = supported,
             .blocking = supported,
-            .non_blocking = supported,
-            .isr = supported,
-            .dma = supported,
-            .instance_count = supported ? 4U : 0U,
-            .max_frequency_hz = 16'000'000U,
+#if MICROHAL_NORDIC_HAS_PWM
+            .instance_count = std::size(backends::nordic::nrfx::detail::pwm_instances),
+#endif
+            .max_frequency_hz = supported ? 16'000'000U : 0U,
             .channel_count = supported ? 4U : 0U,
-            .complementary_output = false,
-            .dead_time = false};
+            .runtime_duty_update = supported && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK,
+            .runtime_start_stop = supported && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK};
   }
 
   static consteval struct watchdog_capability watchdog_capability() noexcept
@@ -1027,25 +1506,47 @@ template <> struct backend_traits<nordic_nrf_tag> final
     constexpr bool supported = MICROHAL_NORDIC_HAS_WDT != 0;
     return {.supported = supported,
             .blocking = supported,
-            .non_blocking = false,
-            .isr = false,
-            .dma = false,
-            .instance_count = supported ? 1U : 0U,
-            .max_frequency_hz = 0U,
+#if MICROHAL_NORDIC_HAS_WDT
+            .instance_count = std::size(backends::nordic::nrfx::detail::wdt_instances),
+#endif
             .independent = supported,
-            .window = supported,
             .min_timeout_ms = supported ? 1U : 0U,
-            .max_timeout_ms = supported ? 120'000U : 0U};
+            .max_timeout_ms = supported ? 131'071'999U : 0U,
+            .runtime_refresh = supported,
+            .reset_on_timeout = supported};
   }
 
   static consteval struct i2s_capability i2s_capability() noexcept
   {
-    return {};
+    constexpr bool supported = MICROHAL_NORDIC_HAS_I2S != 0;
+    return {.supported = supported,
+            .blocking = supported && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK,
+            .non_blocking = supported,
+            .isr = supported,
+            .dma = supported,
+            .instance_count = supported ? 1U : 0U,
+            .master_mode = supported,
+            .slave_mode = supported,
+            .master_clock_output = supported,
+            .max_sample_rate = supported ? 48000U : 0U,
+            .transmit_dma = supported,
+            .sample_bits = supported ? std::uint8_t{16U} : std::uint8_t{0U}};
   }
 
   static consteval struct rcc_capability rcc_capability() noexcept
   {
-    return {};
+    constexpr bool supported = MICROHAL_NORDIC_SYSTEM_CORE_CLOCK != 0;
+    constexpr std::uint32_t maximum =
+#if defined(NRF52840_XXAA) || defined(NRF5340_XXAA_NETWORK)
+        64'000'000U;
+#else
+        128'000'000U;
+#endif
+    return {.supported = supported,
+            .blocking = supported,
+            .instance_count = supported ? 1U : 0U,
+            .max_system_clock_hz = supported ? maximum : 0U,
+            .system_clock_readback = supported};
   }
 
   static consteval struct crc_capability crc_capability() noexcept
@@ -1055,7 +1556,16 @@ template <> struct backend_traits<nordic_nrf_tag> final
 
   template <typename PinConfig> static consteval bool is_valid_gpio_pin() noexcept
   {
+#if defined(NRF54L15_XXAA)
+    return (PinConfig::port_index == 0U && PinConfig::pin_index <= 6U) ||
+           (PinConfig::port_index == 1U && PinConfig::pin_index <= 16U) ||
+           (PinConfig::port_index == 2U && PinConfig::pin_index <= 10U);
+#elif defined(NRF52840_XXAA) || defined(NRF5340_XXAA_APPLICATION)
+    return (PinConfig::port_index == 0U && PinConfig::pin_index < 32U) ||
+           (PinConfig::port_index == 1U && PinConfig::pin_index < 16U);
+#else
     return (PinConfig::port_index < gpio_port_count) && (PinConfig::pin_index < gpio_pins_per_port);
+#endif
   }
 
   template <typename PinConfig> static consteval bool is_valid_alternate_function() noexcept

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <limits>
 #include <span>
 
 #include "microhal/core/concepts.hpp"
@@ -20,7 +21,7 @@ namespace microhal::i2s
  */
 template <std::uint8_t InstanceIndex, i2s_mode Mode = i2s_mode::master_tx,
           i2s_standard Standard = i2s_standard::philips, std::uint32_t SampleRate = 48000U,
-          bool EnableMasterClock = false, bool EnableDma = true>
+          bool EnableMasterClock = false, bool EnableDma = true, transfer_mode TransferMode = transfer_mode::automatic>
 struct i2s_config final
 {
   static constexpr std::uint8_t instance_index{InstanceIndex};
@@ -28,7 +29,25 @@ struct i2s_config final
   static constexpr i2s_standard standard{Standard};
   static constexpr std::uint32_t sample_rate{SampleRate};
   static constexpr bool enable_master_clock{EnableMasterClock};
-  static constexpr bool enable_dma{EnableDma};
+  static constexpr transfer_mode transfer_mode_value{TransferMode};
+  static constexpr bool enable_dma{TransferMode == transfer_mode::dma ||
+                                   (TransferMode == transfer_mode::automatic && EnableDma)};
+};
+
+template <typename Binding, i2s_mode Mode = i2s_mode::master_tx, i2s_standard Standard = i2s_standard::philips,
+          std::uint32_t SampleRate = 48000U, bool EnableMasterClock = false, bool EnableDma = true,
+          transfer_mode TransferMode = transfer_mode::automatic>
+struct bound_i2s_config final
+{
+  using binding = Binding;
+
+  static constexpr i2s_mode mode{Mode};
+  static constexpr i2s_standard standard{Standard};
+  static constexpr std::uint32_t sample_rate{SampleRate};
+  static constexpr bool enable_master_clock{EnableMasterClock};
+  static constexpr transfer_mode transfer_mode_value{TransferMode};
+  static constexpr bool enable_dma{TransferMode == transfer_mode::dma ||
+                                   (TransferMode == transfer_mode::automatic && EnableDma)};
 };
 
 /**
@@ -42,30 +61,104 @@ struct interface final
   using config_type = Config;
 
   static constexpr peripheral_kind kind{peripheral_kind::i2s};
+  static constexpr transfer_mode transfer_mode_value{configured_transfer_mode<Config>()};
+  using mode_api = serial_mode_api<Backend, peripheral_kind::i2s>;
   static constexpr bool has_full_duplex{backend_traits<Backend>::i2s_capability().full_duplex};
   static constexpr std::uint32_t max_sample_rate{backend_traits<Backend>::i2s_capability().max_sample_rate};
+  static constexpr std::uint8_t sample_bits{backend_traits<Backend>::i2s_capability().sample_bits};
 
   [[nodiscard]] static inline status initialize() noexcept
   {
-    return detail::as_status([] { return i2s_api_t<Backend>::template initialize<Config>(); });
+    if constexpr (transfer_mode_value != transfer_mode::automatic)
+      return mode_api::template initialize<Config>();
+    else
+      return detail::as_status([] { return i2s_api_t<Backend>::template initialize<Config>(); });
   }
 
   [[nodiscard]] static inline status transmit_blocking(const std::span<const std::uint16_t> samples) noexcept
   {
-    return detail::as_status([samples] { return i2s_api_t<Backend>::template transmit_blocking<Config>(samples); });
+    if (!is_valid_transfer(samples.size()))
+    {
+      return status::invalid_argument;
+    }
+    if constexpr (transfer_mode_value != transfer_mode::automatic)
+      return mode_api::template transmit<Config, nullptr>(samples);
+    else
+      return detail::as_status([samples] { return i2s_api_t<Backend>::template transmit_blocking<Config>(samples); });
   }
 
   [[nodiscard]] static inline status receive_blocking(const std::span<std::uint16_t> samples) noexcept
   {
-    return detail::as_status([samples] { return i2s_api_t<Backend>::template receive_blocking<Config>(samples); });
+    if (!is_valid_transfer(samples.size()))
+    {
+      return status::invalid_argument;
+    }
+    if constexpr (transfer_mode_value != transfer_mode::automatic)
+      return mode_api::template receive<Config, nullptr>(samples);
+    else
+      return detail::as_status([samples] { return i2s_api_t<Backend>::template receive_blocking<Config>(samples); });
   }
 
   template <auto CompletionHandler>
   [[nodiscard]] static inline status start_dma_tx(const std::span<const std::uint16_t> samples) noexcept
-    requires DmaCapableConcept<Backend, peripheral_kind::i2s>
+    requires(DmaCapableConcept<Backend, peripheral_kind::i2s> && backend_traits<Backend>::i2s_capability().transmit_dma)
   {
-    return detail::as_status([samples]
-                             { return i2s_api_t<Backend>::template start_dma_tx<Config, CompletionHandler>(samples); });
+    static_assert(transfer_mode_value == transfer_mode::automatic ||
+                  valid_serial_completion_handler<CompletionHandler>());
+    if (!is_valid_transfer(samples.size()))
+    {
+      return status::invalid_argument;
+    }
+    if constexpr (transfer_mode_value == transfer_mode::dma)
+      return mode_api::template transmit<Config, CompletionHandler>(samples);
+    else if constexpr (transfer_mode_value != transfer_mode::automatic)
+      return status::unsupported;
+    else
+      return detail::as_status(
+          [samples] { return i2s_api_t<Backend>::template start_dma_tx<Config, CompletionHandler>(samples); });
+  }
+
+  template <auto CompletionHandler>
+  [[nodiscard]] static status transmit_async(const std::span<const std::uint16_t> samples) noexcept
+  {
+    static_assert(valid_serial_completion_handler<CompletionHandler>());
+    if (!is_valid_transfer(samples.size()))
+      return status::invalid_argument;
+    return mode_api::template transmit<Config, CompletionHandler>(samples);
+  }
+  template <auto CompletionHandler>
+  [[nodiscard]] static status receive_async(const std::span<std::uint16_t> samples) noexcept
+  {
+    static_assert(valid_serial_completion_handler<CompletionHandler>());
+    if (!is_valid_transfer(samples.size()))
+      return status::invalid_argument;
+    return mode_api::template receive<Config, CompletionHandler>(samples);
+  }
+  [[nodiscard]] static status abort() noexcept
+  {
+    if constexpr (transfer_mode_value == transfer_mode::automatic)
+      return status::unsupported;
+    else
+      return mode_api::template abort<Config>();
+  }
+  [[nodiscard]] static status transfer_status() noexcept
+  {
+    if constexpr (transfer_mode_value == transfer_mode::automatic)
+      return status::unsupported;
+    else
+      return mode_api::template transfer_status<Config>();
+  }
+  [[nodiscard]] static status handle_interrupt() noexcept
+  {
+    if constexpr (transfer_mode_value == transfer_mode::automatic)
+      return status::unsupported;
+    else
+      return detail::as_status([] { return mode_api::template handle_interrupt<Config>(); });
+  }
+
+  [[nodiscard]] static constexpr bool is_valid_transfer(const std::size_t sample_count) noexcept
+  {
+    return (sample_count > 0U) && (sample_count <= std::numeric_limits<std::uint16_t>::max());
   }
 };
 

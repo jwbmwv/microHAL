@@ -23,7 +23,7 @@ The compile-time guard target `microhal_preset_capability_expectations` exists s
 Use the `nordic-backend-ci` preset with the required environment variables:
 
 - `MICROHAL_NORDIC_INCLUDE_DIRS`: semicolon-separated include roots for nrfx headers (optional when support root is set)
-- `MICROHAL_NORDIC_SUPPORT_ROOT`: path to Nordic support content (for example `vendor-support/nrf-bm/v2.0.0` or `vendor-support`)
+- `MICROHAL_NORDIC_SUPPORT_ROOT`: path to Nordic support content (for example `vendor-support/nrf-bm/v2.0.1` or `vendor-support`)
 - `MICROHAL_NORDIC_DEFINITIONS`: SoC and feature defines (for example `NRF52840_XXAA`)
 
 Example:
@@ -31,25 +31,75 @@ Example:
 ```bash
 export MICROHAL_NORDIC_INCLUDE_DIRS="/path/to/nrfx;/path/to/nrfx/mdk;/path/to/cmsis"
 export MICROHAL_NORDIC_DEFINITIONS="NRF52840_XXAA"
-cmake --preset nordic-backend-ci
+cmake --preset nordic-backend-ci \
+  -DCMAKE_SYSTEM_NAME=Generic \
+  -DCMAKE_C_COMPILER=arm-none-eabi-gcc \
+  -DCMAKE_CXX_COMPILER=arm-none-eabi-g++ \
+  -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+  -DCMAKE_C_FLAGS="-mcpu=cortex-m4 -mthumb" \
+  -DCMAKE_CXX_FLAGS="-mcpu=cortex-m4 -mthumb" \
+  -DCMAKE_EXE_LINKER_FLAGS="-mcpu=cortex-m4 -mthumb -specs=nosys.specs" \
+  -DMICROHAL_WERROR=OFF
 cmake --build --preset nordic-backend-ci
-ctest --preset nordic-backend-ci --output-on-failure
+ctest --preset nordic-backend-ci --output-on-failure -R "^microhal_capability_claim_policy$"
 ```
 
 With `MICROHAL_NORDIC_SUPPORT_ROOT` set, CMake auto-derives include directories from the Nordic tree. If neither include dirs nor support root are set, configuration fails intentionally.
+For the enabled-driver validation below, configure this preset with an ARM bare-metal toolchain
+and CPU flags; do not use the host compiler or run ARM executables through the host CTest runner.
+The matrix script supplies the toolchain flags automatically.
 
 ### nrf-bm Unified Tree
 
-`vendor-support/nrf-bm/v2.0.0` can be used as a single source for legacy and newer Nordic families in this repository's validation flow.
+`vendor-support/nrf-bm/v2.0.1` can be used as a single source for legacy and newer Nordic families in this repository's validation flow.
 
 - nRF52 validation definition: `NRF52840_XXAA`
 - nRF53 validation definition: `NRF5340_XXAA_APPLICATION`
-- nRF54 validation definition: `NRF54H20_XXAA`
+- nRF54H20 application-core definitions: `NRF54H20_XXAA;NRF_APPLICATION`
+- nRF54L15 application-core definitions: `NRF54L15_XXAA;NRF_APPLICATION`
 
 Run the matrix locally:
 
 ```bash
 bash ./scripts/validate_nordic_vendor_matrix.sh
+```
+
+The runner requires `arm-none-eabi-gcc`/`arm-none-eabi-g++` with newlib and its C++ headers/libraries.
+Set `MICROHAL_NORDIC_SUPPORT_ROOT` for a non-default SDK path and
+`MICROHAL_NORDIC_MATRIX_BUILD_ROOT` for a separate build directory. It cross-compiles/links the
+selection, API-contract, and preset-expectation targets, then runs only the host capability-policy
+script. Existing build directories are reused rather than deleted.
+
+On nRF52840, nRF5340 application core, and nRF54L15 application core,
+`microhal_backend_api_contract` additionally depends on the object target
+`microhal_nordic_driver_instantiation`. This instantiates actual enabled peripheral template bodies,
+public facade calls, capability assertions, and interrupt dispatchers, rather than only testing
+`requires` expressions. It enables the implemented nrfx drivers and API 4.1 (including RTC on
+nRF52/53). When the support root is auto-discovered it also compiles the corresponding nrfx C driver
+sources. Explicit include-only configurations compile the C++ instantiations but must validate/link
+their driver sources separately.
+
+The object target uses test-only glue from `tests/nordic/`; applications need their own real nrfx
+integration. These checks do not link a complete firmware image, start clocks, execute peripheral
+operations, or validate electrical behavior. nRF54H20 retains only the earlier header/API-contract
+checks; it does not gain the expanded native-driver coverage. The host suite separately runs
+`microhal_nordic_logic` for status mapping, transfer lifecycle, PWM timing, channel masks, transfer
+count/address boundaries, and unsupported-without-SDK behavior.
+
+### NuttX validation
+
+Configure the NuttX tree for the board and configuration being validated so its generated
+`nuttx/config.h` is present. Pass the NuttX public include tree, architecture include directory,
+generated configuration include directory, and board include directory through
+`MICROHAL_VENDOR_VALIDATION_NUTTX_INCLUDE_DIRS`:
+
+```bash
+cmake -S . -B build/nuttx-h743-vendor \
+  -DMICROHAL_VENDOR_VALIDATION=ON \
+  -DMICROHAL_VENDOR_VALIDATION_PROVIDER=NUTTX \
+  -DMICROHAL_VENDOR_VALIDATION_NUTTX_INCLUDE_DIRS="/path/to/nuttx/include;/path/to/nuttx/arch/arm/include;/path/to/nuttx/boards/arm/stm32h7/nucleo-h743zi/include"
+cmake --build build/nuttx-h743-vendor \
+  --target microhal_backend_selection microhal_backend_api_contract microhal_preset_capability_expectations
 ```
 
 - Set `MICROHAL_VENDOR_VALIDATION_STM32_INCLUDE_DIRS` directly when your CI or local environment already knows the exact include list.

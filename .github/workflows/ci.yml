@@ -6,32 +6,75 @@ on:
 
 jobs:
   host-build-and-test:
-    name: Host build and test (${{ matrix.compiler }})
-    runs-on: ubuntu-latest
+    name: Host build and test (${{ matrix.compiler }}, C++${{ matrix.standard }})
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         include:
-          - compiler: g++
-            cc: gcc
-          - compiler: clang++
-            cc: clang
+          - compiler: g++-13
+            cc: gcc-13
+            package: g++-13
+            standard: 20
+          - compiler: clang++-18
+            cc: clang-18
+            package: clang-18
+            standard: 20
+          - compiler: g++-13
+            cc: gcc-13
+            package: g++-13
+            standard: 23
+          - compiler: clang++-18
+            cc: clang-18
+            package: clang-18
+            standard: 23
+          - compiler: clang++-18
+            cc: clang-18
+            package: clang-18
+            standard: 26
     steps:
       - uses: actions/checkout@v4
 
       - name: Install toolchain
-        run: sudo apt-get update && sudo apt-get install --yes ${{ matrix.cc }} cmake ninja-build
+        run: sudo apt-get update && sudo apt-get install --yes ${{ matrix.package }} cmake ninja-build
 
       - name: Configure
         env:
+          CC: ${{ matrix.cc }}
           CXX: ${{ matrix.compiler }}
-        run: cmake -S . -B build -G Ninja
+        run: cmake -S . -B build -G Ninja -DCMAKE_CXX_STANDARD=${{ matrix.standard }}
 
       - name: Build
         run: cmake --build build
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+      - name: Test add_subdirectory consumption
+        run: |
+          cmake -S tests/package_consumer -B build/consumer-source -G Ninja \
+            -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+            -DCMAKE_CXX_STANDARD=${{ matrix.standard }} -DMICROHAL_TEST_ADD_SUBDIRECTORY=ON
+          cmake --build build/consumer-source --target microhal_package_consumer
+          ctest --test-dir build/consumer-source --output-on-failure -R '^microhal_package_consumer$'
+
+      - name: Test installed package consumption
+        run: |
+          cmake --install build --prefix "$PWD/build/install"
+          cmake -S tests/package_consumer -B build/consumer-installed -G Ninja \
+            -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} -DCMAKE_CXX_STANDARD=${{ matrix.standard }} \
+            -DCMAKE_PREFIX_PATH="$PWD/build/install"
+          cmake --build build/consumer-installed
+          ctest --test-dir build/consumer-installed --output-on-failure
+
+      - name: Test transitive C++20 minimum
+        if: matrix.compiler == 'g++-13' && matrix.standard == 20
+        run: |
+          cmake -S tests/package_consumer -B build/consumer-minimum -G Ninja \
+            -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} -DCMAKE_CXX_STANDARD=17 \
+            -DCMAKE_PREFIX_PATH="$PWD/build/install"
+          cmake --build build/consumer-minimum
+          ctest --test-dir build/consumer-minimum --output-on-failure
 
   backend-selection-matrix:
     name: Single-backend build (${{ matrix.backend }})
@@ -158,16 +201,50 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install toolchain
-        run: sudo apt-get update && sudo apt-get install --yes cmake
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cmake gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib
 
       - name: Configure Nordic vendor validation preset
         env:
           MICROHAL_NORDIC_INCLUDE_DIRS: ${{ vars.MICROHAL_NORDIC_INCLUDE_DIRS }}
           MICROHAL_NORDIC_DEFINITIONS: ${{ vars.MICROHAL_NORDIC_DEFINITIONS }}
-        run: cmake --preset nordic-backend-ci
+        run: |
+          cpu=cortex-m33
+          case "$MICROHAL_NORDIC_DEFINITIONS" in *NRF52*) cpu=cortex-m4 ;; esac
+          cmake --preset nordic-backend-ci \
+            -DCMAKE_SYSTEM_NAME=Generic \
+            -DCMAKE_C_COMPILER=arm-none-eabi-gcc \
+            -DCMAKE_CXX_COMPILER=arm-none-eabi-g++ \
+            -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+            -DCMAKE_C_FLAGS="-mcpu=$cpu -mthumb" \
+            -DCMAKE_CXX_FLAGS="-mcpu=$cpu -mthumb" \
+            -DCMAKE_EXE_LINKER_FLAGS="-mcpu=$cpu -mthumb -specs=nosys.specs" \
+            -DMICROHAL_WERROR=OFF
 
       - name: Build Nordic backend validation targets
         run: cmake --build --preset nordic-backend-ci
 
-      - name: Test Nordic backend validation targets
-        run: ctest --preset nordic-backend-ci --output-on-failure
+      - name: Check Nordic capability policy (ARM binaries are compile-only)
+        run: ctest --preset nordic-backend-ci --output-on-failure -R "^microhal_capability_claim_policy$"
+
+  nuttx-vendor-validation:
+    name: NuttX vendor validation
+    runs-on: ubuntu-latest
+    if: ${{ vars.MICROHAL_NUTTX_INCLUDE_DIRS != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install --yes cmake
+
+      - name: Configure NuttX vendor validation preset
+        env:
+          MICROHAL_NUTTX_INCLUDE_DIRS: ${{ vars.MICROHAL_NUTTX_INCLUDE_DIRS }}
+        run: cmake --preset nuttx-backend-ci
+
+      - name: Build NuttX backend validation targets
+        run: cmake --build --preset nuttx-backend-ci
+
+      - name: Test NuttX backend validation targets
+        run: ctest --preset nuttx-backend-ci --output-on-failure
