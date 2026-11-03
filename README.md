@@ -175,6 +175,10 @@ To cross-compile against real ST headers for STM32C0, STM32F4, and STM32G4:
 microHAL's own tests and examples build with `-Werror` (`MICROHAL_WERROR`, on by default). The
 `INTERFACE` target you link against never forces that on your project.
 
+The clock diagnostic fixture builds as `microhal_clock_i2c` and `microhal_clock_spi`, giving
+clang-tidy valid compilation-database entries for both configurations. The
+`microhal_clock_diagnostics` test separately checks invalid clocks and their compiler messages.
+
 ### Proving the abstraction is free
 
 The zero-overhead claim is checked, not asserted. `scripts/check_zero_overhead.sh` compiles

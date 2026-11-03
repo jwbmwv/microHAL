@@ -402,6 +402,15 @@ endif()
 
 # Host runtime tests use recording backends and deterministic SDK fixtures.
 if(NOT MICROHAL_VENDOR_VALIDATION)
+  foreach(_peripheral I2C SPI)
+    string(TOLOWER "${_peripheral}" _peripheral_lower)
+    add_executable(microhal_clock_${_peripheral_lower} tests/diagnostics/clock.cpp)
+    target_compile_features(microhal_clock_${_peripheral_lower} PRIVATE cxx_std_20)
+    target_include_directories(microhal_clock_${_peripheral_lower} PRIVATE include)
+    target_compile_definitions(microhal_clock_${_peripheral_lower} PRIVATE
+      MICROHAL_BACKENDS_EXPLICIT=1 MICROHAL_ENABLE_MOCK=1
+      MICROHAL_TEST_${_peripheral}=1 MICROHAL_TEST_CLOCK_HZ=1U)
+  endforeach()
   add_executable(microhal_mock_runtime tests/mock_runtime_test.cpp)
   target_link_libraries(microhal_mock_runtime PRIVATE microhal::microhal)
   add_executable(microhal_nordic_logic tests/nordic_logic_test.cpp)
@@ -520,6 +529,9 @@ add_test(NAME microhal_capability_claim_policy
   COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_capability_claim_policy.sh)
 
 if(NOT MICROHAL_VENDOR_VALIDATION)
+  foreach(_peripheral i2c spi)
+    add_test(NAME microhal_clock_${_peripheral} COMMAND microhal_clock_${_peripheral})
+  endforeach()
   set(_microhal_test_cxx_standard "${CMAKE_CXX_STANDARD}")
   if(_microhal_test_cxx_standard LESS 20 OR _microhal_test_cxx_standard STREQUAL "98")
     set(_microhal_test_cxx_standard 20)
