@@ -59,7 +59,7 @@ struct master
 
   [[nodiscard]] static inline status initialize() noexcept
   {
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template initialize<Config>();
     else
       return detail::as_status([] { return spi_api_t<Backend>::template initialize<Config>(); });
@@ -77,7 +77,7 @@ struct master
       return status::ok;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template transfer<Config, nullptr>(tx_payload, rx_payload);
     else
       return detail::as_status([tx_payload, rx_payload]
@@ -95,7 +95,7 @@ struct master
       return status::ok;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template write<Config, nullptr>(payload);
     else
       return detail::as_status([payload] { return spi_api_t<Backend>::template write_blocking<Config>(payload); });
@@ -113,7 +113,7 @@ struct master
       return status::ok;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template read<Config, nullptr>(payload);
     else
       return detail::as_status([payload] { return spi_api_t<Backend>::template read_blocking<Config>(payload); });
@@ -136,7 +136,7 @@ struct master
       return status::ok;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template transfer<Config, CompletionHandler>(tx_payload, rx_payload);
     else
       return detail::as_status(

@@ -59,6 +59,10 @@ template <typename Base, transfer_mode Mode> struct config
   static constexpr auto stop_bits = uart_stop_bits::one;
   static constexpr bool require_fifo = false, require_lpuart = false;
 };
+template <typename Base, transfer_mode Mode> struct slave_config : config<Base, Mode>
+{
+  static constexpr bool is_slave = true;
+};
 inline unsigned callbacks{};
 inline status last_callback{};
 void completed(status result) noexcept
@@ -90,6 +94,14 @@ template <typename Base> void i2c_tests()
 {
   using C = config<Base, transfer_mode::interrupt>;
   using A = api<peripheral_kind::i2c>;
+  using Slave = slave_config<Base, transfer_mode::automatic>;
+  using I2cMaster = i2c::master<kinetis_espresso_tag, Slave>;
+  using I2cSlave = i2c::slave<kinetis_espresso_tag, Slave>;
+  const auto slave_starts = fixture::starts, slave_creates = fixture::creates;
+  assert(I2cMaster::initialize() == status::unsupported);
+  assert(I2cMaster::write_blocking(0x50U, tx) == status::unsupported);
+  assert(I2cSlave::initialize() == status::unsupported);
+  assert(fixture::starts == slave_starts && fixture::creates == slave_creates);
   assert(A::template initialize<C>() == status::ok);
   assert((A::template write<C, nullptr>(tx, 0x50) == status::ok));
   assert((A::template read<C, nullptr>(rx, 0x50) == status::ok));
@@ -186,6 +198,11 @@ template <typename Base> void spi_tests()
 {
   using C = config<Base, transfer_mode::interrupt>;
   using A = api<peripheral_kind::spi>;
+  using SpiSlave = spi::slave<kinetis_espresso_tag, slave_config<Base, transfer_mode::automatic>>;
+  const auto slave_starts = fixture::starts, slave_creates = fixture::creates;
+  assert(SpiSlave::initialize() == status::unsupported);
+  assert((SpiSlave::transfer(tx, rx) == status::unsupported));
+  assert(fixture::starts == slave_starts && fixture::creates == slave_creates);
   assert(A::template initialize<C>() == status::ok);
   assert((A::template transfer<C, nullptr>(tx, rx) == status::ok));
   assert((A::template write<C, nullptr>(tx) == status::ok));

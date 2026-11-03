@@ -61,7 +61,7 @@ struct master final
   /** @brief Initializes the selected I2C controller instance. */
   [[nodiscard]] static inline status initialize() noexcept
   {
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template initialize<Config>();
     else
       return detail::as_status([] { return i2c_api_t<Backend>::template initialize<Config>(); });
@@ -81,7 +81,7 @@ struct master final
       return status::invalid_argument;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template write<Config, nullptr>(payload, address);
     else
       return detail::as_status([address, payload]
@@ -102,7 +102,7 @@ struct master final
       return status::invalid_argument;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template read<Config, nullptr>(payload, address);
     else
       return detail::as_status([address, payload]
@@ -123,7 +123,7 @@ struct master final
       return status::invalid_argument;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template probe<Config>(address);
     else
       return detail::as_status([address] { return i2c_api_t<Backend>::template probe<Config>(address); });
@@ -146,7 +146,7 @@ struct master final
       return status::invalid_argument;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template write_read<Config, nullptr>(tx_payload, rx_payload, address);
     else
       return detail::as_status(
@@ -174,7 +174,7 @@ struct master final
       return status::invalid_argument;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template write_read<Config, CompletionHandler>(tx_payload, rx_payload, address);
     else
       return detail::as_status(
@@ -202,7 +202,7 @@ struct master final
       return status::invalid_argument;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template write<Config, CompletionHandler>(payload, address);
     else
       return detail::as_status(

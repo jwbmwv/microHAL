@@ -1572,28 +1572,28 @@ template <peripheral_kind Kind> struct api
   }
   template <typename Config> static status initialize() noexcept
   {
-    if constexpr (!matches<Config, Kind>)
+    if constexpr (!matches<Config, Kind> || serial_slave_enabled<Config>())
       return status::unsupported;
     else
       return engine<driver_t<Config>>::template initialize<Config>();
   }
   template <typename Config> static status abort() noexcept
   {
-    if constexpr (!matches<Config, Kind>)
+    if constexpr (!matches<Config, Kind> || serial_slave_enabled<Config>())
       return status::unsupported;
     else
       return engine<driver_t<Config>>::template abort<Config>();
   }
   template <typename Config> static status transfer_status() noexcept
   {
-    if constexpr (!matches<Config, Kind>)
+    if constexpr (!matches<Config, Kind> || serial_slave_enabled<Config>())
       return status::unsupported;
     else
       return engine<driver_t<Config>>::template transfer_status<Config>();
   }
   template <typename Config> static status irq() noexcept
   {
-    if constexpr (!matches<Config, Kind>)
+    if constexpr (!matches<Config, Kind> || serial_slave_enabled<Config>())
       return status::unsupported;
     else
       return engine<driver_t<Config>>::template irq<Config>();
@@ -1625,7 +1625,8 @@ template <peripheral_kind Kind> struct api
   template <typename Config, auto Handler>
   static status bytes(std::uint8_t* data, std::size_t count, std::uint16_t address, bool reading) noexcept
   {
-    if constexpr (!matches<Config, Kind> || (Kind != peripheral_kind::uart && Kind != peripheral_kind::i2c))
+    if constexpr (!matches<Config, Kind> || serial_slave_enabled<Config>() ||
+                  (Kind != peripheral_kind::uart && Kind != peripheral_kind::i2c))
       return status::unsupported;
     else
     {
@@ -1657,7 +1658,7 @@ template <peripheral_kind Kind> struct api
   template <typename Config, auto Handler>
   static status transfer(std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx) noexcept
   {
-    if constexpr (Kind != peripheral_kind::spi || !matches<Config, Kind>)
+    if constexpr (Kind != peripheral_kind::spi || !matches<Config, Kind> || serial_slave_enabled<Config>())
       return status::unsupported;
     else
     {
@@ -1680,7 +1681,7 @@ template <peripheral_kind Kind> struct api
   {
     // The SDK's subaddress field gives an atomic repeated-start transaction
     // without an IRQ/DMA gap or an unsafe caller-owned descriptor chain.
-    if constexpr (Kind != peripheral_kind::i2c || !matches<Config, Kind>)
+    if constexpr (Kind != peripheral_kind::i2c || !matches<Config, Kind> || serial_slave_enabled<Config>())
       return status::unsupported;
     else
     {
