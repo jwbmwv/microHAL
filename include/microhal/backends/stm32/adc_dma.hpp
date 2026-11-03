@@ -21,24 +21,23 @@ template <typename C> struct binding_for<C, std::void_t<typename C::binding>>
 };
 template <typename C> using binding_t = typename binding_for<C>::type;
 
-struct dma_instance_state
+/// Bind typed register resources; the shared native endpoint implements transfers.
+template <unsigned Instance> struct dma_resource_state
 {
-  inline static detail::serial_gpdma_node nodes[6]{};
-  inline static detail::serial_dma_resource endpoints[6]{};
+  inline static detail::serial_gpdma_node node{};
+  inline static detail::serial_dma_resource endpoint{};
 };
 
-/// Bind typed register resources; the shared native endpoint implements transfers.
 template <typename C> struct dma_registers
 {
   using board = binding_t<C>;
   static_assert(C::instance_index > 0 && C::instance_index < 6);
+  using state = dma_resource_state<C::instance_index>;
   static constexpr bool available = requires {
     board::dma_channel();
     board::dma_controller();
     board::dma_index;
   };
-  inline static detail::serial_gpdma_node& node = dma_instance_state::nodes[C::instance_index];
-  inline static detail::serial_dma_resource& endpoint = dma_instance_state::endpoints[C::instance_index];
 
   template <typename D, typename Controller> static detail::serial_dma_resource resource(D* d, Controller* c) noexcept
   {
@@ -46,7 +45,7 @@ template <typename C> struct dma_registers
                     d->CTR1;
                     d->CLLR;
                   })
-      return detail::gpdma(*d, &node);
+      return detail::gpdma(*d, &state::node);
     else if constexpr (requires {
                          d->NDTR;
                          c->LISR;
@@ -65,13 +64,13 @@ template <typename C> struct dma_registers
   }
   static unsigned flags() noexcept
   {
-    if (!endpoint)
+    if (!state::endpoint)
       return 0;
-    const auto flags = *endpoint.flags;
-    const auto relevant = endpoint.complete_mask | endpoint.half_mask | endpoint.error_mask;
-    *endpoint.clear = flags & relevant;
-    return ((flags & endpoint.half_mask) ? 1U : 0U) | ((flags & endpoint.complete_mask) ? 2U : 0U) |
-           ((flags & endpoint.error_mask) ? 4U : 0U);
+    const auto flags = *state::endpoint.flags;
+    const auto relevant = state::endpoint.complete_mask | state::endpoint.half_mask | state::endpoint.error_mask;
+    *state::endpoint.clear = flags & relevant;
+    return ((flags & state::endpoint.half_mask) ? 1U : 0U) | ((flags & state::endpoint.complete_mask) ? 2U : 0U) |
+           ((flags & state::endpoint.error_mask) ? 4U : 0U);
   }
   static status stop() noexcept
   {
@@ -79,7 +78,7 @@ template <typename C> struct dma_registers
       return status::unsupported;
     else
     {
-      const auto s = endpoint.stop() ? status::ok : status::timeout;
+      const auto s = state::endpoint.stop() ? status::ok : status::timeout;
       (void)flags();
       return s;
     }
@@ -92,8 +91,8 @@ template <typename C> struct dma_registers
     else
     {
       auto d = board::dma_channel();
-      endpoint = resource(d, board::dma_controller());
-      if (!endpoint.stop())
+      state::endpoint = resource(d, board::dma_controller());
+      if (!state::endpoint.stop())
         return status::busy;
       if constexpr (requires { d->CTR2; })
       {
@@ -105,7 +104,7 @@ template <typename C> struct dma_registers
       else if constexpr (requires { d->NDTR; })
       {
         if constexpr (requires { board::dma_request; })
-          *endpoint.control = (*endpoint.control & ~(7U << 25)) | (board::dma_request << 25);
+          *state::endpoint.control = (*state::endpoint.control & ~(7U << 25)) | (board::dma_request << 25);
       }
       if constexpr (requires {
                       board::dmamux_channel();
@@ -128,14 +127,14 @@ template <typename C> struct dma_registers
         auto reg = board::dma_request_register();
         *reg = (*reg & ~(15U << shift)) | (board::dma_request << shift);
       }
-      auto s = endpoint.start(source, reinterpret_cast<std::uintptr_t>(buffer.data()), buffer.size(), false, circular,
-                              true, 2);
+      auto s = state::endpoint.start(source, reinterpret_cast<std::uintptr_t>(buffer.data()), buffer.size(), false,
+                                     circular, true, 2);
       if (s == status::ok && halves)
       {
-        const auto half_irq = endpoint.layout == detail::serial_dma_layout::gpdma    ? 1U << 9
-                              : endpoint.layout == detail::serial_dma_layout::stream ? 1U << 3
-                                                                                     : 1U << 2;
-        *endpoint.control = *endpoint.control | half_irq;
+        const auto half_irq = state::endpoint.layout == detail::serial_dma_layout::gpdma    ? 1U << 9
+                              : state::endpoint.layout == detail::serial_dma_layout::stream ? 1U << 3
+                                                                                            : 1U << 2;
+        *state::endpoint.control = *state::endpoint.control | half_irq;
       }
       return s;
     }

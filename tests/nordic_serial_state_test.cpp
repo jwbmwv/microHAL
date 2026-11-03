@@ -299,7 +299,10 @@ void uart_lifecycle()
   assert(uart_api::abort_rx<config>() == status::ok);
   assert(rx_rearms == 1U && rx_rearm_result == status::ok);
   assert(state.rx.active && timeout_timer.cb.initialized);
-  assert(fake::release_calls == releases_before_abort + 1);
+  assert(fake::release_calls == releases_before_abort + 1U);
+  trigger_rx_disabled();
+  assert(!state.rx.active && !timeout_timer.cb.initialized);
+  assert(fake::release_calls == releases_before_abort + 2U);
 }
 
 void slaves()

@@ -626,8 +626,11 @@ template <typename Driver> struct engine
   {
     using B = typename Config::binding;
     constexpr auto mode = configured_transfer_mode<Config>();
-    if constexpr (mode != transfer_mode::interrupt && mode != transfer_mode::dma &&
-                  !(mode == transfer_mode::polled && Driver::polled))
+    if constexpr (serial_slave_enabled<Config>() &&
+                  (Driver::kind == peripheral_kind::i2c || Driver::kind == peripheral_kind::spi))
+      return status::unsupported;
+    else if constexpr (mode != transfer_mode::interrupt && mode != transfer_mode::dma &&
+                       !(mode == transfer_mode::polled && Driver::polled))
       return status::unsupported;
     else
     {
@@ -660,9 +663,12 @@ template <typename Driver> struct engine
     using B = typename Config::binding;
     constexpr bool synchronous = synchronous_handler<Handler>;
     constexpr auto mode = configured_transfer_mode<Config>();
-    if constexpr (mode == transfer_mode::automatic ||
-                  (mode == transfer_mode::polled && (!Driver::polled || !synchronous)) ||
-                  (mode == transfer_mode::dma && !Driver::dma))
+    if constexpr (serial_slave_enabled<Config>() &&
+                  (Driver::kind == peripheral_kind::i2c || Driver::kind == peripheral_kind::spi))
+      return status::unsupported;
+    else if constexpr (mode == transfer_mode::automatic ||
+                       (mode == transfer_mode::polled && (!Driver::polled || !synchronous)) ||
+                       (mode == transfer_mode::dma && !Driver::dma))
       return status::unsupported;
     else if constexpr (synchronous && !requires { B::now_ms(); })
       return status::unsupported;

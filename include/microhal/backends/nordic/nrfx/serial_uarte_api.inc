@@ -46,7 +46,8 @@ template <typename Config> static status abort_tx() noexcept
   const auto error = nrfx_uarte_tx_abort(state.instance, true);
   if (error != 0)
   {
-    state.tx_cancelled = false;
+    if (state.tx.generation.load(std::memory_order_acquire) == generation)
+      state.tx_cancelled = false;
     return detail::driver_result(error);
   }
   if (state.tx.active.load() && state.tx.generation.load(std::memory_order_acquire) == generation)
@@ -72,7 +73,8 @@ template <typename Config> static status abort_rx() noexcept
   const auto error = nrfx_uarte_rx_abort(state.instance, true, true);
   if (error != 0)
   {
-    state.rx_cancelled = false;
+    if (state.rx.generation.load(std::memory_order_acquire) == generation)
+      state.rx_cancelled = false;
     return detail::driver_result(error);
   }
   // Synchronous abort returns ownership even when the driver has no pending event.
