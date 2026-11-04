@@ -110,22 +110,31 @@ static_assert(backend_traits<nordic_nrf_tag>::adc_capability().supported);
 static_assert(backend_traits<nordic_nrf_tag>::pwm_capability().supported);
 static_assert(backend_traits<nordic_nrf_tag>::watchdog_capability().supported);
 static_assert(backend_traits<nordic_nrf_tag>::adc_capability().dma);
+#if MICROHAL_NORDIC_HAS_I2S
 static_assert(backend_traits<nordic_nrf_tag>::i2s_capability().transmit_dma);
+static_assert(backend_traits<nordic_nrf_tag>::i2s_capability().receive_dma);
+static_assert(backend_traits<nordic_nrf_tag>::i2s_capability().full_duplex);
+#else
+static_assert(!backend_traits<nordic_nrf_tag>::i2s_capability().supported);
+#endif
 static_assert(backend_traits<nordic_nrf_tag>::gpio_capability().isr);
-#if defined(NRF5340_XXAA_APPLICATION) || defined(NRF54L15_XXAA)
+#if defined(NRF54H20_XXAA)
+static_assert(backend_traits<nordic_nrf_tag>::i2c_capability().instance_count == 8U);
+#elif defined(NRF5340_XXAA_APPLICATION) || defined(NRF54L15_XXAA)
 static_assert(backend_traits<nordic_nrf_tag>::i2c_capability().instance_count == 4U);
 #else
 static_assert(backend_traits<nordic_nrf_tag>::i2c_capability().instance_count == 2U);
 #endif
-#if defined(NRF54L15_XXAA)
+#if defined(NRF54L15_XXAA) || defined(NRF54H20_XXAA)
 static_assert(!backend_traits<nordic_nrf_tag>::qspi_capability().supported);
-static_assert(!backend_traits<nordic_nrf_tag>::rtc_capability().supported);
+#if defined(NRF54L15_XXAA)
 static_assert(backend_traits<nordic_nrf_tag>::gpio_port_count == 3U);
 static_assert(backend_traits<nordic_nrf_tag>::spi_capability().instance_count == 5U);
+#endif
 #else
 static_assert(backend_traits<nordic_nrf_tag>::qspi_capability().supported);
-static_assert(backend_traits<nordic_nrf_tag>::rtc_capability().supported);
 #endif
+static_assert(backend_traits<nordic_nrf_tag>::rtc_capability().supported);
 
 void instantiate(std::span<std::uint8_t> bytes)
 {
@@ -192,17 +201,35 @@ void instantiate(std::span<std::uint8_t> bytes)
   (void)uart::port<backend, config>::write_blocking(bytes);
   (void)timers::timer<backend, config>::initialize();
   (void)timers::timer<backend, config>::period();
+  (void)timers::timer<backend, config>::handle_interrupt();
+  (void)timers::timer<backend, config>::disable_capture_compare<timers::channel_config<1U, false, true>>();
   (void)adc::converter<backend, config>::initialize();
   (void)adc::converter<backend, config>::read_blocking(0U);
+  (void)adc::converter<backend, config>::read_differential_blocking(0U);
+  (void)adc::converter<backend, config>::read_differential_millivolts(0U, 600U);
   (void)adc::converter<backend, config>::start_dma_scan<callback>(channels, samples);
   (void)pwm::output<backend, config>::initialize();
+  (void)pwm::output<backend, config>::set_frequency(2000U);
   (void)watchdog::timer<backend, config>::initialize();
-  (void)i2s::interface<backend, config>::initialize();
-  (void)i2s::interface<backend, config>::start_dma_tx<callback>(samples);
+#if MICROHAL_NORDIC_HAS_I2S
+  using audio = i2s::interface<backend, config>;
+  constexpr auto audio_block = [](status, std::span<const std::uint16_t>, std::span<std::uint16_t>) noexcept {};
+  (void)audio::initialize();
+  (void)audio::start_dma_tx<callback>(samples);
+  (void)audio::start_dma_rx<callback>(samples);
+  (void)audio::start_dma_transfer<callback>(samples, samples);
+  (void)audio::start_dma_stream<audio_block>(samples, samples);
+  (void)audio::transfer_blocking(samples, samples);
+  (void)audio::stop();
+  (void)audio::abort();
+  (void)audio::transfer_status();
+  (void)audio::handle_interrupt();
+  (void)audio::handle_dma_interrupt();
+#endif
 #if MICROHAL_NORDIC_HAS_QSPI
   (void)qspi::controller<backend, qspi_config>::initialize();
 #endif
-#if MICROHAL_NORDIC_HAS_RTC
+#if MICROHAL_NORDIC_HAS_RTC || MICROHAL_NORDIC_HAS_GRTC
   (void)rtc::controller<backend, config>::initialize();
   (void)rtc::controller<backend, config>::read();
 #endif

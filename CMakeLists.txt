@@ -190,8 +190,12 @@ if(MICROHAL_VENDOR_VALIDATION)
       file(MAKE_DIRECTORY "${_microhal_stm32_hal_conf_dir}")
       configure_file("${_microhal_stm32_hal_conf_template}" "${_microhal_stm32_hal_conf_header}" COPYONLY)
       file(READ "${_microhal_stm32_hal_conf_header}" _microhal_stm32_serial_conf)
-      foreach(_serial I2C SPI UART I2S)
-        string(REGEX REPLACE "(#define[ \t]+USE_HAL_${_serial}_REGISTER_CALLBACKS[ \t]+)0U?"
+      foreach(_module ADC CRC I2C I2S IWDG RTC SPI TIM UART)
+        string(REGEX REPLACE "/\\*[ \t]*#define[ \t]+HAL_${_module}_MODULE_ENABLED[ \t]*\\*/"
+          "#define HAL_${_module}_MODULE_ENABLED" _microhal_stm32_serial_conf "${_microhal_stm32_serial_conf}")
+      endforeach()
+      foreach(_serial I2C SPI UART I2S ADC)
+        string(REGEX REPLACE "(#define[ \t]+USE_HAL_${_serial}_REGISTER_CALLBACKS[ \t]+)0[uU]?"
           "\\11U" _microhal_stm32_serial_conf "${_microhal_stm32_serial_conf}")
       endforeach()
       file(WRITE "${_microhal_stm32_hal_conf_header}" "${_microhal_stm32_serial_conf}")
@@ -214,7 +218,7 @@ if(MICROHAL_VENDOR_VALIDATION)
       target_compile_options(microhal INTERFACE -fpermissive)
     endif()
     foreach(_microhal_stm32_include_dir IN LISTS MICROHAL_VENDOR_VALIDATION_STM32_INCLUDE_DIRS)
-      target_include_directories(microhal INTERFACE
+      target_include_directories(microhal SYSTEM INTERFACE
         $<BUILD_INTERFACE:${_microhal_stm32_include_dir}>)
     endforeach()
   elseif(MICROHAL_VENDOR_VALIDATION_PROVIDER STREQUAL "ZEPHYR")
@@ -234,7 +238,9 @@ if(MICROHAL_VENDOR_VALIDATION)
     if(MICROHAL_VENDOR_VALIDATION_NORDIC_INCLUDE_DIRS STREQUAL "" AND NOT MICROHAL_VENDOR_VALIDATION_NORDIC_SUPPORT_ROOT STREQUAL "")
       set(_microhal_nordic_candidate_roots
         "${MICROHAL_VENDOR_VALIDATION_NORDIC_SUPPORT_ROOT}"
+        "${MICROHAL_VENDOR_VALIDATION_NORDIC_SUPPORT_ROOT}/v2.0.1"
         "${MICROHAL_VENDOR_VALIDATION_NORDIC_SUPPORT_ROOT}/v2.0.0"
+        "${MICROHAL_VENDOR_VALIDATION_NORDIC_SUPPORT_ROOT}/nrf-bm/v2.0.1"
         "${MICROHAL_VENDOR_VALIDATION_NORDIC_SUPPORT_ROOT}/nrf-bm/v2.0.0")
       set(_microhal_nordic_resolved_root "")
       foreach(_microhal_nordic_candidate_root IN LISTS _microhal_nordic_candidate_roots)
@@ -267,7 +273,7 @@ if(MICROHAL_VENDOR_VALIDATION)
         endif()
 
         set(_microhal_nordic_cmsis_core_header "core_cm4.h")
-        if(MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS MATCHES "(^|;)NRF54L15_XXAA(;|$)")
+        if(MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS MATCHES "(NRF5340_XXAA_(APPLICATION|NETWORK)|NRF54H20_XXAA|NRF54L15_XXAA)")
           set(_microhal_nordic_cmsis_core_header "core_cm33.h")
         endif()
 
@@ -366,6 +372,37 @@ if(_microhal_build_full_matrix)
   target_link_libraries(microhal_multi_backend PRIVATE microhal::microhal)
 endif()
 
+if(NOT MICROHAL_VENDOR_VALIDATION OR MICROHAL_VENDOR_VALIDATION_PROVIDER STREQUAL "STM32")
+  foreach(_stm32_driver stm32_adc stm32_hal_serial stm32_ll_serial)
+    if(MICROHAL_VENDOR_VALIDATION AND _stm32_driver STREQUAL "stm32_ll_serial")
+      continue()
+    endif()
+    add_library(microhal_${_stm32_driver}_instantiation OBJECT tests/${_stm32_driver}_instantiation.cpp)
+    target_link_libraries(microhal_${_stm32_driver}_instantiation PRIVATE microhal::microhal)
+    if(MICROHAL_VENDOR_VALIDATION)
+      add_dependencies(microhal_compile_time_smoke microhal_${_stm32_driver}_instantiation)
+    endif()
+  endforeach()
+endif()
+
+if(MICROHAL_VENDOR_VALIDATION AND MICROHAL_VENDOR_VALIDATION_PROVIDER STREQUAL "STM32")
+  add_library(microhal_stm32_ll_only_instantiation OBJECT
+    tests/stm32_ll_serial_instantiation.cpp tests/stm32_adc_instantiation.cpp)
+  target_compile_features(microhal_stm32_ll_only_instantiation PRIVATE cxx_std_20)
+  target_include_directories(microhal_stm32_ll_only_instantiation PRIVATE include)
+  target_include_directories(microhal_stm32_ll_only_instantiation SYSTEM PRIVATE
+    ${MICROHAL_VENDOR_VALIDATION_STM32_INCLUDE_DIRS})
+  target_compile_definitions(microhal_stm32_ll_only_instantiation PRIVATE
+    MICROHAL_BACKENDS_EXPLICIT=1 MICROHAL_ENABLE_STM32_LL=1 USE_FULL_LL_DRIVER
+    MICROHAL_SUPPRESS_MISSING_MCU_WARNINGS=1
+    "${MICROHAL_VENDOR_VALIDATION_STM32_FAMILY}" "${MICROHAL_VENDOR_VALIDATION_STM32_DEVICE}")
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(microhal_stm32_ll_only_instantiation PRIVATE
+      -fno-exceptions -fno-rtti -Wall -Wextra -Wpedantic)
+  endif()
+  add_dependencies(microhal_compile_time_smoke microhal_stm32_ll_only_instantiation)
+endif()
+
 # Backend-agnostic: this is the one test target that builds under any MICROHAL_BACKENDS selection.
 add_executable(microhal_backend_selection tests/backend_selection_test.cpp)
 target_link_libraries(microhal_backend_selection PRIVATE microhal::microhal)
@@ -377,24 +414,62 @@ add_executable(microhal_preset_capability_expectations tests/preset_capability_e
 target_link_libraries(microhal_preset_capability_expectations PRIVATE microhal::microhal)
 
 if(MICROHAL_VENDOR_VALIDATION AND MICROHAL_VENDOR_VALIDATION_PROVIDER STREQUAL "NORDIC" AND
-   MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS MATCHES "(NRF52840_XXAA|NRF5340_XXAA_APPLICATION|NRF54L15_XXAA)")
-  add_library(microhal_nordic_driver_instantiation OBJECT tests/nordic_nrfx_instantiation.cpp)
+   MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS MATCHES "(NRF52840_XXAA|NRF5340_XXAA_APPLICATION|NRF54H20_XXAA|NRF54L15_XXAA)")
+  add_library(microhal_nordic_driver_instantiation OBJECT
+    tests/nordic_nrfx_instantiation.cpp tests/nordic_acquisition_instantiation.cpp
+    tests/nordic_serial_instantiation.cpp tests/nordic_system_instantiation.cpp)
   target_include_directories(microhal_nordic_driver_instantiation BEFORE PRIVATE tests/nordic)
   target_link_libraries(microhal_nordic_driver_instantiation PRIVATE microhal::microhal)
   target_compile_definitions(microhal_nordic_driver_instantiation PRIVATE
-    NRFX_SPIM_ENABLED=1 NRFX_UARTE_ENABLED=1 NRFX_TIMER_ENABLED=1
+    NRFX_SPIM_ENABLED=1 NRFX_SPIS_ENABLED=1 NRFX_TWIS_ENABLED=1
+    NRFX_UARTE_ENABLED=1 NRFX_TIMER_ENABLED=1
     NRFX_SAADC_ENABLED=1 NRFX_PWM_ENABLED=1 NRFX_WDT_ENABLED=1
-    NRFX_GPIOTE_ENABLED=1 NRFX_QSPI_ENABLED=1 NRFX_TWIM_ENABLED=1 NRFX_I2S_ENABLED=1
-    NRFX_RTC_ENABLED=1 NRFX_CONFIG_API_VER_MINOR=1)
+    NRFX_GPIOTE_ENABLED=1 NRFX_TWIM_ENABLED=1 NRFX_I2S_ENABLED=1 NRFX_CLOCK_ENABLED=1
+    NRFX_CONFIG_API_VER_MINOR=1)
+  if(MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS MATCHES "(NRF52840_XXAA|NRF5340_XXAA_APPLICATION)")
+    target_compile_definitions(microhal_nordic_driver_instantiation PRIVATE
+      NRFX_QSPI_ENABLED=1 NRFX_RTC_ENABLED=1 NRFX_USBD_ENABLED=1 NRFX_NVMC_ENABLED=1)
+  elseif(MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS MATCHES "NRF54L15_XXAA")
+    target_compile_definitions(microhal_nordic_driver_instantiation PRIVATE NRFX_RRAMC_ENABLED=1 NRFX_GRTC_ENABLED=1)
+  elseif(MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS MATCHES "NRF54H20_XXAA")
+    target_compile_definitions(microhal_nordic_driver_instantiation PRIVATE NRFX_MRAMC_ENABLED=1 NRFX_GRTC_ENABLED=1)
+  endif()
   if(DEFINED _microhal_nordic_nrfx_root)
-    foreach(_driver spim uarte timer saadc pwm wdt gpiote twim i2s)
+    foreach(_driver spim spis twis uarte timer saadc pwm wdt gpiote twim)
       target_sources(microhal_nordic_driver_instantiation PRIVATE
         "${_microhal_nordic_nrfx_root}/drivers/src/nrfx_${_driver}.c")
     endforeach()
-    if(NOT MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS MATCHES "NRF54L15_XXAA")
+    if(NOT MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS MATCHES "NRF54H20_XXAA")
+      target_sources(microhal_nordic_driver_instantiation PRIVATE
+        "${_microhal_nordic_nrfx_root}/drivers/src/nrfx_i2s.c"
+        "${_microhal_nordic_nrfx_root}/drivers/src/nrfx_clock.c")
+      target_sources(microhal_nordic_driver_instantiation PRIVATE
+        "${_microhal_nordic_nrfx_root}/helpers/nrfx_flag32_allocator.c")
+      if(MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS MATCHES "NRF52840_XXAA")
+        target_sources(microhal_nordic_driver_instantiation PRIVATE
+          "${_microhal_nordic_nrfx_root}/helpers/nrfx_gppi_ppi.c")
+      else()
+        target_sources(microhal_nordic_driver_instantiation PRIVATE
+          "${_microhal_nordic_nrfx_root}/helpers/nrfx_gppi_dppi.c")
+        if(MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS MATCHES "NRF54L15_XXAA")
+          target_sources(microhal_nordic_driver_instantiation PRIVATE
+            "${_microhal_nordic_nrfx_root}/bsp/stable/soc/interconnect/nrfx_gppi_d2ppi.c")
+        endif()
+      endif()
+    endif()
+    if(MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS MATCHES "(NRF52840_XXAA|NRF5340_XXAA_APPLICATION)")
       target_sources(microhal_nordic_driver_instantiation PRIVATE
         "${_microhal_nordic_nrfx_root}/drivers/src/nrfx_qspi.c"
-        "${_microhal_nordic_nrfx_root}/drivers/src/nrfx_rtc.c")
+        "${_microhal_nordic_nrfx_root}/drivers/src/nrfx_rtc.c"
+        "${_microhal_nordic_nrfx_root}/drivers/src/nrfx_usbd.c"
+        "${_microhal_nordic_nrfx_root}/drivers/src/nrfx_nvmc.c")
+    elseif(MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS MATCHES "NRF54L15_XXAA")
+      target_sources(microhal_nordic_driver_instantiation PRIVATE
+        "${_microhal_nordic_nrfx_root}/drivers/src/nrfx_rramc.c"
+        "${_microhal_nordic_nrfx_root}/drivers/src/nrfx_grtc.c")
+    elseif(MICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS MATCHES "NRF54H20_XXAA")
+      target_sources(microhal_nordic_driver_instantiation PRIVATE
+        "${_microhal_nordic_nrfx_root}/drivers/src/nrfx_grtc.c")
     endif()
   endif()
   add_dependencies(microhal_backend_api_contract microhal_nordic_driver_instantiation)
@@ -413,10 +488,67 @@ if(NOT MICROHAL_VENDOR_VALIDATION)
   endforeach()
   add_executable(microhal_mock_runtime tests/mock_runtime_test.cpp)
   target_link_libraries(microhal_mock_runtime PRIVATE microhal::microhal)
+  add_executable(microhal_nordic_frontend tests/nordic_frontend_test.cpp)
+  target_link_libraries(microhal_nordic_frontend PRIVATE microhal::microhal)
   add_executable(microhal_nordic_logic tests/nordic_logic_test.cpp)
   target_link_libraries(microhal_nordic_logic PRIVATE microhal::microhal)
+  add_library(microhal_nordic_instantiation OBJECT tests/nordic_acquisition_instantiation.cpp
+    tests/nordic_serial_instantiation.cpp tests/nordic_system_instantiation.cpp)
+  target_link_libraries(microhal_nordic_instantiation PRIVATE microhal::microhal)
+  add_executable(microhal_nordic_acquisition_state tests/nordic_acquisition_state_test.cpp)
+  target_compile_features(microhal_nordic_acquisition_state PRIVATE cxx_std_20)
+  target_include_directories(microhal_nordic_acquisition_state PRIVATE tests/nordic_acquisition_fakes include)
+  if(MSVC)
+    target_compile_options(microhal_nordic_acquisition_state PRIVATE /UNDEBUG)
+  else()
+    target_compile_options(microhal_nordic_acquisition_state PRIVATE -UNDEBUG)
+  endif()
+  foreach(_fixture serial_state system_calendar system_rtc system_grtc system_can system_dma system_rng system_usb)
+    add_executable(microhal_nordic_${_fixture} tests/nordic_${_fixture}_test.cpp)
+    target_compile_features(microhal_nordic_${_fixture} PRIVATE cxx_std_20)
+    target_include_directories(microhal_nordic_${_fixture} PRIVATE include)
+    target_compile_definitions(microhal_nordic_${_fixture} PRIVATE MICROHAL_SUPPRESS_MISSING_MCU_WARNINGS=1)
+    if(MSVC)
+      target_compile_options(microhal_nordic_${_fixture} PRIVATE /UNDEBUG)
+    else()
+      target_compile_options(microhal_nordic_${_fixture} PRIVATE -UNDEBUG)
+    endif()
+  endforeach()
+  foreach(_xipen 0 1)
+    add_executable(microhal_nordic_system_qspi${_xipen} tests/nordic_system_qspi_test.cpp)
+    target_compile_features(microhal_nordic_system_qspi${_xipen} PRIVATE cxx_std_20)
+    target_include_directories(microhal_nordic_system_qspi${_xipen} PRIVATE include)
+    target_compile_definitions(microhal_nordic_system_qspi${_xipen} PRIVATE
+      NRF_QSPI_HAS_XIPEN=${_xipen} MICROHAL_SUPPRESS_MISSING_MCU_WARNINGS=1)
+    if(MSVC)
+      target_compile_options(microhal_nordic_system_qspi${_xipen} PRIVATE /UNDEBUG)
+    else()
+      target_compile_options(microhal_nordic_system_qspi${_xipen} PRIVATE -UNDEBUG)
+    endif()
+  endforeach()
   add_executable(microhal_stm32_serial_state tests/stm32_serial_state_test.cpp)
   target_link_libraries(microhal_stm32_serial_state PRIVATE microhal::microhal)
+  foreach(_stm32_fixture stm32_adc_state stm32_adc_register stm32_adc_modern_register
+      stm32_hal_uart_state stm32_ll_serial_state stm32_ll_serial_legacy stm32_ll_serial_modern)
+    if(_stm32_fixture STREQUAL "stm32_adc_modern_register")
+      add_executable(microhal_${_stm32_fixture} tests/stm32_adc_register_test.cpp)
+      target_compile_definitions(microhal_${_stm32_fixture} PRIVATE MICROHAL_TEST_ADC_MODERN=1)
+    elseif(_stm32_fixture STREQUAL "stm32_ll_serial_legacy")
+      add_executable(microhal_${_stm32_fixture} tests/stm32_ll_serial_state_test.cpp)
+      target_compile_definitions(microhal_${_stm32_fixture} PRIVATE MICROHAL_TEST_I2C_LEGACY=1)
+    elseif(_stm32_fixture STREQUAL "stm32_ll_serial_modern")
+      add_executable(microhal_${_stm32_fixture} tests/stm32_ll_serial_state_test.cpp)
+      target_compile_definitions(microhal_${_stm32_fixture} PRIVATE MICROHAL_TEST_SPI_MODERN=1)
+    else()
+      add_executable(microhal_${_stm32_fixture} tests/${_stm32_fixture}_test.cpp)
+    endif()
+    target_link_libraries(microhal_${_stm32_fixture} PRIVATE microhal::microhal)
+    if(MSVC)
+      target_compile_options(microhal_${_stm32_fixture} PRIVATE /UNDEBUG)
+    else()
+      target_compile_options(microhal_${_stm32_fixture} PRIVATE -UNDEBUG)
+    endif()
+  endforeach()
   foreach(_variant no_sdk sdk_common irq edma dma)
     if(_variant STREQUAL "no_sdk" OR _variant STREQUAL "sdk_common")
       set(_serial_fixture_source tests/kinetis/serial_modes_no_sdk_test.cpp)
@@ -515,6 +647,19 @@ if(MICROHAL_WERROR AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
 endif()
 
 enable_testing()
+foreach(_xipen 0 1)
+  if(TARGET microhal_nordic_system_qspi${_xipen})
+    add_test(NAME microhal_nordic_system_qspi${_xipen} COMMAND microhal_nordic_system_qspi${_xipen})
+  endif()
+endforeach()
+foreach(_fixture serial_state system_calendar system_rtc system_grtc system_can system_dma system_rng system_usb)
+  if(TARGET microhal_nordic_${_fixture})
+    add_test(NAME microhal_nordic_${_fixture} COMMAND microhal_nordic_${_fixture})
+  endif()
+endforeach()
+if(TARGET microhal_nordic_acquisition_state)
+  add_test(NAME microhal_nordic_acquisition_state COMMAND microhal_nordic_acquisition_state)
+endif()
 if(TARGET microhal_compile_time_smoke AND NOT MICROHAL_VENDOR_VALIDATION)
   add_test(NAME microhal_compile_time_smoke COMMAND microhal_compile_time_smoke)
 endif()
@@ -549,7 +694,12 @@ if(NOT MICROHAL_VENDOR_VALIDATION)
       -DCMAKE_CXX_STANDARD=${_microhal_test_cxx_standard})
   add_test(NAME microhal_mock_runtime COMMAND microhal_mock_runtime)
   add_test(NAME microhal_nordic_logic COMMAND microhal_nordic_logic)
+  add_test(NAME microhal_nordic_frontend COMMAND microhal_nordic_frontend)
   add_test(NAME microhal_stm32_serial_state COMMAND microhal_stm32_serial_state)
+  foreach(_stm32_fixture stm32_adc_state stm32_adc_register stm32_adc_modern_register
+      stm32_hal_uart_state stm32_ll_serial_state stm32_ll_serial_legacy stm32_ll_serial_modern)
+    add_test(NAME microhal_${_stm32_fixture} COMMAND microhal_${_stm32_fixture})
+  endforeach()
   foreach(_variant no_sdk sdk_common irq edma dma)
     add_test(NAME microhal_kinetis_serial_${_variant} COMMAND microhal_kinetis_serial_${_variant})
   endforeach()

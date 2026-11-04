@@ -9,25 +9,11 @@
 #pragma once
 
 #include <cstdint>
-#include <type_traits>
 
 #include "microhal/core/concepts.hpp"
 
 namespace microhal::rtc
 {
-
-/**
- * @brief Unified calendar representation used by the RTC abstraction.
- */
-struct date_time final
-{
-  std::uint16_t year{0U};
-  std::uint8_t month{0U};
-  std::uint8_t day{0U};
-  std::uint8_t hour{0U};
-  std::uint8_t minute{0U};
-  std::uint8_t second{0U};
-};
 
 /**
  * @brief Compile-time RTC feature selection.
@@ -68,7 +54,10 @@ struct controller final
     }
     if ((value.year != 0U) || (value.month != 0U) || (value.day != 0U))
     {
-      return status::unsupported;
+      if constexpr (backend_traits<Backend>::rtc_capability().calendar)
+        return rtc_api_t<Backend>::template set_date_time<Config>(value);
+      else
+        return status::unsupported;
     }
     return detail::as_status(
         [value] { return rtc_api_t<Backend>::template set_time<Config>(value.hour, value.minute, value.second); });
@@ -76,30 +65,32 @@ struct controller final
 
   [[nodiscard]] static inline result<date_time> read() noexcept
   {
-    std::uint8_t hours = 0U;
-    std::uint8_t minutes = 0U;
-    std::uint8_t seconds = 0U;
-    using return_type = decltype(rtc_api_t<Backend>::template get_time<Config>(hours, minutes, seconds));
-    if constexpr (std::is_same_v<std::remove_cv_t<return_type>, status>)
-    {
-      const status read_status = rtc_api_t<Backend>::template get_time<Config>(hours, minutes, seconds);
-      if (read_status != status::ok)
-      {
-        return read_status;
-      }
-    }
-    else if constexpr (std::is_same_v<std::remove_cv_t<return_type>, bool>)
-    {
-      if (!rtc_api_t<Backend>::template get_time<Config>(hours, minutes, seconds))
-      {
-        return status::io_error;
-      }
-    }
-    else
-    {
-      rtc_api_t<Backend>::template get_time<Config>(hours, minutes, seconds);
-    }
-    return date_time{.hour = hours, .minute = minutes, .second = seconds};
+    return rtc_api_t<Backend>::template get_date_time<Config>();
+  }
+
+  [[nodiscard]] static result<std::uint32_t> read_subsecond_us() noexcept
+  {
+    return rtc_api_t<Backend>::template read_subsecond_us<Config>();
+  }
+
+  template <auto Handler>
+  [[nodiscard]] static status enable_periodic_irq(std::uint32_t frequency_hz) noexcept
+    requires IsrCapableConcept<Backend, peripheral_kind::rtc>
+  {
+    static_assert(valid_serial_completion_handler<Handler>());
+    if (frequency_hz == 0U)
+      return status::invalid_argument;
+    return rtc_api_t<Backend>::template enable_periodic_irq<Config, Handler>(frequency_hz);
+  }
+
+  [[nodiscard]] static status disable_periodic_irq() noexcept
+  {
+    return rtc_api_t<Backend>::template disable_periodic_irq<Config>();
+  }
+
+  [[nodiscard]] static status handle_interrupt() noexcept
+  {
+    return rtc_api_t<Backend>::template handle_interrupt<Config>();
   }
 
   [[nodiscard]] static inline date_time now() noexcept

@@ -9,8 +9,10 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <span>
 
+#include "microhal/core/adc_types.hpp"
 #include "microhal/core/concepts.hpp"
 
 namespace microhal::adc
@@ -21,7 +23,8 @@ namespace microhal::adc
  */
 template <std::uint8_t InstanceIndex, adc_resolution Resolution = adc_resolution::bits_12,
           adc_sample_time SampleTime = adc_sample_time::cycles_84, bool EnableDma = false,
-          bool EnableInterrupts = false, bool DifferentialMode = false>
+          bool EnableInterrupts = false, bool DifferentialMode = false, std::uint32_t ExternalTrigger = 0U,
+          adc_trigger_edge TriggerEdge = adc_trigger_edge::software>
 struct adc_config final
 {
   static constexpr std::uint8_t instance_index{InstanceIndex};
@@ -30,6 +33,8 @@ struct adc_config final
   static constexpr bool enable_dma{EnableDma};
   static constexpr bool enable_interrupts{EnableInterrupts};
   static constexpr bool differential_mode{DifferentialMode};
+  static constexpr std::uint32_t external_trigger{ExternalTrigger};
+  static constexpr adc_trigger_edge trigger_edge{TriggerEdge};
 };
 
 /**
@@ -58,6 +63,34 @@ struct converter final
   {
     return detail::as_result<std::uint16_t>([channel]
                                             { return adc_api_t<Backend>::template read_blocking<Config>(channel); });
+  }
+
+  [[nodiscard]] static result<std::int16_t> read_differential_blocking(std::uint8_t channel) noexcept
+  {
+    if constexpr (Config::differential_mode)
+      return adc_api_t<Backend>::template read_differential_blocking<Config>(channel);
+    else
+      return status::unsupported;
+  }
+
+  /** @brief Converts signed differential counts; reference_mv is the positive full-scale input voltage. */
+  [[nodiscard]] static result<std::int32_t> read_differential_millivolts(std::uint8_t channel,
+                                                                         std::uint32_t reference_mv) noexcept
+  {
+    if (reference_mv == 0U || reference_mv > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max()))
+      return status::invalid_argument;
+    constexpr auto bits = static_cast<std::uint32_t>(Config::resolution);
+    static_assert(bits > 0U && bits <= 16U, "microHAL: unsupported ADC resolution.");
+    constexpr std::int64_t scale = std::int64_t{1} << (bits - 1U);
+    const auto sample = read_differential_blocking(channel);
+    if (!sample)
+      return sample.error();
+    const auto code = static_cast<std::int64_t>(sample.value());
+    if (code < -scale || code >= scale)
+      return status::error;
+    const auto numerator = code * reference_mv;
+    const auto rounded = numerator + (numerator < 0 ? -(scale / 2) : scale / 2);
+    return static_cast<std::int32_t>(rounded / scale);
   }
 
   /** @brief Reads channels in order into an equally sized output span. */
@@ -89,6 +122,8 @@ struct converter final
     {
       return status::invalid_argument;
     }
+    if constexpr (Config::differential_mode)
+      return status::unsupported;
 
     constexpr std::uint32_t bits = static_cast<std::uint32_t>(Config::resolution);
     static_assert((bits > 0U) && (bits <= 16U), "microHAL: unsupported ADC resolution.");
@@ -112,6 +147,8 @@ struct converter final
     return detail::as_status([channels] { return adc_api_t<Backend>::template start_continuous<Config>(channels); });
   }
 
+  /** CompletionHandler(status, uint16_t) receives the sample or an error.
+   * Legacy status-only, sample-only and no-argument handlers remain accepted. */
   template <auto CompletionHandler>
   [[nodiscard]] static inline status start_async(const std::uint8_t channel) noexcept
     requires IsrCapableConcept<Backend, peripheral_kind::adc>
@@ -128,6 +165,39 @@ struct converter final
     return detail::as_status(
         [channels, results]
         { return adc_api_t<Backend>::template start_dma_scan<Config, CompletionHandler>(channels, results); });
+  }
+
+  /** DMA blocks: Handler(status, span<uint16_t>) owns the completed half until the next callback.
+   * Set circular=false for two half-block notifications followed by automatic stop.
+   * Both halves must contain whole scans. Keep DMA-coherent storage live until completion or successful stop(). */
+  template <auto Handler>
+  [[nodiscard]] static status start_dma_stream(std::span<const std::uint8_t> channels, std::span<std::uint16_t> results,
+                                               bool circular = true) noexcept
+    requires DmaCapableConcept<Backend, peripheral_kind::adc>
+  {
+    return detail::as_status(
+        [=] { return adc_api_t<Backend>::template start_dma_stream<Config, Handler>(channels, results, circular); });
+  }
+
+  [[nodiscard]] static status stop() noexcept
+  {
+    return detail::as_status([] { return adc_api_t<Backend>::template stop<Config>(); });
+  }
+  [[nodiscard]] static status abort() noexcept
+  {
+    return detail::as_status([] { return adc_api_t<Backend>::template abort<Config>(); });
+  }
+  [[nodiscard]] static result<dma_transfer_state> transfer_status() noexcept
+  {
+    return adc_api_t<Backend>::template transfer_status<Config>();
+  }
+  static void handle_interrupt() noexcept
+  {
+    adc_api_t<Backend>::template handle_interrupt<Config>();
+  }
+  static void handle_dma_interrupt() noexcept
+  {
+    adc_api_t<Backend>::template handle_dma_interrupt<Config>();
   }
 };
 

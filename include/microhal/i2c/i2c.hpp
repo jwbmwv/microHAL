@@ -53,10 +53,15 @@ struct master final
   static constexpr transfer_mode mode{configured_transfer_mode<Config>()};
   using mode_api = serial_mode_api<Backend, peripheral_kind::i2c>;
 
+  [[nodiscard]] static status handle_dma_interrupt() noexcept
+  {
+    return mode_api::template handle_dma_interrupt<Config>();
+  }
+
   /** @brief Initializes the selected I2C controller instance. */
   [[nodiscard]] static inline status initialize() noexcept
   {
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template initialize<Config>();
     else
       return detail::as_status([] { return i2c_api_t<Backend>::template initialize<Config>(); });
@@ -76,7 +81,7 @@ struct master final
       return status::invalid_argument;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template write<Config, nullptr>(payload, address);
     else
       return detail::as_status([address, payload]
@@ -97,7 +102,7 @@ struct master final
       return status::invalid_argument;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template read<Config, nullptr>(payload, address);
     else
       return detail::as_status([address, payload]
@@ -118,7 +123,7 @@ struct master final
       return status::invalid_argument;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template probe<Config>(address);
     else
       return detail::as_status([address] { return i2c_api_t<Backend>::template probe<Config>(address); });
@@ -141,7 +146,7 @@ struct master final
       return status::invalid_argument;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template write_read<Config, nullptr>(tx_payload, rx_payload, address);
     else
       return detail::as_status(
@@ -169,7 +174,7 @@ struct master final
       return status::invalid_argument;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template write_read<Config, CompletionHandler>(tx_payload, rx_payload, address);
     else
       return detail::as_status(
@@ -197,7 +202,7 @@ struct master final
       return status::invalid_argument;
     }
 
-    if constexpr (mode != transfer_mode::automatic)
+    if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
       return mode_api::template write<Config, CompletionHandler>(payload, address);
     else
       return detail::as_status(
@@ -226,25 +231,88 @@ struct master final
 
   [[nodiscard]] static status abort() noexcept
   {
-    if constexpr (mode == transfer_mode::automatic)
+    if constexpr (mode == transfer_mode::automatic && !std::same_as<Backend, nordic_nrf_tag>)
       return status::unsupported;
     else
       return mode_api::template abort<Config>();
   }
   [[nodiscard]] static status transfer_status() noexcept
   {
-    if constexpr (mode == transfer_mode::automatic)
+    if constexpr (mode == transfer_mode::automatic && !std::same_as<Backend, nordic_nrf_tag>)
       return status::unsupported;
     else
       return mode_api::template transfer_status<Config>();
   }
   [[nodiscard]] static status handle_interrupt() noexcept
   {
-    if constexpr (mode == transfer_mode::automatic)
+    if constexpr (mode == transfer_mode::automatic && !std::same_as<Backend, nordic_nrf_tag>)
       return status::unsupported;
     else
       return detail::as_status([] { return mode_api::template handle_interrupt<Config>(); });
   }
 };
 
+/** @brief Fixed-length I2C slave configuration. OwnAddress is unshifted. */
+template <std::uint8_t InstanceIndex, std::uint16_t OwnAddress,
+          i2c_address_mode AddressMode = i2c_address_mode::seven_bit, std::uint32_t ClockHz = 100000U,
+          bool EnableDma = false, bool EnableInterrupts = false, std::uint32_t TimeoutMs = 1000U,
+          transfer_mode Mode = transfer_mode::interrupt>
+struct slave_config final
+{
+  static_assert(OwnAddress <= (AddressMode == i2c_address_mode::seven_bit ? 0x7FU : 0x3FFU));
+  static_assert(TimeoutMs > 0U);
+  static constexpr bool is_slave = true;
+  static constexpr auto instance_index = InstanceIndex;
+  static constexpr auto own_address = OwnAddress;
+  static constexpr auto address_mode = AddressMode;
+  static constexpr auto clock_hz = ClockHz;
+  static constexpr auto transfer_mode_value = Mode;
+  static constexpr bool enable_dma = Mode == transfer_mode::dma || (Mode == transfer_mode::automatic && EnableDma);
+  static constexpr bool enable_interrupts =
+      Mode == transfer_mode::interrupt || (Mode == transfer_mode::automatic && EnableInterrupts);
+  static constexpr auto timeout_ms = TimeoutMs;
+};
+
+template <typename Backend, typename Config>
+  requires I2cMasterConcept<Backend, Config>
+struct slave final
+{
+  // Async buffers remain owned until completion or a successful abort.
+  static_assert(serial_slave_enabled<Config>());
+  using backend_tag = Backend;
+  using config_type = Config;
+  using mode_api = serial_mode_api<Backend, peripheral_kind::i2c>;
+  static constexpr auto kind = peripheral_kind::i2c;
+  static constexpr auto mode = configured_transfer_mode<Config>();
+  [[nodiscard]] static status initialize() noexcept
+  {
+    return mode_api::template initialize<Config>();
+  }
+  template <auto Handler> [[nodiscard]] static status receive_async(std::span<std::uint8_t> bytes) noexcept
+  {
+    static_assert(valid_serial_completion_handler<Handler>());
+    return mode_api::template read<Config, Handler>(bytes);
+  }
+  template <auto Handler> [[nodiscard]] static status transmit_async(std::span<const std::uint8_t> bytes) noexcept
+  {
+    static_assert(valid_serial_completion_handler<Handler>());
+    return mode_api::template write<Config, Handler>(bytes);
+  }
+  [[nodiscard]] static status abort() noexcept
+  {
+    return mode_api::template abort<Config>();
+  }
+  [[nodiscard]] static status transfer_status() noexcept
+  {
+    return mode_api::template transfer_status<Config>();
+  }
+  [[nodiscard]] static status handle_interrupt() noexcept
+  {
+    return mode_api::template handle_interrupt<Config>();
+  }
+  [[nodiscard]] static status handle_dma_interrupt() noexcept
+  {
+    return mode_api::template handle_dma_interrupt<Config>();
+  }
+};
 } // namespace microhal::i2c

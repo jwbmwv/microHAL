@@ -112,11 +112,21 @@ struct timer final
   template <typename ChannelConfig> [[nodiscard]] static inline result<std::uint32_t> capture_value() noexcept
   {
     if constexpr (!ChannelConfig::enable_capture || (ChannelConfig::channel_index < 1U) ||
-                  (ChannelConfig::channel_index > 4U))
+                  (ChannelConfig::channel_index > backend_traits<Backend>::timer_capability().channel_count))
     {
       return status::invalid_argument;
     }
     return timer_api_t<Backend>::template capture_value<Config, ChannelConfig>();
+  }
+
+  template <typename ChannelConfig> [[nodiscard]] static status disable_capture_compare() noexcept
+  {
+    return timer_api_t<Backend>::template disable_capture_compare<Config, ChannelConfig>();
+  }
+
+  [[nodiscard]] static status handle_interrupt() noexcept
+  {
+    return timer_api_t<Backend>::template handle_interrupt<Config>();
   }
 };
 

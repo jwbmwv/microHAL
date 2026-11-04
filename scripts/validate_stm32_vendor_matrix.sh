@@ -23,7 +23,7 @@ validate_family() {
     -DMICROHAL_VENDOR_VALIDATION_PROVIDER=STM32 \
     -DMICROHAL_VENDOR_VALIDATION_STM32_FAMILY="$family" \
     -DMICROHAL_VENDOR_VALIDATION_STM32_DEVICE="$device" \
-    -DMICROHAL_VENDOR_VALIDATION_STM32_SUPPORT_ROOT="$support_root"
+    -DMICROHAL_VENDOR_VALIDATION_STM32_SUPPORT_ROOT="$support_root" || return
   cmake --build "$build_dir" --target microhal_compile_time_smoke
 }
 
@@ -32,24 +32,55 @@ if [[ ! -d "$support_root" ]]; then
   exit 1
 fi
 
-case "${1:-all}" in
-  all)
-    validate_family STM32C0 STM32C011xx cortex-m0plus
-    validate_family STM32F4 STM32F407xx cortex-m4
-    validate_family STM32G4 STM32G431xx cortex-m4
-    ;;
-  STM32C0)
-    validate_family STM32C0 STM32C011xx cortex-m0plus
-    ;;
-  STM32F4)
-    validate_family STM32F4 STM32F407xx cortex-m4
-    ;;
-  STM32G4)
-    validate_family STM32G4 STM32G431xx cortex-m4
-    ;;
-  *)
-    printf 'Unknown matrix family: %s\n' "$1" >&2
-    printf 'Supported families: STM32C0, STM32F4, STM32G4\n' >&2
-    exit 2
-    ;;
-esac
+readonly matrix=(
+  "STM32C0 STM32C011xx cortex-m0plus"
+  "STM32F0 STM32F072xB cortex-m0"
+  "STM32F1 STM32F103xB cortex-m3"
+  "STM32F2 STM32F207xx cortex-m3"
+  "STM32F3 STM32F303xC cortex-m4"
+  "STM32F4 STM32F407xx cortex-m4"
+  "STM32F7 STM32F767xx cortex-m7"
+  "STM32G0 STM32G071xx cortex-m0plus"
+  "STM32G4 STM32G431xx cortex-m4"
+  "STM32H5 STM32H563xx cortex-m33"
+  "STM32H7 STM32H743xx cortex-m7"
+  "STM32H7RS STM32H7S3xx cortex-m7"
+  "STM32L0 STM32L072xx cortex-m0plus"
+  "STM32L1 STM32L152xE cortex-m3"
+  "STM32L4 STM32L476xx cortex-m4"
+  "STM32L5 STM32L552xx cortex-m33"
+  "STM32N6 STM32N657xx cortex-m55"
+  "STM32U0 STM32U083xx cortex-m0plus"
+  "STM32U3 STM32U385xx cortex-m33"
+  "STM32U5 STM32U575xx cortex-m33"
+  "STM32WB STM32WB55xx cortex-m4"
+)
+
+selection="${1:-all}"
+matched=false
+failures=()
+for entry in "${matrix[@]}"; do
+  read -r family device cpu <<<"$entry"
+  if [[ "$selection" == "all" ]]; then
+    case "$family" in
+      STM32C0|STM32F4|STM32G4) ;;
+      *) continue ;;
+    esac
+  elif [[ "$selection" != "full" && "$selection" != "$family" ]]; then
+    continue
+  fi
+  matched=true
+  if ! validate_family "$family" "$device" "$cpu"; then
+    failures+=("$family")
+  fi
+done
+
+if [[ "$matched" == false ]]; then
+  printf 'Unknown matrix selection: %s\n' "$selection" >&2
+  printf 'Use all (C0/F4/G4), full (all supported families), or an STM32 family name.\n' >&2
+  exit 2
+fi
+if [[ ${#failures[@]} -gt 0 ]]; then
+  printf 'STM32 vendor validation failed: %s\n' "${failures[*]}" >&2
+  exit 1
+fi

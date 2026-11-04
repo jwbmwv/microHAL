@@ -441,6 +441,82 @@ template <typename Backend> struct gpio_api_adapter final
 
 template <typename Backend> struct rtc_api_adapter final
 {
+  template <typename Config> static status set_date_time(const rtc::date_time value) noexcept
+  {
+    if constexpr (requires { raw_rtc_api_t<Backend>::template set_date_time<Config>(value); })
+      return detail::as_status([value] { return raw_rtc_api_t<Backend>::template set_date_time<Config>(value); });
+    else
+      return status::unsupported;
+  }
+
+  template <typename Config> static result<rtc::date_time> get_date_time() noexcept
+  {
+    if constexpr (requires { raw_rtc_api_t<Backend>::template get_date_time<Config>(); })
+      return detail::as_result<rtc::date_time>([] { return raw_rtc_api_t<Backend>::template get_date_time<Config>(); });
+    else
+    {
+      rtc::date_time value{};
+      using return_type =
+          decltype(raw_rtc_api_t<Backend>::template get_time<Config>(value.hour, value.minute, value.second));
+      if constexpr (std::is_same_v<std::remove_cv_t<return_type>, status>)
+      {
+        const auto read_status =
+            raw_rtc_api_t<Backend>::template get_time<Config>(value.hour, value.minute, value.second);
+        if (read_status != status::ok)
+          return read_status;
+      }
+      else if constexpr (std::is_same_v<std::remove_cv_t<return_type>, bool>)
+      {
+        if (!raw_rtc_api_t<Backend>::template get_time<Config>(value.hour, value.minute, value.second))
+          return status::io_error;
+      }
+      else
+        raw_rtc_api_t<Backend>::template get_time<Config>(value.hour, value.minute, value.second);
+      return value;
+    }
+  }
+
+  template <typename Config> static result<std::uint32_t> read_subsecond_us() noexcept
+  {
+    if constexpr (requires { raw_rtc_api_t<Backend>::template read_subsecond_us<Config>(); })
+      return detail::as_result<std::uint32_t>([]
+                                              { return raw_rtc_api_t<Backend>::template read_subsecond_us<Config>(); });
+    else
+      return status::unsupported;
+  }
+
+  template <typename Config, auto Handler> static status enable_periodic_irq(std::uint32_t frequency_hz) noexcept
+  {
+    if constexpr (requires { raw_rtc_api_t<Backend>::template enable_periodic_irq<Config, Handler>(frequency_hz); })
+      return detail::as_status(
+          [frequency_hz]
+          { return raw_rtc_api_t<Backend>::template enable_periodic_irq<Config, Handler>(frequency_hz); });
+    else
+      return status::unsupported;
+  }
+
+  template <typename Config> static status disable_periodic_irq() noexcept
+  {
+    if constexpr (requires { raw_rtc_api_t<Backend>::template disable_periodic_irq<Config>(); })
+      return detail::as_status([] { return raw_rtc_api_t<Backend>::template disable_periodic_irq<Config>(); });
+    else
+      return status::unsupported;
+  }
+
+  template <typename Config> static status handle_interrupt() noexcept
+  {
+    if constexpr (requires { raw_rtc_api_t<Backend>::template handle_interrupt<Config>(); })
+      return detail::as_status([] { return raw_rtc_api_t<Backend>::template handle_interrupt<Config>(); });
+    else if constexpr (requires { raw_rtc_api_t<Backend>::handle_interrupt(Config::instance_index); })
+      return detail::as_status([] { return raw_rtc_api_t<Backend>::handle_interrupt(Config::instance_index); });
+    else if constexpr (requires { raw_rtc_api_t<Backend>::handle_interrupt(0U); })
+      return detail::as_status([] { return raw_rtc_api_t<Backend>::handle_interrupt(0U); });
+    else if constexpr (requires { raw_rtc_api_t<Backend>::handle_interrupt(); })
+      return detail::as_status([] { return raw_rtc_api_t<Backend>::handle_interrupt(); });
+    else
+      return status::unsupported;
+  }
+
   template <typename Config> static auto initialize() noexcept
   {
     return raw_rtc_api_t<Backend>::template initialize<Config>();
@@ -611,6 +687,32 @@ template <typename Backend> struct timer_api_adapter final
     }
   }
 
+  template <typename Config, typename ChannelConfig> static status disable_capture_compare() noexcept
+  {
+    if constexpr (requires { raw_timer_api_t<Backend>::template disable_capture_compare<Config, ChannelConfig>(); })
+      return detail::as_status(
+          [] { return raw_timer_api_t<Backend>::template disable_capture_compare<Config, ChannelConfig>(); });
+    else
+      return status::unsupported;
+  }
+
+  template <typename Config> static status handle_interrupt() noexcept
+  {
+    if constexpr (requires { raw_timer_api_t<Backend>::template handle_interrupt<Config>(); })
+      return detail::as_status([] { return raw_timer_api_t<Backend>::template handle_interrupt<Config>(); });
+    else if constexpr (requires { raw_timer_api_t<Backend>::handle_interrupt(std::uint8_t{}); })
+      return detail::as_status(
+          []
+          {
+            if constexpr (requires { Config::instance_index; })
+              return raw_timer_api_t<Backend>::handle_interrupt(Config::instance_index);
+            else
+              return raw_timer_api_t<Backend>::handle_interrupt(0U);
+          });
+    else
+      return status::unsupported;
+  }
+
   template <typename Config, typename ChannelConfig> static auto capture_value() noexcept
   {
     if constexpr (requires { raw_timer_api_t<Backend>::template capture_value<Config, ChannelConfig>(); })
@@ -660,6 +762,60 @@ template <typename Backend> struct dma_api_adapter final
 
 template <typename Backend> struct adc_api_adapter final
 {
+  template <typename Config> static result<std::int16_t> read_differential_blocking(std::uint8_t channel) noexcept
+  {
+    if constexpr (requires { raw_adc_api_t<Backend>::template read_differential_blocking<Config>(channel); })
+      return detail::as_result<std::int16_t>(
+          [channel] { return raw_adc_api_t<Backend>::template read_differential_blocking<Config>(channel); });
+    else
+      return status::unsupported;
+  }
+
+  template <typename Config, auto Handler>
+  static status start_dma_stream(std::span<const std::uint8_t> channels, std::span<std::uint16_t> results,
+                                 bool circular = true) noexcept
+  {
+    if constexpr (requires {
+                    raw_adc_api_t<Backend>::template start_dma_stream<Config, Handler>(channels, results, circular);
+                  })
+      return detail::as_status(
+          [=]
+          { return raw_adc_api_t<Backend>::template start_dma_stream<Config, Handler>(channels, results, circular); });
+    else
+      return status::unsupported;
+  }
+  template <typename Config> static status stop() noexcept
+  {
+    if constexpr (requires { raw_adc_api_t<Backend>::template stop<Config>(); })
+      return detail::as_status([] { return raw_adc_api_t<Backend>::template stop<Config>(); });
+    else
+      return status::unsupported;
+  }
+  template <typename Config> static status abort() noexcept
+  {
+    if constexpr (requires { raw_adc_api_t<Backend>::template abort<Config>(); })
+      return detail::as_status([] { return raw_adc_api_t<Backend>::template abort<Config>(); });
+    else
+      return status::unsupported;
+  }
+  template <typename Config> static result<dma_transfer_state> transfer_status() noexcept
+  {
+    if constexpr (requires { raw_adc_api_t<Backend>::template transfer_status<Config>(); })
+      return detail::as_result<dma_transfer_state>(
+          [] { return raw_adc_api_t<Backend>::template transfer_status<Config>(); });
+    else
+      return status::unsupported;
+  }
+  template <typename Config> static void handle_interrupt() noexcept
+  {
+    if constexpr (requires { raw_adc_api_t<Backend>::template handle_interrupt<Config>(); })
+      raw_adc_api_t<Backend>::template handle_interrupt<Config>();
+  }
+  template <typename Config> static void handle_dma_interrupt() noexcept
+  {
+    if constexpr (requires { raw_adc_api_t<Backend>::template handle_dma_interrupt<Config>(); })
+      raw_adc_api_t<Backend>::template handle_dma_interrupt<Config>();
+  }
   template <typename Config> static auto initialize() noexcept
   {
     return raw_adc_api_t<Backend>::template initialize<Config>();
