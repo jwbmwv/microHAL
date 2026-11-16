@@ -1,5 +1,8 @@
 common:
-  tags: microhal zephyr renode
+  tags:
+    - microhal
+    - zephyr
+    - renode
   timeout: 120
   min_ram: 32
   min_flash: 128
