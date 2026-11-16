@@ -2156,6 +2156,8 @@ template <> struct backend_traits<kinetis_espresso_tag> final
             .instance_count = native ? 1U : 0U,
             .max_frequency_hz = native ? 1'000'000U : 0U,
             .repeated_start = native,
+            .clock_stretching = native,
+            .smbus_pec = native,
             .transfer_modes = {.polled = native, .interrupt = native, .dma = dma}};
   }
 
@@ -2220,6 +2222,7 @@ template <> struct backend_traits<kinetis_espresso_tag> final
             .lpuart = (MICROHAL_KINETIS_HAS_LPUART_INSTANCE != 0),
             .autobaud = false,
             .fifo_depth = 8U,
+            .data_bits_mask = uart_data_bits_mask(uart_data_bits::eight),
             .transfer_modes = {.polled = has_uart,
                                .interrupt = has_uart,
                                .dma = MICROHAL_KINETIS_SERIAL_UART_EDMA || MICROHAL_KINETIS_SERIAL_LPUART_EDMA ||

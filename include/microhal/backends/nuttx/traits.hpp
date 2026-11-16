@@ -2768,6 +2768,7 @@ template <> struct backend_traits<nuttx_tag> final
             .dma = false,
             .instance_count = 4U,
             .max_frequency_hz = 1'000'000U,
+            .max_transfer_size_bytes = UINT16_MAX,
 #if defined(I2C_M_TEN)
             .ten_bit_addressing = true,
 #else
@@ -2778,7 +2779,9 @@ template <> struct backend_traits<nuttx_tag> final
 #else
             .repeated_start = false,
 #endif
-            .address_probe = true};
+            .address_probe = true,
+            .clock_stretching = true,
+            .smbus_pec = true};
 #else
     return {};
 #endif
@@ -2825,7 +2828,8 @@ template <> struct backend_traits<nuttx_tag> final
             .two_stop_bits = true,
             .one_and_half_stop_bits = false,
             .hardware_flow_control = false,
-            .max_baud_rate = 460'800U};
+            .max_baud_rate = 460'800U,
+            .data_bits_mask = uart_data_bits_mask(uart_data_bits::eight)};
 #else
     return {};
 #endif

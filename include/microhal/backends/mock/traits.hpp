@@ -1108,7 +1108,9 @@ template <> struct backend_traits<mock_tag> final
             .max_frequency_hz = 1'000'000U,
             .ten_bit_addressing = true,
             .repeated_start = true,
-            .address_probe = true};
+            .address_probe = true,
+            .clock_stretching = true,
+            .smbus_pec = true};
   }
 
   static consteval struct spi_capability spi_capability() noexcept
@@ -1160,7 +1162,11 @@ template <> struct backend_traits<mock_tag> final
             .two_stop_bits = true,
             .one_and_half_stop_bits = true,
             .hardware_flow_control = false,
-            .max_baud_rate = 10'000'000U};
+            .max_baud_rate = 10'000'000U,
+            .data_bits_mask = static_cast<std::uint16_t>(
+                uart_data_bits_mask(uart_data_bits::five) | uart_data_bits_mask(uart_data_bits::six) |
+                uart_data_bits_mask(uart_data_bits::seven) | uart_data_bits_mask(uart_data_bits::eight) |
+                uart_data_bits_mask(uart_data_bits::nine))};
   }
 
   static consteval struct rtc_capability rtc_capability() noexcept

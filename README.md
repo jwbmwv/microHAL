@@ -2,15 +2,18 @@
 
 A header-only, zero-overhead hardware abstraction layer for microcontrollers, requiring C++20 or newer.
 
-microHAL lets you write peripheral code once and compile it against STM32Cube HAL, STM32Cube LL,
-NXP MCUXpresso, Zephyr, or NuttX — without virtual dispatch, dynamic allocation, exceptions, RTTI,
-or any runtime backend indirection. Backend selection and capability checking happen entirely in the
-type system, so the generated code is the same as calling the vendor SDK directly.
+microHAL provides typed peripheral facades for STM32Cube HAL, STM32Cube LL, NXP MCUXpresso,
+Zephyr, and NuttX — without virtual dispatch, dynamic allocation, exceptions, RTTI, or runtime
+backend indirection. Backend selection and capability checking happen in the type system. The
+zero-overhead probe verifies instruction equivalence for its tested UART call path; it is not a
+claim that every facade and backend combination has identical generated code.
 
 ```cpp
+#include <array>
+
 #include "microhal/uart/uart.hpp"
 
-using backend = microhal::stm32_hal_tag;
+using backend = microhal::mock_tag;
 using console = microhal::uart::port_config<2U, 115'200U>;
 
 if (microhal::is_ok(microhal::uart::port<backend, console>::initialize()))
@@ -20,7 +23,9 @@ if (microhal::is_ok(microhal::uart::port<backend, console>::initialize()))
 }
 ```
 
-Retarget the same code to Zephyr by changing one line: `using backend = microhal::zephyr_tag;`.
+This example uses the host recording backend. A hardware build selects its backend tag and supplies
+the board-specific configuration or binding required by that backend; changing the tag alone is not
+sufficient for every target (for example, Zephyr requires a device binding).
 
 ## Why
 

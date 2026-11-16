@@ -31,6 +31,11 @@ through Twister. The current Renode-targeted suites are:
 - `microhal.ztest.renode_stm32f4_disco`
 - `microhal.ztest.renode_frdm_k64f`
 
+The [Zephyr tests workflow](../.github/workflows/zephyr-tests.yml) builds both
+board suites with Twister against Zephyr v3.7.0 LTS and v4.5.0. CI uses
+`--build-only`; it checks configuration and compilation but does not execute the
+tests in Renode.
+
 Run them with:
 
 ```bash

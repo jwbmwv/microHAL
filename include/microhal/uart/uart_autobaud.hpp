@@ -58,21 +58,41 @@ struct autobaud_helper final
   static constexpr bool uses_dedicated_sense_pin{AutobaudConfig::use_dedicated_sense_pin};
   static constexpr bool reconfigures_rx_pin{AutobaudConfig::reconfigure_rx_pin_as_gpio};
 
+  /**
+   * @brief Computes the minimum accepted timer interval for the configured maximum baud rate.
+   * @return Integer timer ticks calculated as timer clock divided by @c AutobaudConfig::max_baud.
+   */
   static consteval std::uint32_t minimum_ticks() noexcept
   {
     return timer_config::clock_hz / AutobaudConfig::max_baud;
   }
 
+  /**
+   * @brief Computes the maximum accepted timer interval for the configured minimum baud rate.
+   * @return Integer timer ticks calculated as timer clock divided by @c AutobaudConfig::min_baud.
+   */
   static consteval std::uint32_t maximum_ticks() noexcept
   {
     return timer_config::clock_hz / AutobaudConfig::min_baud;
   }
 
+  /**
+   * @brief Arms the backend's generic UART autobaud measurement path.
+   * @return Backend arm status, including capability or hardware errors reported by the backend.
+   * @note Requires @ref AutobaudCapableConcept support; call according to the backend's documented
+   *       peripheral/interrupt setup.
+   */
   [[nodiscard]] static inline status arm() noexcept
   {
     return detail::as_status([] { return uart_api_t<Backend>::template arm_autobaud<UartConfig, AutobaudConfig>(); });
   }
 
+  /**
+   * @brief Converts a captured edge interval to a baud estimate and range-stability result.
+   * @param[in] delta_ticks  Timer ticks between the two edge captures.
+   * @return Measurement containing the input interval, integer baud estimate (zero for a zero
+   *         interval), and whether both interval and estimate lie within the configured baud range.
+   */
   [[nodiscard]] static constexpr autobaud_measurement decode_from_ticks(const std::uint32_t delta_ticks) noexcept
   {
     const std::uint32_t baud = (delta_ticks == 0U) ? 0U : (timer_config::clock_hz / delta_ticks);
@@ -85,6 +105,15 @@ struct autobaud_helper final
     };
   }
 
+  /**
+   * @brief Decodes a timer capture edge interval and immediately notifies the supplied handler.
+   * @tparam CompletionHandler  No-throw callable accepting one @ref autobaud_measurement.
+   * @param[in] previous_capture_ticks  Timer value at the preceding capture.
+   * @param[in] current_capture_ticks   Timer value at the current capture.
+   * @note The unsigned difference is decoded and the handler is invoked inline in the caller's
+   *       context (normally a timer capture ISR). This timer ISR path must remain bounded and
+   *       the handler must be safe and non-blocking for that context.
+   */
   template <auto CompletionHandler>
   static inline void on_edge(const std::uint32_t previous_capture_ticks,
                              const std::uint32_t current_capture_ticks) noexcept
@@ -94,6 +123,12 @@ struct autobaud_helper final
     CompletionHandler(measurement);
   }
 
+  /**
+   * @brief Passes the measured baud rate to the backend for application to the UART configuration.
+   * @param[in] measurement  Measurement whose @c baud_rate is passed to the backend. The caller is
+   *                         responsible for checking @c stable before applying it.
+   * @return Backend application status.
+   */
   [[nodiscard]] static inline status apply(const autobaud_measurement measurement) noexcept
   {
     return detail::as_status(

@@ -38,6 +38,11 @@
 namespace microhal
 {
 
+/**
+ * @brief Creates a descriptor from a registered backend's identity traits.
+ * @tparam Backend Backend tag with a @ref backend_traits specialization.
+ * @return The backend name, vendor, and kind from its traits specialization.
+ */
 template <typename Backend> consteval backend_descriptor make_backend_descriptor() noexcept
 {
   return backend_descriptor{.name = backend_traits<Backend>::name,
@@ -71,7 +76,10 @@ inline constexpr auto backend_registry = std::array{
 };
 
 /**
- * @brief Projects any peripheral-specific capability struct onto the fields common to all of them.
+ * @brief Projects any peripheral-specific capability struct onto its common fields.
+ * @tparam Capability Capability type exposing the common capability members.
+ * @param[in] cap Peripheral-specific capability value to project.
+ * @return A @ref base_capability containing the shared fields; peripheral-specific fields are omitted.
  */
 template <typename Capability> [[nodiscard]] consteval base_capability to_base_capability(const Capability cap) noexcept
 {
@@ -89,6 +97,10 @@ template <typename Capability> [[nodiscard]] consteval base_capability to_base_c
  * @details This is the single place where the enum-to-accessor mapping lives. Peripheral-specific
  *          fields remain available through the typed `backend_traits<B>::x_capability()` accessors;
  *          this helper exposes only the shared subset so generic code can stay peripheral-agnostic.
+ * @tparam Backend Backend tag with a traits accessor for @p Peripheral.
+ * @tparam Peripheral Peripheral whose capability is requested.
+ * @return The common capability fields reported by the selected backend accessor.
+ * @note Instantiating this helper for an unhandled peripheral kind produces a compile-time error.
  */
 template <typename Backend, peripheral_kind Peripheral>
 [[nodiscard]] consteval base_capability capability_for() noexcept
@@ -179,16 +191,34 @@ template <typename Backend, peripheral_kind Peripheral>
   }
 }
 
+/**
+ * @brief Reports whether a backend supports a peripheral.
+ * @tparam Backend Backend tag with a traits specialization.
+ * @tparam Peripheral Peripheral to query.
+ * @return The `supported` field of the selected peripheral capability.
+ */
 template <typename Backend, peripheral_kind Peripheral> consteval bool peripheral_supported() noexcept
 {
   return capability_for<Backend, Peripheral>().supported;
 }
 
+/**
+ * @brief Reports whether a peripheral capability advertises ISR support.
+ * @tparam Backend Backend tag with a traits specialization.
+ * @tparam Peripheral Peripheral to query.
+ * @return The `isr` field of the selected peripheral capability.
+ */
 template <typename Backend, peripheral_kind Peripheral> consteval bool peripheral_supports_isr() noexcept
 {
   return capability_for<Backend, Peripheral>().isr;
 }
 
+/**
+ * @brief Reports whether a peripheral capability advertises DMA support.
+ * @tparam Backend Backend tag with a traits specialization.
+ * @tparam Peripheral Peripheral to query.
+ * @return The `dma` field of the selected peripheral capability.
+ */
 template <typename Backend, peripheral_kind Peripheral> consteval bool peripheral_supports_dma() noexcept
 {
   return capability_for<Backend, Peripheral>().dma;

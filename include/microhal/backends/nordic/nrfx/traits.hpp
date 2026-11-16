@@ -1375,6 +1375,8 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .ten_bit_addressing = false,
             .repeated_start = supported,
             .address_probe = supported && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK,
+            .clock_stretching = supported,
+            .smbus_pec = supported && (MICROHAL_NORDIC_SYSTEM_CORE_CLOCK != 0),
             .transfer_modes = {.polled = supported && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK, .dma = supported}};
   }
 
@@ -1439,6 +1441,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
                                        1'000'000U
 #endif
                                        : 0U,
+            .data_bits_mask = supported ? uart_data_bits_mask(uart_data_bits::eight) : 0U,
             .transfer_modes = {.polled = supported && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK, .dma = supported}};
   }
 

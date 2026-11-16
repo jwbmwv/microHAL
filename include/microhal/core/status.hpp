@@ -34,13 +34,21 @@ enum class status : std::uint8_t
   io_error          ///< Bus-level failure such as an I2C NAK or CRC mismatch.
 };
 
-/// @brief True when @p value represents success.
+/**
+ * @brief Tests whether a status represents success.
+ * @param[in] value  Status value to inspect.
+ * @return `true` only when @p value is @ref status::ok.
+ */
 [[nodiscard]] constexpr bool is_ok(const status value) noexcept
 {
   return value == status::ok;
 }
 
-/// @brief Human-readable name for @p value, intended for logging and test output.
+/**
+ * @brief Returns the textual name of a status value.
+ * @param[in] value  Status value to convert.
+ * @return The matching enumerator name, or `"unknown"` if @p value is not a named value.
+ */
 [[nodiscard]] constexpr std::string_view to_string(const status value) noexcept
 {
   switch (value)
@@ -72,32 +80,61 @@ template <typename T> class result final
 public:
   using value_type = T;
 
+  /**
+   * @brief Constructs a successful result containing @p value.
+   * @param[in] value  Payload to store.
+   * @details The stored status is set to @ref status::ok.
+   */
   constexpr result(const T value) noexcept : value_{value}, status_{status::ok} {}
 
+  /**
+   * @brief Constructs a result with @p error_status and a value-initialized payload.
+   * @param[in] error_status  Status to store; it is retained as supplied.
+   * @details The payload is value-initialized and the supplied status is preserved.
+   */
   constexpr result(const status error_status) noexcept : value_{}, status_{error_status} {}
 
+  /**
+   * @brief Tests whether this result has a successful value.
+   * @return `true` exactly when the stored status is @ref status::ok.
+   */
   [[nodiscard]] constexpr bool has_value() const noexcept
   {
     return status_ == status::ok;
   }
 
+  /**
+   * @brief Converts this result to its success state.
+   * @return The same value as @ref has_value.
+   */
   [[nodiscard]] constexpr explicit operator bool() const noexcept
   {
     return has_value();
   }
 
+  /**
+   * @brief Returns the status stored in this result.
+   * @return The status supplied at construction.
+   */
   [[nodiscard]] constexpr status error() const noexcept
   {
     return status_;
   }
 
-  /// @brief Returns the payload. Only meaningful when @ref has_value is true.
+  /**
+   * @brief Returns the stored payload without checking the status.
+   * @return The stored payload; it is meaningful as an operation result only when @ref has_value is true.
+   */
   [[nodiscard]] constexpr T value() const noexcept
   {
     return value_;
   }
 
-  /// @brief Returns the payload, or @p fallback when the operation failed.
+  /**
+   * @brief Returns the stored payload on success, or @p fallback otherwise.
+   * @param[in] fallback  Value to return when this result has no value.
+   * @return The stored payload when @ref has_value is true; otherwise @p fallback.
+   */
   [[nodiscard]] constexpr T value_or(const T fallback) const noexcept
   {
     return has_value() ? value_ : fallback;

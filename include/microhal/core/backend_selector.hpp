@@ -983,11 +983,21 @@ template <typename Backend> struct backend_dispatch_table final
   using crc = crc_api_t<Backend>;
 };
 
+/**
+ * @brief Returns the registry descriptor for a registered backend.
+ * @tparam Backend Backend tag whose traits provide the descriptor.
+ * @return The backend name, vendor, and backend kind.
+ */
 template <typename Backend> [[nodiscard]] consteval auto select_backend() noexcept -> backend_descriptor
 {
   return make_backend_descriptor<Backend>();
 }
 
+/**
+ * @brief Requires a backend to support every listed peripheral at compile time.
+ * @tparam Backend Backend tag to validate.
+ * @tparam RequiredPeripherals Peripheral kinds required by the application.
+ */
 template <typename Backend, peripheral_kind... RequiredPeripherals>
 consteval auto validate_backend_selection() noexcept -> void
 {

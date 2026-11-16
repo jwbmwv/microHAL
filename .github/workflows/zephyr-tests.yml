@@ -1,0 +1,47 @@
+name: Zephyr tests
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  twister:
+    name: Twister build (Zephyr ${{ matrix.version }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [v3.7.0, v4.5.0]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check out Zephyr
+        uses: actions/checkout@v4
+        with:
+          repository: zephyrproject-rtos/zephyr
+          ref: ${{ matrix.version }}
+          path: zephyr-ws/zephyr
+          fetch-depth: 1
+
+      - name: Set up Zephyr workspace and SDK
+        uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: zephyr
+          base-path: zephyr-ws
+          toolchains: arm-zephyr-eabi
+
+      - name: Build STM32F4 Discovery test
+        working-directory: zephyr-ws
+        run: west twister -T ../tests/zephyr -p stm32f4_disco --build-only
+
+      - name: Build FRDM-K64F test
+        working-directory: zephyr-ws
+        run: west twister -T ../tests/zephyr -p frdm_k64f --build-only

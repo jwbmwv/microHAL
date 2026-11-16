@@ -81,6 +81,10 @@ consteval auto clock_diagnostic(const std::uint32_t requested, const std::array<
 } // namespace detail
 #endif
 
+/**
+ * @brief Checks whether a capability type exposes the common capability flags.
+ * @tparam Capability Type whose `supported`, `blocking`, `non_blocking`, `isr`, and `dma` members are inspected.
+ */
 template <typename Capability>
 concept CapabilityConcept = requires(const Capability capability) {
   { capability.supported } -> std::convertible_to<bool>;
@@ -90,6 +94,10 @@ concept CapabilityConcept = requires(const Capability capability) {
   { capability.dma } -> std::convertible_to<bool>;
 };
 
+/**
+ * @brief Checks whether a backend tag is registered with its identity traits.
+ * @tparam Backend Backend tag to inspect.
+ */
 template <typename Backend>
 concept BackendConcept = requires {
   typename backend_traits<Backend>::backend_tag;
@@ -98,6 +106,10 @@ concept BackendConcept = requires {
   { backend_traits<Backend>::kind } -> std::convertible_to<backend_kind>;
 };
 
+/**
+ * @brief Checks whether a peripheral API type exposes its backend tag and peripheral kind.
+ * @tparam Peripheral Peripheral API type to inspect.
+ */
 template <typename Peripheral>
 concept PeripheralConcept = requires {
   typename Peripheral::backend_tag;
@@ -114,7 +126,13 @@ concept PeripheralConcept = requires {
  */
 /// @{
 
-/// @brief True when @p Backend is registered and implements @p Peripheral.
+/**
+ * @brief Tests peripheral availability without producing a diagnostic for an unregistered backend.
+ * @tparam Backend Backend tag to query.
+ * @tparam Peripheral Peripheral kind to query.
+ * @return `true` when @p Backend satisfies @ref BackendConcept and reports @p Peripheral as supported;
+ *         otherwise `false`.
+ */
 template <typename Backend, peripheral_kind Peripheral> consteval bool peripheral_available() noexcept
 {
   if constexpr (BackendConcept<Backend>)
@@ -127,6 +145,12 @@ template <typename Backend, peripheral_kind Peripheral> consteval bool periphera
   }
 }
 
+/**
+ * @brief Tests ISR capability without producing a diagnostic for an unregistered backend.
+ * @tparam Backend Backend tag to query.
+ * @tparam Peripheral Peripheral kind to query.
+ * @return `true` when @p Backend satisfies @ref BackendConcept and its @p Peripheral capability advertises ISR support.
+ */
 template <typename Backend, peripheral_kind Peripheral> consteval bool peripheral_isr_available() noexcept
 {
   if constexpr (BackendConcept<Backend>)
@@ -139,6 +163,12 @@ template <typename Backend, peripheral_kind Peripheral> consteval bool periphera
   }
 }
 
+/**
+ * @brief Tests DMA capability without producing a diagnostic for an unregistered backend.
+ * @tparam Backend Backend tag to query.
+ * @tparam Peripheral Peripheral kind to query.
+ * @return `true` when @p Backend satisfies @ref BackendConcept and its @p Peripheral capability advertises DMA support.
+ */
 template <typename Backend, peripheral_kind Peripheral> consteval bool peripheral_dma_available() noexcept
 {
   if constexpr (BackendConcept<Backend>)
@@ -151,16 +181,32 @@ template <typename Backend, peripheral_kind Peripheral> consteval bool periphera
   }
 }
 
+/// @brief Compile-time value indicating whether @p Backend supports @p Peripheral.
 template <typename Backend, peripheral_kind Peripheral>
 inline constexpr bool peripheral_supported_v = peripheral_available<Backend, Peripheral>();
 
+/**
+ * @brief Requires that a backend support the requested peripheral.
+ * @tparam Backend Backend tag to query.
+ * @tparam Peripheral Peripheral kind to query.
+ */
 template <typename Backend, peripheral_kind Peripheral>
 concept SupportedPeripheralConcept = peripheral_available<Backend, Peripheral>();
 
+/**
+ * @brief Requires a supported peripheral whose capability advertises ISR use.
+ * @tparam Backend Backend tag to query.
+ * @tparam Peripheral Peripheral kind to query.
+ */
 template <typename Backend, peripheral_kind Peripheral>
 concept IsrCapableConcept =
     peripheral_available<Backend, Peripheral>() && peripheral_isr_available<Backend, Peripheral>();
 
+/**
+ * @brief Requires a supported peripheral whose capability advertises DMA.
+ * @tparam Backend Backend tag to query.
+ * @tparam Peripheral Peripheral kind to query.
+ */
 template <typename Backend, peripheral_kind Peripheral>
 concept DmaCapableConcept =
     peripheral_available<Backend, Peripheral>() && peripheral_dma_available<Backend, Peripheral>();
@@ -173,6 +219,13 @@ concept DmaCapableConcept =
  *          used to define the predicates above.
  */
 /// @{
+/**
+ * @brief Requires a registered backend that advertises @p Peripheral.
+ * @tparam Backend Backend tag to validate.
+ * @tparam Peripheral Peripheral kind to require.
+ * @return `true` when validation succeeds.
+ * @note An unregistered backend or unsupported peripheral triggers a compile-time assertion.
+ */
 template <typename Backend, peripheral_kind Peripheral> consteval bool validate_capability() noexcept
 {
   static_assert(BackendConcept<Backend>, "microHAL: backend tag is not registered in backend_traits.");
@@ -182,9 +235,20 @@ template <typename Backend, peripheral_kind Peripheral> consteval bool validate_
 }
 /// @}
 
+/**
+ * @brief Detects whether a configuration supplies a backend binding type.
+ * @tparam Config Configuration type to inspect.
+ */
 template <typename Config>
 concept BindingBackedConfig = requires { typename Config::binding; };
 
+/**
+ * @brief Tests whether a GPIO pin configuration matches a backend's GPIO contract.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam PinConfig Pin configuration type.
+ * @return `true` when the backend supports GPIO and the configuration has the required binding or pin fields,
+ *         mode fields, and (for legacy configs) valid pin and alternate-function selections.
+ */
 template <typename Backend, typename PinConfig> consteval bool gpio_pin_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::gpio>())
@@ -225,6 +289,13 @@ template <typename Backend, typename PinConfig> consteval bool gpio_pin_compatib
   }
 }
 
+/**
+ * @brief Tests I2C configuration structure and capability compatibility.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config I2C configuration type.
+ * @return `true` when the backend supports I2C and the required instance, clock, address, transfer-mode,
+ *         DMA, and interrupt constraints are satisfied.
+ */
 template <typename Backend, typename Config> consteval bool i2c_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::i2c>())
@@ -247,14 +318,51 @@ template <typename Backend, typename Config> consteval bool i2c_config_compatibl
   else
   {
     const auto capability = backend_traits<Backend>::i2c_capability();
-    return capability.transfer_modes.supports(configured_transfer_mode<Config>()) && (Config::clock_hz > 0U) &&
-           (Config::clock_hz <= capability.max_frequency_hz) &&
+    constexpr bool instance_valid = []
+    {
+      if constexpr (requires { Config::instance_index; })
+      {
+        constexpr auto instance_count = backend_traits<Backend>::i2c_capability().instance_count;
+        return (instance_count == 0U) || (Config::instance_index <= instance_count);
+      }
+      return true;
+    }();
+    constexpr bool clock_stretch_valid = []
+    {
+      if constexpr (requires {
+                      Config::clock_stretch_policy;
+                      Config::clock_stretch_timeout_us;
+                    })
+      {
+        constexpr auto stretch_capability = backend_traits<Backend>::i2c_capability();
+        constexpr bool policy_supported = (Config::clock_stretch_policy == i2c_clock_stretch_policy::backend_default) ||
+                                          ((Config::clock_stretch_policy == i2c_clock_stretch_policy::allow) &&
+                                           stretch_capability.clock_stretching) ||
+                                          ((Config::clock_stretch_policy == i2c_clock_stretch_policy::disallow) &&
+                                           stretch_capability.clock_stretch_control);
+        constexpr bool timeout_supported =
+            (Config::clock_stretch_timeout_us == 0U) ||
+            ((stretch_capability.max_clock_stretch_timeout_us != 0U) &&
+             (Config::clock_stretch_timeout_us <= stretch_capability.max_clock_stretch_timeout_us));
+        return policy_supported && timeout_supported;
+      }
+      return true;
+    }();
+    return instance_valid && capability.transfer_modes.supports(configured_transfer_mode<Config>()) &&
+           (Config::clock_hz > 0U) && (Config::clock_hz <= capability.max_frequency_hz) && clock_stretch_valid &&
            ((Config::address_mode != i2c_address_mode::ten_bit) || capability.ten_bit_addressing) &&
            ((!serial_dma_enabled<Config>()) || DmaCapableConcept<Backend, peripheral_kind::i2c>) &&
            ((!serial_interrupt_enabled<Config>()) || IsrCapableConcept<Backend, peripheral_kind::i2c>);
   }
 }
 
+/**
+ * @brief Tests SPI configuration structure and capability compatibility.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config SPI configuration type.
+ * @return `true` when the backend supports SPI and the required instance, clock, transfer-mode, DMA, and
+ *         interrupt constraints are satisfied.
+ */
 template <typename Backend, typename Config> consteval bool spi_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::spi>())
@@ -287,6 +395,12 @@ template <typename Backend, typename Config> consteval bool spi_config_compatibl
   }
 }
 
+/**
+ * @brief Tests QSPI configuration and required backend API compatibility.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config QSPI configuration type.
+ * @return `true` when required capabilities, fields, DMA support, and any backend-specific binding operations match.
+ */
 template <typename Backend, typename Config> consteval bool qspi_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::qspi>())
@@ -330,6 +444,13 @@ template <typename Backend, typename Config> consteval bool qspi_config_compatib
   }
 }
 
+/**
+ * @brief Tests UART configuration structure and capability compatibility.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config UART configuration type.
+ * @return `true` when the backend supports the configured baud, mode, transfer, FIFO/LPUART, parity, and stop-bit
+ *         requirements.
+ */
 template <typename Backend, typename Config> consteval bool uart_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::uart>())
@@ -355,6 +476,20 @@ template <typename Backend, typename Config> consteval bool uart_config_compatib
   else
   {
     const auto capability = backend_traits<Backend>::uart_capability();
+    constexpr std::uint16_t supported_data_bits = backend_traits<Backend>::uart_capability().data_bits_mask == 0U
+                                                      ? uart_data_bits_mask(uart_data_bits::eight)
+                                                      : backend_traits<Backend>::uart_capability().data_bits_mask;
+    constexpr uart_data_bits requested_data_bits = []
+    {
+      if constexpr (requires { Config::data_bits; })
+      {
+        return Config::data_bits;
+      }
+      else
+      {
+        return uart_data_bits::eight;
+      }
+    }();
     return capability.transfer_modes.supports(configured_transfer_mode<Config>()) && (Config::baud_rate > 0U) &&
            ((!serial_dma_enabled<Config>()) || DmaCapableConcept<Backend, peripheral_kind::uart>) &&
            ((!serial_interrupt_enabled<Config>()) || IsrCapableConcept<Backend, peripheral_kind::uart>) &&
@@ -362,12 +497,20 @@ template <typename Backend, typename Config> consteval bool uart_config_compatib
            ((!Config::require_lpuart) || capability.lpuart) &&
            ((capability.max_baud_rate == 0U) || (Config::baud_rate <= capability.max_baud_rate)) &&
            ((Config::parity == uart_parity::none) || capability.parity) &&
+           ((supported_data_bits & uart_data_bits_mask(requested_data_bits)) != 0U) &&
+           ((requested_data_bits != uart_data_bits::nine) || (Config::parity == uart_parity::none)) &&
            ((Config::stop_bits == uart_stop_bits::one) ||
             ((Config::stop_bits == uart_stop_bits::two) && capability.two_stop_bits) ||
             ((Config::stop_bits == uart_stop_bits::one_and_half) && capability.one_and_half_stop_bits));
   }
 }
 
+/**
+ * @brief Tests timer configuration structure and DMA/interrupt capability requirements.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config Timer configuration type.
+ * @return `true` when the backend supports timers and the required configuration fields and enabled features.
+ */
 template <typename Backend, typename Config> consteval bool timer_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::timer>())
@@ -396,6 +539,13 @@ template <typename Backend, typename Config> consteval bool timer_config_compati
   }
 }
 
+/**
+ * @brief Tests flash geometry and DMA requirements for a configuration.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config Flash configuration type.
+ * @return `true` when configured program alignment and erase size are nonzero, meet integral backend granularity
+ *         constraints, and any requested DMA is supported.
+ */
 template <typename Backend, typename Config> consteval bool flash_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::flash>())
@@ -424,6 +574,12 @@ template <typename Backend, typename Config> consteval bool flash_config_compati
   }
 }
 
+/**
+ * @brief Tests RTC configuration structure and interrupt requirements.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config RTC configuration type.
+ * @return `true` when the backend supports RTC and any configured periodic or alarm interrupt is supported.
+ */
 template <typename Backend, typename Config> consteval bool rtc_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::rtc>())
@@ -445,6 +601,14 @@ template <typename Backend, typename Config> consteval bool rtc_config_compatibl
 }
 
 template <typename Backend, typename UartConfig, typename AutobaudConfig>
+/**
+ * @brief Tests UART autobaud configuration composition and backend support.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam UartConfig UART configuration type.
+ * @tparam AutobaudConfig Type providing `timer_config`, `gpio_pin`, `min_baud`, and `max_baud`.
+ * @return `true` when the UART, timer, and GPIO configurations are compatible, the backend advertises autobaud,
+ *         and the minimum baud is below the maximum.
+ */
 consteval bool autobaud_config_compatible() noexcept
 {
   if constexpr (!uart_config_compatible<Backend, UartConfig>())
@@ -468,6 +632,13 @@ consteval bool autobaud_config_compatible() noexcept
   }
 }
 
+/**
+ * @brief Tests ADC configuration structure and enabled DMA/interrupt support.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config ADC configuration type.
+ * @return `true` when the backend supports ADC, the required fields and instance binding are present, and enabled
+ *         DMA or interrupt operation is supported.
+ */
 template <typename Backend, typename Config> consteval bool adc_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::adc>())
@@ -495,6 +666,13 @@ template <typename Backend, typename Config> consteval bool adc_config_compatibl
   }
 }
 
+/**
+ * @brief Tests DAC configuration structure and enabled DMA support.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config DAC configuration type.
+ * @return `true` when the backend supports DAC, the required channel/configuration members are present, and requested
+ *         DMA is supported.
+ */
 template <typename Backend, typename Config> consteval bool dac_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::dac>())
@@ -522,6 +700,13 @@ template <typename Backend, typename Config> consteval bool dac_config_compatibl
   }
 }
 
+/**
+ * @brief Tests CAN configuration structure and interrupt requirements.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config CAN configuration type.
+ * @return `true` when the backend supports CAN, required configuration members exist, baudrate is nonzero, and any
+ *         enabled interrupts are supported.
+ */
 template <typename Backend, typename Config> consteval bool can_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::can>())
@@ -543,11 +728,32 @@ template <typename Backend, typename Config> consteval bool can_config_compatibl
   }
   else
   {
-    return (Config::baudrate > 0U) &&
+    constexpr auto capability = backend_traits<Backend>::can_capability();
+    constexpr bool instance_valid = []
+    {
+      if constexpr (BindingBackedConfig<Config>)
+      {
+        return true;
+      }
+      else
+      {
+        return Config::instance_index <= backend_traits<Backend>::can_capability().instance_count;
+      }
+    }();
+    return instance_valid && (Config::baudrate > 0U) &&
+           ((capability.max_bitrate == 0U) || (Config::baudrate <= capability.max_bitrate)) &&
+           ((!Config::enable_can_fd) || capability.can_fd) &&
            ((!Config::enable_interrupts) || IsrCapableConcept<Backend, peripheral_kind::can>);
   }
 }
 
+/**
+ * @brief Tests USB configuration mode, speed, and backend API compatibility.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config USB configuration type.
+ * @return `true` when endpoint transfer is supported, at least one role is enabled, the requested roles and speed
+ *         are available, and any required backend binding operations are present.
+ */
 template <typename Backend, typename Config> consteval bool usb_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::usb>())
@@ -597,6 +803,13 @@ template <typename Backend, typename Config> consteval bool usb_config_compatibl
   }
 }
 
+/**
+ * @brief Tests Ethernet configuration structure and enabled-feature requirements.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config Ethernet configuration type.
+ * @return `true` when the backend supports Ethernet and any selected DMA, interrupts, gigabit speed, or checksum
+ *         offload are available.
+ */
 template <typename Backend, typename Config> consteval bool ethernet_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::ethernet>())
@@ -627,6 +840,13 @@ template <typename Backend, typename Config> consteval bool ethernet_config_comp
   }
 }
 
+/**
+ * @brief Tests SD configuration geometry, timing, transfer, and backend API compatibility.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config SD configuration type.
+ * @return `true` when required block operations and capacity query are supported, clock and bus settings are within
+ *         advertised capabilities, enabled DMA/interrupts are supported, and required binding operations exist.
+ */
 template <typename Backend, typename Config> consteval bool sd_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::sd>())
@@ -675,6 +895,13 @@ template <typename Backend, typename Config> consteval bool sd_config_compatible
   }
 }
 
+/**
+ * @brief Tests DMA configuration structure and backend availability.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config DMA configuration type.
+ * @return `true` when the backend supports DMA and the configuration provides an instance/stream/channel binding and
+ *         the required transfer attributes.
+ */
 template <typename Backend, typename Config> consteval bool dma_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::dma>())
@@ -700,6 +927,13 @@ template <typename Backend, typename Config> consteval bool dma_config_compatibl
   }
 }
 
+/**
+ * @brief Tests PWM configuration structure and frequency.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config PWM configuration type.
+ * @return `true` when the backend supports PWM, required timer/channel and output fields exist, and frequency is
+ *         nonzero.
+ */
 template <typename Backend, typename Config> consteval bool pwm_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::pwm>())
@@ -727,6 +961,13 @@ template <typename Backend, typename Config> consteval bool pwm_config_compatibl
   }
 }
 
+/**
+ * @brief Tests watchdog configuration structure and timeout.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config Watchdog configuration type.
+ * @return `true` when the backend supports watchdog, required fields and instance binding exist, and timeout is
+ *         nonzero.
+ */
 template <typename Backend, typename Config> consteval bool watchdog_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::watchdog>())
@@ -751,6 +992,13 @@ template <typename Backend, typename Config> consteval bool watchdog_config_comp
   }
 }
 
+/**
+ * @brief Tests I2S mode, sample rate, transfer mode, and backend API requirements.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config I2S configuration type.
+ * @return `true` when requested mode, clocking, sample width/rate, transfer mode, and optional DMA features are
+ *         supported, with required binding operations present where applicable.
+ */
 template <typename Backend, typename Config> consteval bool i2s_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::i2s>())
@@ -805,6 +1053,12 @@ template <typename Backend, typename Config> consteval bool i2s_config_compatibl
   }
 }
 
+/**
+ * @brief Tests RCC configuration structure and system-clock value.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config RCC configuration type.
+ * @return `true` when the backend supports RCC, the required members exist, and the system clock is nonzero.
+ */
 template <typename Backend, typename Config> consteval bool rcc_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::rcc>())
@@ -825,6 +1079,12 @@ template <typename Backend, typename Config> consteval bool rcc_config_compatibl
   }
 }
 
+/**
+ * @brief Tests CRC configuration structure and backend availability.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config CRC configuration type.
+ * @return `true` when the backend supports CRC and the configuration has the required instance binding and members.
+ */
 template <typename Backend, typename Config> consteval bool crc_config_compatible() noexcept
 {
   if constexpr (!BackendConcept<Backend> || !peripheral_available<Backend, peripheral_kind::crc>())
@@ -844,6 +1104,14 @@ template <typename Backend, typename Config> consteval bool crc_config_compatibl
   }
 }
 
+/**
+ * @brief Validates a GPIO pin configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam PinConfig Pin configuration type.
+ * @return `true` when the backend and pin configuration pass the static assertions.
+ * @note Invalid backend capability, missing fields, or invalid legacy pin/alternate-function selections cause a
+ *       compile-time error.
+ */
 template <typename Backend, typename PinConfig> consteval bool validate_gpio_pin() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::gpio>(), "microHAL: GPIO backend validation failed.");
@@ -872,9 +1140,22 @@ template <typename Backend, typename PinConfig> consteval bool validate_gpio_pin
   return true;
 }
 
+/**
+ * @brief Requires a GPIO pin configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam PinConfig Pin configuration type.
+ */
 template <typename Backend, typename PinConfig>
 concept GpioPinConcept = gpio_pin_compatible<Backend, PinConfig>();
 
+/**
+ * @brief Validates I2C configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config I2C configuration type.
+ * @return `true` when backend capability and required I2C configuration constraints pass.
+ * @note Invalid capability, missing fields, unsupported enabled transfer mode, or an out-of-range clock causes a
+ *       compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_i2c_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::i2c>(), "microHAL: I2C backend validation failed.");
@@ -888,11 +1169,47 @@ template <typename Backend, typename Config> consteval bool validate_i2c_config(
         Config::enable_dma;
         Config::enable_interrupts;
       }, "microHAL: I2C configuration must expose clock_hz, address_mode, enable_dma, and enable_interrupts.");
-  static_assert((Config::clock_hz > 0U) &&
-                    (Config::clock_hz <= backend_traits<Backend>::i2c_capability().max_frequency_hz),
+  constexpr auto capability = backend_traits<Backend>::i2c_capability();
+  constexpr bool instance_valid = []
+  {
+    if constexpr (requires { Config::instance_index; })
+    {
+      constexpr auto instance_count = backend_traits<Backend>::i2c_capability().instance_count;
+      return (instance_count == 0U) || (Config::instance_index <= instance_count);
+    }
+    return true;
+  }();
+  static_assert(instance_valid, "microHAL: I2C instance index exceeds backend capability.");
+  constexpr bool clock_stretch_valid = []
+  {
+    if constexpr (requires {
+                    Config::clock_stretch_policy;
+                    Config::clock_stretch_timeout_us;
+                  })
+    {
+      constexpr auto stretch_capability = backend_traits<Backend>::i2c_capability();
+      constexpr bool policy_supported =
+          (Config::clock_stretch_policy == i2c_clock_stretch_policy::backend_default) ||
+          ((Config::clock_stretch_policy == i2c_clock_stretch_policy::allow) && stretch_capability.clock_stretching) ||
+          ((Config::clock_stretch_policy == i2c_clock_stretch_policy::disallow) &&
+           stretch_capability.clock_stretch_control);
+      constexpr bool timeout_supported =
+          (Config::clock_stretch_timeout_us == 0U) ||
+          ((stretch_capability.max_clock_stretch_timeout_us != 0U) &&
+           (Config::clock_stretch_timeout_us <= stretch_capability.max_clock_stretch_timeout_us));
+      return policy_supported && timeout_supported;
+    }
+    return true;
+  }();
+  static_assert(clock_stretch_valid, "microHAL: selected backend does not support the requested clock-stretch policy.");
+  static_assert(capability.transfer_modes.supports(configured_transfer_mode<Config>()),
+                "microHAL: selected backend does not provide the requested I2C transfer mode.");
+  static_assert((Config::address_mode != i2c_address_mode::ten_bit) || capability.ten_bit_addressing,
+                "microHAL: selected backend does not support ten-bit I2C addressing.");
+  static_assert((Config::clock_hz > 0U) && (Config::clock_hz <= capability.max_frequency_hz),
 #if defined(__cpp_static_assert) && __cpp_static_assert >= 202306L
                 detail::clock_diagnostic(Config::clock_hz, std::to_array("microHAL: requested I2C clock "),
-                                         backend_traits<Backend>::i2c_capability().max_frequency_hz));
+                                         capability.max_frequency_hz));
 #else
                 "microHAL: requested I2C clock exceeds backend capability.");
 #endif
@@ -903,9 +1220,22 @@ template <typename Backend, typename Config> consteval bool validate_i2c_config(
   return true;
 }
 
+/**
+ * @brief Requires an I2C master configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config I2C configuration type.
+ */
 template <typename Backend, typename Config>
 concept I2cMasterConcept = i2c_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates SPI configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config SPI configuration type.
+ * @return `true` when backend capability and required SPI configuration constraints pass.
+ * @note Invalid capability, missing fields, unsupported enabled transfer mode, or an out-of-range clock causes a
+ *       compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_spi_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::spi>(), "microHAL: SPI backend validation failed.");
@@ -938,9 +1268,21 @@ template <typename Backend, typename Config> consteval bool validate_spi_config(
   return true;
 }
 
+/**
+ * @brief Requires an SPI master configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config SPI configuration type.
+ */
 template <typename Backend, typename Config>
 concept SpiMasterConcept = spi_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates QSPI configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config QSPI configuration type.
+ * @return `true` when backend capability, quad mode, required fields, and requested DMA pass validation.
+ * @note Invalid capability or missing requirements causes a compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_qspi_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::qspi>(), "microHAL: QSPI backend validation failed.");
@@ -960,9 +1302,22 @@ template <typename Backend, typename Config> consteval bool validate_qspi_config
   return true;
 }
 
+/**
+ * @brief Requires a QSPI configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config QSPI configuration type.
+ */
 template <typename Backend, typename Config>
 concept QspiConcept = qspi_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates UART configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config UART configuration type.
+ * @return `true` when backend capability and required UART configuration constraints pass.
+ * @note Invalid capability, missing fields, zero baud, unsupported requested DMA/interrupts, or unavailable required
+ *       FIFO/LPUART support causes a compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_uart_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::uart>(), "microHAL: UART backend validation failed.");
@@ -980,6 +1335,21 @@ template <typename Backend, typename Config> consteval bool validate_uart_config
         Config::require_lpuart;
       }, "microHAL: UART configuration must expose baud_rate, parity, stop_bits, enable_dma, enable_interrupts, "
          "require_fifo, and require_lpuart.");
+  constexpr auto requested_data_bits = []
+  {
+    if constexpr (requires { Config::data_bits; })
+    {
+      return Config::data_bits;
+    }
+    return uart_data_bits::eight;
+  }();
+  constexpr std::uint16_t supported_data_bits = backend_traits<Backend>::uart_capability().data_bits_mask == 0U
+                                                    ? uart_data_bits_mask(uart_data_bits::eight)
+                                                    : backend_traits<Backend>::uart_capability().data_bits_mask;
+  static_assert((supported_data_bits & uart_data_bits_mask(requested_data_bits)) != 0U,
+                "microHAL: selected backend does not support the requested UART data width.");
+  static_assert((requested_data_bits != uart_data_bits::nine) || (Config::parity == uart_parity::none),
+                "microHAL: nine UART data bits cannot be combined with parity.");
   static_assert(Config::baud_rate > 0U, "microHAL: UART baud rate must be non-zero.");
   static_assert((!Config::enable_dma) || DmaCapableConcept<Backend, peripheral_kind::uart>,
                 "microHAL: selected backend does not provide DMA-capable UART.");
@@ -992,9 +1362,22 @@ template <typename Backend, typename Config> consteval bool validate_uart_config
   return true;
 }
 
+/**
+ * @brief Requires a UART configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config UART configuration type.
+ */
 template <typename Backend, typename Config>
 concept UartConcept = uart_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates timer configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config Timer configuration type.
+ * @return `true` when backend capability, required fields, and enabled features pass validation.
+ * @note Invalid capability, missing fields, zero clock, or unsupported requested DMA/interrupts causes a compile-time
+ *       error.
+ */
 template <typename Backend, typename Config> consteval bool validate_timer_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::timer>(), "microHAL: timer backend validation failed.");
@@ -1018,9 +1401,21 @@ template <typename Backend, typename Config> consteval bool validate_timer_confi
   return true;
 }
 
+/**
+ * @brief Requires a timer configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config Timer configuration type.
+ */
 template <typename Backend, typename Config>
 concept TimerConcept = timer_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates flash configuration geometry and DMA requirements.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config Flash configuration type.
+ * @return `true` when backend capability and flash alignment/erase constraints pass.
+ * @note Invalid granularity, missing fields, or unsupported requested DMA causes a compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_flash_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::flash>(), "microHAL: flash backend validation failed.");
@@ -1047,9 +1442,21 @@ template <typename Backend, typename Config> consteval bool validate_flash_confi
   return true;
 }
 
+/**
+ * @brief Requires a flash configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config Flash configuration type.
+ */
 template <typename Backend, typename Config>
 concept FlashConcept = flash_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates RTC configuration and its interrupt capability requirements.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config RTC configuration type.
+ * @return `true` when backend capability and required RTC configuration members pass validation.
+ * @note Invalid capability, missing fields, or unsupported requested interrupts causes a compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_rtc_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::rtc>(), "microHAL: RTC backend validation failed.");
@@ -1064,9 +1471,23 @@ template <typename Backend, typename Config> consteval bool validate_rtc_config(
   return true;
 }
 
+/**
+ * @brief Requires an RTC configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config RTC configuration type.
+ */
 template <typename Backend, typename Config>
 concept RtcConcept = rtc_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates UART autobaud configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam UartConfig UART configuration type.
+ * @tparam AutobaudConfig Type providing timer, GPIO, and baud-range settings.
+ * @return `true` when the composed configurations and backend autobaud capability pass validation.
+ * @note Invalid UART/timer/GPIO configuration, unavailable autobaud, or an invalid baud range causes a compile-time
+ *       error.
+ */
 template <typename Backend, typename UartConfig, typename AutobaudConfig>
 consteval bool validate_autobaud_config() noexcept
 {
@@ -1082,11 +1503,24 @@ consteval bool validate_autobaud_config() noexcept
   return true;
 }
 
+/**
+ * @brief Requires compatible UART, timer, and GPIO configurations for autobaud.
+ * @tparam Backend Backend tag.
+ * @tparam UartConfig UART configuration type.
+ * @tparam AutobaudConfig Autobaud settings type.
+ */
 template <typename Backend, typename UartConfig, typename AutobaudConfig>
 concept AutobaudCapableConcept = autobaud_config_compatible<Backend, UartConfig, AutobaudConfig>();
 
 // New peripheral concepts
 
+/**
+ * @brief Validates ADC configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config ADC configuration type.
+ * @return `true` when backend support, required members, and enabled DMA/interrupts pass validation.
+ * @note Invalid capability, missing fields, or unsupported requested DMA/interrupts causes a compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_adc_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::adc>(), "microHAL: ADC backend validation failed.");
@@ -1109,9 +1543,21 @@ template <typename Backend, typename Config> consteval bool validate_adc_config(
   return true;
 }
 
+/**
+ * @brief Requires an ADC configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config ADC configuration type.
+ */
 template <typename Backend, typename Config>
 concept AdcConcept = adc_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates DAC configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config DAC configuration type.
+ * @return `true` when backend support, required members, and requested DMA pass validation.
+ * @note Invalid capability, missing fields, or unsupported requested DMA causes a compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_dac_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::dac>(), "microHAL: DAC backend validation failed.");
@@ -1131,9 +1577,22 @@ template <typename Backend, typename Config> consteval bool validate_dac_config(
   return true;
 }
 
+/**
+ * @brief Requires a DAC configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config DAC configuration type.
+ */
 template <typename Backend, typename Config>
 concept DacConcept = dac_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates CAN configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config CAN configuration type.
+ * @return `true` when backend support, required members, nonzero baudrate, and requested interrupts pass validation.
+ * @note Invalid capability, missing fields, zero baudrate, or unsupported requested interrupts causes a compile-time
+ *       error.
+ */
 template <typename Backend, typename Config> consteval bool validate_can_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::can>(), "microHAL: CAN backend validation failed.");
@@ -1148,14 +1607,44 @@ template <typename Backend, typename Config> consteval bool validate_can_config(
         Config::enable_interrupts;
       }, "microHAL: CAN configuration must expose baudrate, mode, enable_can_fd, and enable_interrupts.");
   static_assert(Config::baudrate > 0U, "microHAL: CAN baudrate must be non-zero.");
+  static_assert(
+      []
+      {
+        if constexpr (BindingBackedConfig<Config>)
+        {
+          return true;
+        }
+        else
+        {
+          return Config::instance_index <= backend_traits<Backend>::can_capability().instance_count;
+        }
+      }(),
+      "microHAL: CAN instance index exceeds the backend instance count.");
+  static_assert(backend_traits<Backend>::can_capability().max_bitrate == 0U ||
+                    Config::baudrate <= backend_traits<Backend>::can_capability().max_bitrate,
+                "microHAL: CAN baudrate exceeds the backend maximum.");
+  static_assert((!Config::enable_can_fd) || backend_traits<Backend>::can_capability().can_fd,
+                "microHAL: selected backend does not support CAN FD.");
   static_assert((!Config::enable_interrupts) || IsrCapableConcept<Backend, peripheral_kind::can>,
                 "microHAL: selected backend does not provide interrupt-capable CAN.");
   return true;
 }
 
+/**
+ * @brief Requires a CAN configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config CAN configuration type.
+ */
 template <typename Backend, typename Config>
 concept CanConcept = can_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates USB configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config USB configuration type.
+ * @return `true` when backend support, required members, and at least one enabled role pass validation.
+ * @note Invalid capability, missing fields, or no enabled USB role causes a compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_usb_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::usb>(), "microHAL: USB backend validation failed.");
@@ -1174,9 +1663,21 @@ template <typename Backend, typename Config> consteval bool validate_usb_config(
   return true;
 }
 
+/**
+ * @brief Requires a USB configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config USB configuration type.
+ */
 template <typename Backend, typename Config>
 concept UsbConcept = usb_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates Ethernet configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config Ethernet configuration type.
+ * @return `true` when backend support, required members, and requested DMA/interrupt/speed/offload features pass.
+ * @note Unsupported requested capabilities or missing required fields cause a compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_ethernet_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::ethernet>(),
@@ -1205,9 +1706,21 @@ template <typename Backend, typename Config> consteval bool validate_ethernet_co
   return true;
 }
 
+/**
+ * @brief Requires an Ethernet configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config Ethernet configuration type.
+ */
 template <typename Backend, typename Config>
 concept EthernetConcept = ethernet_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates SD configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config SD configuration type.
+ * @return `true` when backend support, required members, clock, bus width, timing, and enabled transfer features pass.
+ * @note Unsupported requested capabilities or out-of-range clock causes a compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_sd_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::sd>(), "microHAL: SD backend validation failed.");
@@ -1241,9 +1754,21 @@ template <typename Backend, typename Config> consteval bool validate_sd_config()
   return true;
 }
 
+/**
+ * @brief Requires an SD configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config SD configuration type.
+ */
 template <typename Backend, typename Config>
 concept SdConcept = sd_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates DMA configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config DMA configuration type.
+ * @return `true` when the backend supports DMA and the required config fields are present.
+ * @note Unsupported DMA or missing instance/stream/channel and transfer members causes a compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_dma_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::dma>(), "microHAL: DMA backend validation failed.");
@@ -1263,9 +1788,21 @@ template <typename Backend, typename Config> consteval bool validate_dma_config(
   return true;
 }
 
+/**
+ * @brief Requires a DMA configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config DMA configuration type.
+ */
 template <typename Backend, typename Config>
 concept DmaConcept = dma_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates PWM configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config PWM configuration type.
+ * @return `true` when the backend supports PWM and the required fields and nonzero frequency are present.
+ * @note Invalid capability, missing fields, or zero frequency causes a compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_pwm_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::pwm>(), "microHAL: PWM backend validation failed.");
@@ -1284,9 +1821,21 @@ template <typename Backend, typename Config> consteval bool validate_pwm_config(
   return true;
 }
 
+/**
+ * @brief Requires a PWM configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config PWM configuration type.
+ */
 template <typename Backend, typename Config>
 concept PwmConcept = pwm_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates watchdog configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config Watchdog configuration type.
+ * @return `true` when backend support, required members, and nonzero timeout pass validation.
+ * @note Invalid capability, missing fields, or zero timeout causes a compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_watchdog_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::watchdog>(),
@@ -1304,9 +1853,21 @@ template <typename Backend, typename Config> consteval bool validate_watchdog_co
   return true;
 }
 
+/**
+ * @brief Requires a watchdog configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config Watchdog configuration type.
+ */
 template <typename Backend, typename Config>
 concept WatchdogConcept = watchdog_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates I2S configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config I2S configuration type.
+ * @return `true` when backend support, required members, nonzero sample rate, and requested DMA pass validation.
+ * @note Unsupported requested DMA or missing required members causes a compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_i2s_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::i2s>(), "microHAL: I2S backend validation failed.");
@@ -1327,9 +1888,21 @@ template <typename Backend, typename Config> consteval bool validate_i2s_config(
   return true;
 }
 
+/**
+ * @brief Requires an I2S configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config I2S configuration type.
+ */
 template <typename Backend, typename Config>
 concept I2sConcept = i2s_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates RCC configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config RCC configuration type.
+ * @return `true` when backend support, required members, and nonzero system clock pass validation.
+ * @note Invalid capability, missing members, or zero system clock causes a compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_rcc_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::rcc>(), "microHAL: RCC backend validation failed.");
@@ -1343,9 +1916,21 @@ template <typename Backend, typename Config> consteval bool validate_rcc_config(
   return true;
 }
 
+/**
+ * @brief Requires an RCC configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config RCC configuration type.
+ */
 template <typename Backend, typename Config>
 concept RccConcept = rcc_config_compatible<Backend, Config>();
 
+/**
+ * @brief Validates CRC configuration and emits compile-time diagnostics on failure.
+ * @tparam Backend Backend tag to validate against.
+ * @tparam Config CRC configuration type.
+ * @return `true` when backend support and required config members are present.
+ * @note Invalid capability or missing members causes a compile-time error.
+ */
 template <typename Backend, typename Config> consteval bool validate_crc_config() noexcept
 {
   static_assert(validate_capability<Backend, peripheral_kind::crc>(), "microHAL: CRC backend validation failed.");
@@ -1360,6 +1945,11 @@ template <typename Backend, typename Config> consteval bool validate_crc_config(
   return true;
 }
 
+/**
+ * @brief Requires a CRC configuration compatible with @p Backend.
+ * @tparam Backend Backend tag.
+ * @tparam Config CRC configuration type.
+ */
 template <typename Backend, typename Config>
 concept CrcConcept = crc_config_compatible<Backend, Config>();
 

@@ -52,11 +52,21 @@ struct master
   static constexpr transfer_mode mode{configured_transfer_mode<Config>()};
   using mode_api = serial_mode_api<Backend, peripheral_kind::spi>;
 
+  /**
+   * @brief Dispatches the configured SPI DMA completion interrupt.
+   * @return The backend's interrupt-dispatch status.
+   * @note Call from the DMA interrupt handler when the selected backend requires facade dispatch.
+   */
   [[nodiscard]] static status handle_dma_interrupt() noexcept
   {
     return mode_api::template handle_dma_interrupt<Config>();
   }
 
+  /**
+   * @brief Initializes the configured SPI controller.
+   * @return Initialization status, including backend errors or @ref status::unsupported when the
+   *         selected configuration has no initialization path.
+   */
   [[nodiscard]] static inline status initialize() noexcept
   {
     if constexpr (mode != transfer_mode::automatic || serial_slave_enabled<Config>())
@@ -65,6 +75,15 @@ struct master
       return detail::as_status([] { return spi_api_t<Backend>::template initialize<Config>(); });
   }
 
+  /**
+   * @brief Transmits and receives an equal number of SPI bytes.
+   * @param[in]  tx_payload  Bytes to transmit; storage is used only for the duration of this call.
+   * @param[out] rx_payload  Destination bytes; storage is used only for the duration of this call.
+   * @return Transfer status, or @ref status::invalid_argument if the span lengths differ. Equal
+   *         empty spans return @ref status::ok without accessing the backend.
+   * @note Blocking modes use the configured timeout where supported and may require live interrupt
+   *       service. Do not call from an ISR.
+   */
   [[nodiscard]] static inline status transfer(const std::span<const std::uint8_t> tx_payload,
                                               const std::span<std::uint8_t> rx_payload) noexcept
   {
@@ -87,6 +106,10 @@ struct master
   /**
    * @brief Transmits bytes without requiring a receive buffer.
    * @details Backends that cannot provide a transmit-only operation report @ref status::unsupported.
+   * @param[in] payload  Bytes to transmit; storage is used only for the duration of this call.
+   * @return Backend transfer status. An empty payload returns @ref status::ok without accessing the backend.
+   * @note Blocking modes use the configured timeout where supported and may require live interrupt
+   *       service. Do not call from an ISR.
    */
   [[nodiscard]] static inline status write_blocking(const std::span<const std::uint8_t> payload) noexcept
   {
@@ -105,6 +128,10 @@ struct master
    * @brief Receives bytes without requiring a transmit buffer.
    * @details The backend supplies its documented dummy transmit value; unsupported paths report
    *          @ref status::unsupported.
+   * @param[out] payload  Destination bytes; storage is used only for the duration of this call.
+   * @return Backend transfer status. An empty payload returns @ref status::ok without accessing the backend.
+   * @note Blocking modes use the configured timeout where supported and may require live interrupt
+   *       service. Do not call from an ISR.
    */
   [[nodiscard]] static inline status read_blocking(const std::span<std::uint8_t> payload) noexcept
   {
@@ -119,6 +146,17 @@ struct master
       return detail::as_status([payload] { return spi_api_t<Backend>::template read_blocking<Config>(payload); });
   }
 
+  /**
+   * @brief Starts a nonblocking full-duplex SPI transfer.
+   * @tparam CompletionHandler  No-throw callback accepting status or no arguments, as supported by
+   *                            the selected serial mode.
+   * @param[in]  tx_payload  Bytes to transmit; retain until completion or successful abort.
+   * @param[out] rx_payload  Destination bytes; retain until completion or successful abort.
+   * @return Submission status, or @ref status::invalid_argument when lengths differ. Equal empty
+   *         spans return @ref status::ok in automatic mode and do not submit a transfer.
+   * @note Requires interrupt-capable SPI support. The completion callback normally runs in interrupt
+   *       context and must not block.
+   */
   template <auto CompletionHandler>
   [[nodiscard]] static inline status transfer_async(const std::span<const std::uint8_t> tx_payload,
                                                     const std::span<std::uint8_t> rx_payload) noexcept
@@ -144,6 +182,16 @@ struct master
           { return spi_api_t<Backend>::template transfer_async<Config, CompletionHandler>(tx_payload, rx_payload); });
   }
 
+  /**
+   * @brief Starts an asynchronous SPI transmit-only operation.
+   * @tparam CompletionHandler  No-throw callback accepting status or no arguments, as supported by
+   *                            the selected serial mode.
+   * @param[in] payload  Bytes to transmit; retain until completion or successful abort.
+   * @return Submission status, or @ref status::invalid_argument for an empty payload; backend errors
+   *         are returned unchanged.
+   * @note The callback normally runs in interrupt context and must not block. Async support depends
+   *       on the configured mode and backend capability.
+   */
   template <auto CompletionHandler>
   [[nodiscard]] static status write_async(const std::span<const std::uint8_t> payload) noexcept
   {
@@ -152,6 +200,16 @@ struct master
       return status::invalid_argument;
     return mode_api::template write<Config, CompletionHandler>(payload);
   }
+  /**
+   * @brief Starts an asynchronous SPI receive-only operation.
+   * @tparam CompletionHandler  No-throw callback accepting status or no arguments, as supported by
+   *                            the selected serial mode.
+   * @param[out] payload  Destination bytes; retain until completion or successful abort.
+   * @return Submission status, or @ref status::invalid_argument for an empty payload; backend errors
+   *         are returned unchanged.
+   * @note The callback normally runs in interrupt context and must not block. Async support depends
+   *       on the configured mode and backend capability.
+   */
   template <auto CompletionHandler>
   [[nodiscard]] static status read_async(const std::span<std::uint8_t> payload) noexcept
   {
@@ -160,6 +218,11 @@ struct master
       return status::invalid_argument;
     return mode_api::template read<Config, CompletionHandler>(payload);
   }
+  /**
+   * @brief Attempts to cancel the outstanding SPI transfer.
+   * @return Backend cancellation status. Retain active buffers unless cancellation succeeds;
+   *         @ref status::unsupported is returned where automatic mode has no abort path.
+   */
   [[nodiscard]] static status abort() noexcept
   {
     if constexpr (mode == transfer_mode::automatic && !serial_slave_enabled<Config>() &&
@@ -168,6 +231,11 @@ struct master
     else
       return mode_api::template abort<Config>();
   }
+  /**
+   * @brief Queries the current or most recently completed SPI transfer status.
+   * @return Backend status, typically @ref status::busy while active; automatic mode may report
+   *         @ref status::unsupported where it has no status path.
+   */
   [[nodiscard]] static status transfer_status() noexcept
   {
     if constexpr (mode == transfer_mode::automatic && !serial_slave_enabled<Config>() &&
@@ -176,6 +244,12 @@ struct master
     else
       return mode_api::template transfer_status<Config>();
   }
+  /**
+   * @brief Dispatches the configured SPI peripheral interrupt.
+   * @return Backend interrupt-dispatch status, or @ref status::unsupported where automatic mode has
+   *         no facade-dispatch path.
+   * @note Call from the peripheral ISR when required by the backend.
+   */
   [[nodiscard]] static status handle_interrupt() noexcept
   {
     if constexpr (mode == transfer_mode::automatic && !serial_slave_enabled<Config>() &&
@@ -212,10 +286,26 @@ struct slave_config final
 template <typename Backend, typename Config> struct slave final : master<Backend, Config>
 {
   static_assert(serial_slave_enabled<Config>());
+  /**
+   * @brief Starts an asynchronous SPI slave transmit.
+   * @tparam Handler  No-throw callback accepting status or no arguments, as supported by the mode.
+   * @param[in] bytes  Data to transmit; retain until completion or successful abort.
+   * @return Submission status from the inherited SPI write operation.
+   * @note The external SPI master supplies the clock. The callback normally runs in interrupt context
+   *       and must not block.
+   */
   template <auto Handler> [[nodiscard]] static status transmit_async(std::span<const std::uint8_t> bytes) noexcept
   {
     return master<Backend, Config>::template write_async<Handler>(bytes);
   }
+  /**
+   * @brief Starts an asynchronous SPI slave receive.
+   * @tparam Handler  No-throw callback accepting status or no arguments, as supported by the mode.
+   * @param[out] bytes  Destination buffer; retain until completion or successful abort.
+   * @return Submission status from the inherited SPI read operation.
+   * @note The external SPI master supplies the clock. The callback normally runs in interrupt context
+   *       and must not block.
+   */
   template <auto Handler> [[nodiscard]] static status receive_async(std::span<std::uint8_t> bytes) noexcept
   {
     return master<Backend, Config>::template read_async<Handler>(bytes);

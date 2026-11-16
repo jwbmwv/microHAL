@@ -47,17 +47,34 @@ struct converter final
   static constexpr bool has_voltage_conversion{backend_traits<Backend>::dac_capability().voltage_conversion};
   static constexpr bool has_sequence_write{backend_traits<Backend>::dac_capability().sequence_write};
 
+  /**
+   * @brief Initializes the DAC channel selected by @p Config.
+   * @return @ref status::ok on success; otherwise the backend initialization status.
+   */
   [[nodiscard]] static inline status initialize() noexcept
   {
     return detail::as_status([] { return dac_api_t<Backend>::template initialize<Config>(); });
   }
 
+  /**
+   * @brief Writes one raw DAC code to the configured channel.
+   * @param[in] value Output code in the range represented by the configured resolution.
+   * @return @ref status::ok on success; otherwise the backend status. This call has no facade timeout parameter
+   *         and must not be made from interrupt context.
+   */
   [[nodiscard]] static inline status write_blocking(const std::uint16_t value) noexcept
   {
     return detail::as_status([value] { return dac_api_t<Backend>::template write_blocking<Config>(value); });
   }
 
-  /** @brief Writes each sample in order, stopping at the first backend error. */
+  /**
+   * @brief Writes raw DAC codes in order, stopping at the first backend error.
+   * @param[in] samples Caller-owned sequence of codes in the range represented by the configured resolution; the
+   *                    span is used only during this call.
+   * @return @ref status::ok when all writes succeed (including an empty sequence); otherwise the first backend
+   *         error. Earlier samples may already have been written on failure. Writes block, have no facade timeout
+   *         parameter, and must not be called from interrupt context.
+   */
   [[nodiscard]] static inline status write_sequence_blocking(const std::span<const std::uint16_t> samples) noexcept
   {
     for (const std::uint16_t sample : samples)
@@ -71,7 +88,14 @@ struct converter final
     return status::ok;
   }
 
-  /** @brief Converts millivolts to a DAC code using the configured resolution. */
+  /**
+   * @brief Converts a voltage to a DAC code using the configured resolution and writes it.
+   * @param[in] millivolts Voltage to output; must not exceed @p reference_mv.
+   * @param[in] reference_mv Positive full-scale output voltage in millivolts; must be non-zero.
+   * @return @ref status::invalid_argument for an invalid reference or voltage; otherwise the status from writing
+   *         the rounded DAC code. The write blocks, has no facade timeout parameter, and must not be called from
+   *         interrupt context.
+   */
   [[nodiscard]] static inline status write_millivolts(const std::uint32_t millivolts,
                                                       const std::uint32_t reference_mv) noexcept
   {
@@ -88,6 +112,15 @@ struct converter final
     return write_blocking(code);
   }
 
+  /**
+   * @brief Writes two raw DAC codes through the backend's dual-channel operation.
+   * @param[in] value1 First code in the range represented by the configured resolution.
+   * @param[in] value2 Second code in the range represented by the configured resolution.
+   * @return @ref status::ok on success; otherwise the backend status. Available only when
+   *         @ref has_dual_mode is true.
+   * @note This is a synchronous backend operation with no facade timeout parameter; do not call it from interrupt
+   *       context.
+   */
   [[nodiscard]] static inline status write_dual(const std::uint16_t value1, const std::uint16_t value2) noexcept
     requires(has_dual_mode)
   {
@@ -95,6 +128,15 @@ struct converter final
                              { return dac_api_t<Backend>::template write_dual<Config>(value1, value2); });
   }
 
+  /**
+   * @brief Starts DMA playback of a DAC sample sequence.
+   * @tparam CompletionHandler Backend-specific completion callback; its accepted signature and notification
+   *                           behavior depend on the selected backend.
+   * @param[in] samples DMA-accessible sample storage; keep it alive for the backend's transfer duration.
+   * @return @ref status::ok when started; otherwise the backend status.
+   * @note Requires a DMA-capable DAC backend. Any callback runs in the backend's completion/interrupt context and
+   *       must be noexcept, bounded, and non-blocking.
+   */
   template <auto CompletionHandler>
   [[nodiscard]] static inline status start_dma_waveform(const std::span<const std::uint16_t> samples) noexcept
     requires DmaCapableConcept<Backend, peripheral_kind::dac>

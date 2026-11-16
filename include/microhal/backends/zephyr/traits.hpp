@@ -603,6 +603,22 @@ struct i2c_api final
 #endif
   }
 
+  template <typename Config> static status recover_bus() noexcept
+  {
+#if defined(CONFIG_I2C)
+    const struct device* dev = device_from_config<Config>();
+    if ((dev == nullptr) || !device_is_ready(dev))
+    {
+      return status::error;
+    }
+
+    return transfer_status(i2c_recover_bus(dev));
+#else
+    (void)sizeof(Config);
+    return status::unsupported;
+#endif
+  }
+
   template <typename Config>
   static status write_read_blocking(const std::span<const std::uint8_t> tx_payload,
                                     const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
@@ -630,12 +646,25 @@ struct i2c_api final
   }
 
   template <typename Config, auto Handler>
-  static bool start_transfer(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
+  static status write_read_async(const std::span<const std::uint8_t> tx_payload,
+                                 const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
   {
+    (void)sizeof(Config);
+    (void)Handler;
+    (void)tx_payload;
+    (void)rx_payload;
+    (void)address;
+    return status::unsupported;
+  }
+
+  template <typename Config, auto Handler>
+  static status start_transfer(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
+  {
+    (void)sizeof(Config);
     (void)payload;
     (void)address;
     (void)Handler;
-    return false;
+    return status::unsupported;
   }
 };
 
@@ -1424,9 +1453,135 @@ struct can_api final
   {
 #if defined(CONFIG_CAN)
     const struct device* dev = device_from_config<Config>();
-    return (dev != nullptr) && device_is_ready(dev) && (can_start(dev) == 0);
+    if ((dev == nullptr) || !device_is_ready(dev) || (can_set_bitrate(dev, Config::baudrate) != 0))
+    {
+      return false;
+    }
+
+    can_mode_t mode = CAN_MODE_NORMAL;
+    if constexpr (Config::mode == can_mode::loopback)
+    {
+      mode = CAN_MODE_LOOPBACK;
+    }
+    else if constexpr (Config::mode == can_mode::silent)
+    {
+      mode = CAN_MODE_LISTENONLY;
+    }
+    else if constexpr (Config::mode == can_mode::silent_loopback)
+    {
+      mode = static_cast<can_mode_t>(CAN_MODE_LOOPBACK | CAN_MODE_LISTENONLY);
+    }
+    return (can_set_mode(dev, mode) == 0) && (can_start(dev) == 0);
 #else
     return false;
+#endif
+  }
+
+  template <typename Config> static status configure_timing(const can_bit_timing& timing) noexcept
+  {
+#if defined(CONFIG_CAN)
+    const struct device* dev = device_from_config<Config>();
+    if ((dev == nullptr) || !device_is_ready(dev))
+    {
+      return status::error;
+    }
+
+    struct can_timing zephyr_timing
+    {
+    };
+    zephyr_timing.prescaler = timing.prescaler;
+    zephyr_timing.sjw = timing.synchronization_jump_width;
+    zephyr_timing.prop_seg = timing.propagation_segment;
+    zephyr_timing.phase_seg1 = timing.phase_segment1;
+    zephyr_timing.phase_seg2 = timing.phase_segment2;
+    const int result = can_set_timing(dev, &zephyr_timing, nullptr);
+    if (result == 0)
+    {
+      return status::ok;
+    }
+    return ((result == -ENOTSUP) || (result == -ENOSYS)) ? status::unsupported : status::error;
+#else
+    (void)sizeof(Config);
+    (void)timing;
+    return status::unsupported;
+#endif
+  }
+
+  template <typename Config> static status query_error_state(can_error_state& result) noexcept
+  {
+#if defined(CONFIG_CAN)
+    const struct device* dev = device_from_config<Config>();
+    if ((dev == nullptr) || !device_is_ready(dev))
+    {
+      return status::error;
+    }
+
+    enum can_state state = CAN_STATE_ERROR_ACTIVE;
+    std::uint16_t tx_errors = 0U;
+    std::uint16_t rx_errors = 0U;
+    const int query_result = can_get_state(dev, &state, &tx_errors, &rx_errors);
+    if ((query_result == -ENOTSUP) || (query_result == -ENOSYS))
+    {
+      return status::unsupported;
+    }
+    if (query_result != 0)
+    {
+      return status::error;
+    }
+    switch (state)
+    {
+    case CAN_STATE_ERROR_ACTIVE:
+      result.state = can_bus_state::active;
+      break;
+    case CAN_STATE_ERROR_WARNING:
+      result.state = can_bus_state::warning;
+      break;
+    case CAN_STATE_ERROR_PASSIVE:
+      result.state = can_bus_state::error_passive;
+      break;
+    case CAN_STATE_BUS_OFF:
+      result.state = can_bus_state::bus_off;
+      break;
+    default:
+      result.state = can_bus_state::unknown;
+      break;
+    }
+    result.transmit_error_count = tx_errors;
+    result.receive_error_count = rx_errors;
+    return status::ok;
+#else
+    (void)sizeof(Config);
+    (void)result;
+    return status::unsupported;
+#endif
+  }
+
+  template <typename Config> static status recover_bus(const std::uint32_t timeout_ms) noexcept
+  {
+#if defined(CONFIG_CAN)
+    const struct device* dev = device_from_config<Config>();
+    if ((dev == nullptr) || !device_is_ready(dev))
+    {
+      return status::error;
+    }
+    const int result = can_recover(dev, K_MSEC(timeout_ms));
+    if (result == 0)
+    {
+      return status::ok;
+    }
+    if (result == -ETIMEDOUT)
+    {
+      return status::timeout;
+    }
+    if ((result == -ENOTSUP) || (result == -ENOSYS))
+    {
+      return status::unsupported;
+    }
+    return status::error;
+#else
+    (void)sizeof(Config);
+    (void)timeout_ms;
+    return status::unsupported;
 #endif
   }
 
@@ -2367,14 +2522,17 @@ template <> struct backend_traits<zephyr_tag> final
   {
     return {.supported = true,
             .blocking = true,
-            .non_blocking = true,
-            .isr = true,
-            .dma = true,
+            .non_blocking = false,
+            .isr = false,
+            .dma = false,
             .instance_count = 8U,
             .max_frequency_hz = 1'000'000U,
             .ten_bit_addressing = false,
             .repeated_start = true,
-            .address_probe = true};
+            .address_probe = true,
+            .bus_recovery = true,
+            .clock_stretching = true,
+            .smbus_pec = true};
   }
 
   static consteval struct spi_capability spi_capability() noexcept
@@ -2425,7 +2583,8 @@ template <> struct backend_traits<zephyr_tag> final
             .fifo = true,
             .lpuart = true,
             .autobaud = true,
-            .fifo_depth = 64U};
+            .fifo_depth = 64U,
+            .data_bits_mask = uart_data_bits_mask(uart_data_bits::eight)};
   }
 
   static consteval struct rtc_capability rtc_capability() noexcept
@@ -2520,7 +2679,11 @@ template <> struct backend_traits<zephyr_tag> final
             .filter_banks = 14U,
             .extended_ids = true,
             .remote_frames = true,
-            .rx_interrupt = true};
+            .rx_interrupt = false,
+            .timing_configuration = true,
+            .state_query = true,
+            .bus_recovery = true,
+            .max_bitrate = 1'000'000U};
   }
 
   static consteval struct usb_capability usb_capability() noexcept

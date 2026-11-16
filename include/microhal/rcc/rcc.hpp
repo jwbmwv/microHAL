@@ -50,11 +50,20 @@ struct clock_controller final
   static constexpr peripheral_kind kind{peripheral_kind::rcc};
   static constexpr std::uint32_t max_system_clock{backend_traits<Backend>::rcc_capability().max_system_clock_hz};
 
+  /**
+   * @brief Configures the system clock according to the compile-time clock configuration.
+   * @return Backend clock-configuration status.
+   */
   [[nodiscard]] static inline status configure() noexcept
   {
     return detail::as_status([] { return rcc_api_t<Backend>::template configure<Config>(); });
   }
 
+  /**
+   * @brief Configures the system clock and verifies the measured frequency.
+   * @return Configuration error if configuration fails, @ref microhal::status::ok when the measured frequency
+   *         matches @c Config::system_clock_hz, or @ref microhal::status::io_error when it does not.
+   */
   [[nodiscard]] static inline status configure_and_verify() noexcept
   {
     const status configured = configure();
@@ -65,12 +74,21 @@ struct clock_controller final
     return (get_system_clock_hz() == Config::system_clock_hz) ? status::ok : status::io_error;
   }
 
-  /// @return The measured system clock in hertz, not an operation status.
+  /**
+   * @brief Reads the measured system clock frequency.
+   * @return System clock frequency in hertz, not an operation status.
+   */
   [[nodiscard]] static inline std::uint32_t get_system_clock_hz() noexcept
   {
     return rcc_api_t<Backend>::template get_system_clock_hz<Config>();
   }
 
+  /**
+   * @brief Enables the clock for a peripheral instance.
+   * @param[in] peripheral Peripheral kind to clock.
+   * @param[in] instance   Backend-specific peripheral instance index.
+   * @return Backend clock-control status.
+   */
   [[nodiscard]] static inline status enable_peripheral_clock(const peripheral_kind peripheral,
                                                              const std::uint8_t instance) noexcept
   {
@@ -79,6 +97,12 @@ struct clock_controller final
         { return rcc_api_t<Backend>::template enable_peripheral_clock<Config>(peripheral, instance); });
   }
 
+  /**
+   * @brief Disables the clock for a peripheral instance.
+   * @param[in] peripheral Peripheral kind whose clock is disabled.
+   * @param[in] instance   Backend-specific peripheral instance index.
+   * @return Backend clock-control status.
+   */
   [[nodiscard]] static inline status disable_peripheral_clock(const peripheral_kind peripheral,
                                                               const std::uint8_t instance) noexcept
   {

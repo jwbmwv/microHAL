@@ -1686,6 +1686,10 @@ struct i2c_api final
   static status write_blocking(std::span<const std::uint8_t> payload, const std::uint16_t address) noexcept
   {
 #if MICROHAL_STM32_HAL_HAS_I2C
+    if (payload.size() > UINT16_MAX)
+    {
+      return status::invalid_argument;
+    }
     auto& handle_storage = handle<Config>();
     constexpr std::uint32_t timeout_ms = timeout_for<Config>();
     const std::uint16_t device_address =
@@ -1704,6 +1708,10 @@ struct i2c_api final
   static status read_blocking(std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
   {
 #if MICROHAL_STM32_HAL_HAS_I2C
+    if (payload.size() > UINT16_MAX)
+    {
+      return status::invalid_argument;
+    }
     auto& handle_storage = handle<Config>();
     constexpr std::uint32_t timeout_ms = timeout_for<Config>();
     const std::uint16_t device_address =
@@ -1861,6 +1869,10 @@ struct i2c_api final
   static bool start_transfer(std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
   {
 #if MICROHAL_STM32_HAL_HAS_I2C
+    if (payload.size() > UINT16_MAX)
+    {
+      return false;
+    }
     auto& handle_storage = handle<Config>();
     if (HAL_I2C_Master_Transmit_IT(&handle_storage, static_cast<std::uint16_t>(address << 1U), payload.data(),
                                    static_cast<std::uint16_t>(payload.size())) == HAL_OK) [[likely]]
@@ -2344,20 +2356,33 @@ struct uart_api final
     auto& handle_storage = handle<Config>();
     handle_storage.Instance = peripheral_instance<USART_TypeDef, Config>();
     handle_storage.Init.BaudRate = Config::baud_rate;
-    if constexpr (Config::parity == uart_parity::none)
+    constexpr uart_data_bits data_bits = []
     {
-      handle_storage.Init.WordLength = UART_WORDLENGTH_8B;
-      handle_storage.Init.Parity = UART_PARITY_NONE;
+      if constexpr (requires { Config::data_bits; })
+        return Config::data_bits;
+      return uart_data_bits::eight;
+    }();
+    if constexpr (data_bits == uart_data_bits::eight)
+    {
+      if constexpr (Config::parity == uart_parity::none)
+      {
+        handle_storage.Init.WordLength = UART_WORDLENGTH_8B;
+        handle_storage.Init.Parity = UART_PARITY_NONE;
+      }
+      else
+      {
+        handle_storage.Init.WordLength = UART_WORDLENGTH_9B;
+        handle_storage.Init.Parity = Config::parity == uart_parity::even ? UART_PARITY_EVEN : UART_PARITY_ODD;
+      }
     }
-    else if constexpr (Config::parity == uart_parity::even)
+    else if constexpr ((data_bits == uart_data_bits::nine) && (Config::parity == uart_parity::none))
     {
       handle_storage.Init.WordLength = UART_WORDLENGTH_9B;
-      handle_storage.Init.Parity = UART_PARITY_EVEN;
+      handle_storage.Init.Parity = UART_PARITY_NONE;
     }
     else
     {
-      handle_storage.Init.WordLength = UART_WORDLENGTH_9B;
-      handle_storage.Init.Parity = UART_PARITY_ODD;
+      return false;
     }
 
     if constexpr (Config::stop_bits == uart_stop_bits::one)
@@ -4280,6 +4305,7 @@ template <> struct backend_traits<stm32_hal_tag> final
             .dma = true,
             .instance_count = (MICROHAL_STM32_HAL_FAMILY_SELECTED != 0) ? backends::stm32::hal::i2c_instance_count : 4U,
             .max_frequency_hz = 1'000'000U,
+            .max_transfer_size_bytes = UINT16_MAX,
             .ten_bit_addressing = true,
 #if MICROHAL_STM32_HAL_HAS_I2C && defined(I2C_FIRST_FRAME) && defined(I2C_LAST_FRAME)
             .repeated_start = true,
@@ -4287,6 +4313,8 @@ template <> struct backend_traits<stm32_hal_tag> final
             .repeated_start = false,
 #endif
             .address_probe = true,
+            .clock_stretching = true,
+            .smbus_pec = true,
             .transfer_modes = backends::stm32::hal::serial_transfer_modes<peripheral_kind::i2c>()};
   }
 
@@ -4350,6 +4378,8 @@ template <> struct backend_traits<stm32_hal_tag> final
 #endif
               .hardware_flow_control = false,
               .max_baud_rate = 12'500'000U,
+              .data_bits_mask = static_cast<std::uint16_t>(uart_data_bits_mask(uart_data_bits::eight) |
+                                                           uart_data_bits_mask(uart_data_bits::nine)),
               .transfer_modes = backends::stm32::hal::serial_transfer_modes<peripheral_kind::uart>()};
     }
 
@@ -4372,7 +4402,9 @@ template <> struct backend_traits<stm32_hal_tag> final
             .one_and_half_stop_bits = false,
 #endif
             .hardware_flow_control = false,
-            .max_baud_rate = 12'500'000U};
+            .max_baud_rate = 12'500'000U,
+            .data_bits_mask = static_cast<std::uint16_t>(uart_data_bits_mask(uart_data_bits::eight) |
+                                                         uart_data_bits_mask(uart_data_bits::nine))};
   }
 
   static consteval struct rtc_capability rtc_capability() noexcept
@@ -4482,7 +4514,8 @@ template <> struct backend_traits<stm32_hal_tag> final
               .filter_banks = 14U,
               .extended_ids = true,
               .remote_frames = true,
-              .rx_interrupt = true};
+              .rx_interrupt = true,
+              .max_bitrate = 1'000'000U};
     }
 
     return {.supported = true,
@@ -4498,7 +4531,8 @@ template <> struct backend_traits<stm32_hal_tag> final
             .filter_banks = 14U,
             .extended_ids = true,
             .remote_frames = true,
-            .rx_interrupt = true};
+            .rx_interrupt = true,
+            .max_bitrate = 1'000'000U};
   }
 
   static consteval struct usb_capability usb_capability() noexcept

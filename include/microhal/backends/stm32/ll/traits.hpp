@@ -3263,6 +3263,8 @@ template <> struct backend_traits<stm32_ll_tag> final
             .repeated_start = false,
 #endif
             .address_probe = (MICROHAL_STM32_LL_HAS_I2C != 0),
+            .clock_stretching = true,
+            .smbus_pec = (MICROHAL_STM32_LL_HAS_I2C != 0),
             .transfer_modes = {.polled = MICROHAL_STM32_LL_HAS_I2C != 0,
                                .interrupt = MICROHAL_STM32_LL_HAS_I2C != 0,
                                .dma = MICROHAL_STM32_LL_HAS_I2C != 0}};
@@ -3329,6 +3331,7 @@ template <> struct backend_traits<stm32_ll_tag> final
 #endif
               .parity = true,
               .two_stop_bits = true,
+              .data_bits_mask = uart_data_bits_mask(uart_data_bits::eight),
               .transfer_modes = {.polled = MICROHAL_STM32_LL_HAS_UART != 0,
                                  .interrupt = MICROHAL_STM32_LL_HAS_UART != 0,
                                  .dma = MICROHAL_STM32_LL_HAS_UART != 0}};
@@ -3344,7 +3347,8 @@ template <> struct backend_traits<stm32_ll_tag> final
             .fifo = true,
             .lpuart = true,
             .autobaud = true,
-            .fifo_depth = 16U};
+            .fifo_depth = 16U,
+            .data_bits_mask = uart_data_bits_mask(uart_data_bits::eight)};
   }
 
   static consteval struct rtc_capability rtc_capability() noexcept

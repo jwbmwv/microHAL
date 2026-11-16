@@ -38,21 +38,38 @@ struct timer final
   static constexpr peripheral_kind kind{peripheral_kind::watchdog};
   static constexpr bool has_window{backend_traits<Backend>::watchdog_capability().window};
 
+  /**
+   * @brief Initializes the configured watchdog.
+   * @return Backend initialization status.
+   */
   [[nodiscard]] static inline status initialize() noexcept
   {
     return detail::as_status([] { return watchdog_api_t<Backend>::template initialize<Config>(); });
   }
 
+  /**
+   * @brief Starts the configured watchdog with its compile-time timeout.
+   * @return Backend start status.
+   * @note Expiration and reset behavior follow the selected watchdog hardware and backend capability.
+   */
   [[nodiscard]] static inline status start() noexcept
   {
     return detail::as_status([] { return watchdog_api_t<Backend>::template start<Config>(); });
   }
 
+  /**
+   * @brief Refreshes the watchdog counter.
+   * @return Backend refresh status; runtime refresh support is backend-dependent.
+   */
   [[nodiscard]] static inline status refresh() noexcept
   {
     return detail::as_status([] { return watchdog_api_t<Backend>::template refresh<Config>(); });
   }
 
+  /**
+   * @brief Refreshes the watchdog counter; equivalent to refresh().
+   * @return Result of refresh().
+   */
   [[nodiscard]] static inline status feed() noexcept
   {
     return refresh();

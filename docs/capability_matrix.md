@@ -109,7 +109,7 @@ capability record.
 | Peripheral | Additional capability fields |
 | --- | --- |
 | GPIO | `alternate_function`, `alternate_function_count`, `port_count`, `pins_per_port`, `output_toggle` |
-| I2C | `ten_bit_addressing`, `repeated_start`, `address_probe`, `transfer_modes` |
+| I2C | `ten_bit_addressing`, `repeated_start`, `address_probe`, `clock_stretching`, `clock_stretch_control`, `max_clock_stretch_timeout_us`, `bus_recovery`, `smbus_pec`, `max_transfer_size_bytes`, `transfer_modes` |
 | SPI | `transmit_only`, `receive_only`, `async_transfer`, `transfer_modes` |
 | QSPI | `quad_mode`, `dual_mode`, `octo_mode`, `ddr_mode`, `command_transfer`, `memory_mapped`, `max_address_bytes` |
 | UART | `fifo`, `lpuart`, `autobaud`, `fifo_depth`, `parity`, `two_stop_bits`, `one_and_half_stop_bits`, `hardware_flow_control`, `max_baud_rate`, `transfer_modes` |
@@ -118,8 +118,8 @@ capability record.
 | Timer | `capture_compare`, `periodic`, `pwm`, `channel_count`, `period_readback`, `counter_reset` |
 | ADC | `resolution_bits`, `channel_count`, `differential`, `oversampling`, `injected`, `sequential_scan`, `voltage_conversion` |
 | DAC | `resolution_bits`, `channel_count`, `dual_mode`, `waveform_generation`, `output_buffer`, `voltage_conversion`, `sequence_write` |
-| CAN | `can_fd`, `time_triggered`, `mailbox_count`, `filter_banks`, `extended_ids`, `remote_frames`, `rx_interrupt` |
-| USB | `device`, `host`, `otg`, `high_speed`, `endpoint_count`, `endpoint_transfer`, `endpoint_stall`, `max_packet_size_bytes` |
+| CAN | `can_fd`, `time_triggered`, `mailbox_count`, `filter_banks`, `extended_ids`, `remote_frames`, `rx_interrupt`, `timing_configuration`, `state_query`, `bus_recovery`, `max_bitrate` |
+| USB | `device`, `host`, `otg`, `high_speed`, `endpoint_count`, `endpoint_transfer`, `endpoint_stall`, `control_transfer`, `descriptor_access`, `max_packet_size_bytes` |
 | Ethernet | `checksum_offload`, `ptp_timestamp`, `vlan_filter`, `gigabit`, `mtu_bytes` |
 | SD/MMC | `high_speed`, `uhs`, `bus_width_1`, `bus_width_4`, `bus_width_8`, `block_size_bytes`, `block_io`, `erase`, `capacity_query` |
 | DMA | `stream_count`, `channel_count`, `mem_to_mem`, `fifo`, `double_buffer`, `transfer_status`, `abort`, `completion_callback`, `address_width_bits` |

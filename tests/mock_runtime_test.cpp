@@ -223,6 +223,25 @@ void test_i2c_probe_status() noexcept
   check(recorder::log().size() == 2U, "invalid i2c probe addresses do not reach the backend");
 }
 
+void test_i2c_smbus_pec_write() noexcept
+{
+  recorder::reset();
+  constexpr std::array<std::uint8_t, 1U> payload{0x34U};
+  std::array<std::uint8_t, 2U> workspace{};
+  check_status(microhal::i2c::master<backend, sensor_i2c>::write_blocking_with_pec(0x12U, payload, workspace),
+               status::ok, "SMBus PEC write succeeds");
+  check(workspace[0] == 0x34U && workspace[1] == 0x76U, "SMBus PEC write appends the expected CRC-8 byte");
+  check(recorder::log().size() == 1U && recorder::log()[0].op == operation::write &&
+            recorder::log()[0].length == workspace.size(),
+        "SMBus PEC write transmits payload and PEC in one transfer");
+
+  recorder::reset();
+  check_status(microhal::i2c::master<backend, sensor_i2c>::write_blocking_with_pec(
+                   0x12U, payload, std::span<std::uint8_t>{workspace.data(), 1U}),
+               status::invalid_argument, "SMBus PEC write rejects undersized workspace");
+  check(recorder::log().empty(), "invalid SMBus PEC workspace does not reach the backend");
+}
+
 void test_spi_fills_rx_buffer() noexcept
 {
   recorder::reset();
@@ -784,6 +803,7 @@ int main()
   test_i2c_combined_write_read_reports_status();
   test_i2c_combined_async_reports_completion();
   test_i2c_probe_status();
+  test_i2c_smbus_pec_write();
   test_spi_fills_rx_buffer();
   test_gpio_round_trip();
   test_flash_forwards_address();
