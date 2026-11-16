@@ -1,4 +1,5 @@
 if(CONFIG_MICRO_HAL)
+  zephyr_compile_definitions(MICROHAL_BACKENDS_EXPLICIT=1 MICROHAL_ENABLE_ZEPHYR=1)
   zephyr_library()
   zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../include)
   zephyr_library_sources(${CMAKE_CURRENT_SOURCE_DIR}/module_anchor.cpp)

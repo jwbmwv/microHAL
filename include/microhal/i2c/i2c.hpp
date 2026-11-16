@@ -445,7 +445,7 @@ public:
     {
       return transfer_result;
     }
-    if (smbus::pec(address, true, std::span<const std::uint8_t>{frame.data(), payload.size()}) != frame.back())
+    if (smbus::pec(address, true, std::span<const std::uint8_t>{frame}.first(payload.size())) != frame.back())
     {
       return status::io_error;
     }

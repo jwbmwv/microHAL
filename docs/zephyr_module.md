@@ -10,6 +10,8 @@ The module entry points are:
 
 Applications opt in by setting `CONFIG_MICRO_HAL=y` in `prj.conf` and adding
 microHAL to `EXTRA_ZEPHYR_MODULES` when building outside a west workspace.
+The module selects only the Zephyr backend for the application and module sources
+so native vendor backends do not accidentally compile against Zephyr's SDK headers.
 
 ## Contractual Board Binding Example
 
@@ -35,6 +37,8 @@ The [Zephyr tests workflow](../.github/workflows/zephyr-tests.yml) builds both
 board suites with Twister against Zephyr v3.7.0 LTS and v4.5.0. CI uses
 `--build-only`; it checks configuration and compilation but does not execute the
 tests in Renode.
+Each board uses a separate Twister output directory. CI prints failing build logs
+inline and uploads the available logs and reports for each Zephyr version.
 
 Run them with:
 
