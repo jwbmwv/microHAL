@@ -38,7 +38,7 @@ jobs:
           base-path: zephyr-ws
           toolchains: arm-zephyr-eabi
 
-      - name: Install pkg_resources for Zephyr 3.7 Twister
+      - name: Restore pkg_resources for Zephyr v3.7 Twister
         if: matrix.version == 'v3.7.0'
         run: python -m pip install "setuptools<81"
 
