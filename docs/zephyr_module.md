@@ -37,6 +37,8 @@ The [Zephyr tests workflow](../.github/workflows/zephyr-tests.yml) builds both
 board suites with Twister against Zephyr v3.7.0 LTS and v4.5.0. CI uses
 `--build-only`; it checks configuration and compilation but does not execute the
 tests in Renode.
+CI uses Python 3.12 and installs `setuptools<81` for Zephyr v3.7.0's legacy
+`pkg_resources` dependency.
 Each board uses a separate Twister output directory. CI prints failing build logs
 inline and uploads the available logs and reports for each Zephyr version.
 
