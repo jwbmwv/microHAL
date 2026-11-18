@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx storage backend implementation fragment.
+ */
 // Included inside microhal::backends::nordic::nrfx.
 struct mram_api final
 {
+  /// @brief Initializes the configured backend resource.
   static status initialize() noexcept
   {
 #if MICROHAL_NORDIC_HAS_MRAMC
@@ -18,6 +22,7 @@ struct mram_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Erases the requested storage range.
   static status erase(std::uint32_t address, std::uint32_t bytes) noexcept
   {
 #if MICROHAL_NORDIC_HAS_MRAMC
@@ -39,6 +44,7 @@ struct mram_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Programs the supplied data into storage.
   static status program(std::uint32_t address, std::span<const std::uint8_t> data) noexcept
   {
 #if MICROHAL_NORDIC_HAS_MRAMC
@@ -65,6 +71,7 @@ struct mram_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Reads data using the configured backend.
   static status read(std::uint32_t address, std::span<std::uint8_t> data) noexcept
   {
 #if MICROHAL_NORDIC_HAS_MRAMC
@@ -84,6 +91,7 @@ struct mram_api final
 struct h20_mram_api final
 {
 #if MICROHAL_NORDIC_HAS_H20_MRAM
+  /// @brief Checks whether an MRAM word can be read without an uncorrectable fault.
   static bool readable_word(std::uint32_t address) noexcept
   {
     // An uncorrectable H20 MRAM word faults on read instead of returning bad data.
@@ -114,6 +122,7 @@ struct h20_mram_api final
     return fault == 0U;
   }
 #endif
+  /// @brief Checks whether the configuration supplies the required board binding.
   template <typename Config> static constexpr bool bound() noexcept
   {
     return requires {
@@ -124,6 +133,7 @@ struct h20_mram_api final
       Config::binding::mram_release();
     };
   }
+  /// @brief Checks whether a nonempty address range lies within the aligned MRAM binding.
   template <typename Config> static bool range(std::uint32_t address, std::size_t bytes) noexcept
   {
     if constexpr (bound<Config>())
@@ -133,6 +143,7 @@ struct h20_mram_api final
                  static_cast<std::uint64_t>(Config::binding::mram_start_address) + Config::binding::mram_size_bytes;
     return false;
   }
+  /// @brief Writes data using the configured backend.
   template <typename Config>
   static status write(std::uint32_t address, std::span<const std::uint8_t> data, bool erase) noexcept
   {
@@ -197,6 +208,7 @@ struct h20_mram_api final
 #endif
     return status::unsupported;
   }
+  /// @brief Erases the requested storage range.
   template <typename Config> static status erase(std::uint32_t address, std::uint32_t bytes) noexcept
   {
     if (!range<Config>(address, bytes) || (address & 15U) || (bytes & 15U))
@@ -205,10 +217,12 @@ struct h20_mram_api final
     return write<Config>(address, {reinterpret_cast<std::uint8_t const*>(static_cast<std::uintptr_t>(address)), bytes},
                          true);
   }
+  /// @brief Programs the supplied data into storage.
   template <typename Config> static status program(std::uint32_t address, std::span<const std::uint8_t> data) noexcept
   {
     return write<Config>(address, data, false);
   }
+  /// @brief Reads data using the configured backend.
   template <typename Config> static status read(std::uint32_t address, std::span<std::uint8_t> data) noexcept
   {
 #if MICROHAL_NORDIC_HAS_H20_MRAM
@@ -230,6 +244,7 @@ struct h20_mram_api final
 
 struct flash_api final
 {
+  /// @brief Erases the requested storage range.
   template <typename Config> static status erase(std::uint32_t address, std::uint32_t bytes) noexcept
   {
 #if MICROHAL_NORDIC_HAS_RRAMC
@@ -242,6 +257,7 @@ struct flash_api final
     return nvmc_api::erase<Config>(address, bytes);
 #endif
   }
+  /// @brief Programs the supplied data into storage.
   template <typename Config> static status program(std::uint32_t address, std::span<const std::uint8_t> data) noexcept
   {
 #if MICROHAL_NORDIC_HAS_RRAMC
@@ -254,6 +270,7 @@ struct flash_api final
     return nvmc_api::program<Config>(address, data);
 #endif
   }
+  /// @copybrief microhal::flash::controller::read
   template <typename Config> static status read(std::uint32_t address, std::span<std::uint8_t> data) noexcept
   {
 #if MICROHAL_NORDIC_HAS_RRAMC
@@ -266,6 +283,7 @@ struct flash_api final
     return nvmc_api::read<Config>(address, data);
 #endif
   }
+  /// @copybrief microhal::flash::controller::erase_region
   template <typename Config> static result<flash_erase_region> erase_region(std::uint32_t address) noexcept
   {
 #if MICROHAL_NORDIC_HAS_RRAMC

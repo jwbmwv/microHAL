@@ -283,6 +283,12 @@ struct slave_config final
   static constexpr auto timeout_ms = TimeoutMs;
 };
 
+/**
+ * @brief SPI slave facade; the external master supplies the transfer clock.
+ * @tparam Backend Registered backend tag.
+ * @tparam Config Slave configuration accepted by the inherited master facade.
+ * @note The application must serialize access and retain asynchronous buffers until completion or successful abort.
+ */
 template <typename Backend, typename Config> struct slave final : master<Backend, Config>
 {
   static_assert(serial_slave_enabled<Config>());

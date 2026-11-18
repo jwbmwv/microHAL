@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx clock backend implementation fragment.
+ */
 // Included inside microhal::backends::nordic::nrfx.
 struct rcc_api final
 {
+  /// @brief Checks ownership of the configured resource.
   template <typename Config> static constexpr bool owned() noexcept
   {
     if constexpr (requires { Config::binding::owns_clock; })
       return Config::binding::owns_clock;
     return false;
   }
+  /// @copybrief microhal::rcc::clock_controller::configure
   template <typename Config> static status configure() noexcept
   {
     if constexpr (!owned<Config>())
@@ -72,6 +77,7 @@ struct rcc_api final
 #endif
     }
   }
+  /// @brief Returns the system-clock frequency in hertz.
   template <typename Config> static std::uint32_t get_system_clock_hz() noexcept
   {
 #if MICROHAL_NORDIC_SYSTEM_CORE_CLOCK
@@ -81,16 +87,19 @@ struct rcc_api final
     return 0U;
 #endif
   }
+  /// @copybrief microhal::rcc::clock_controller::enable_peripheral_clock
   template <typename Config>
   static status enable_peripheral_clock(peripheral_kind peripheral, std::uint8_t instance) noexcept
   {
     return domain<Config>(peripheral, instance, true);
   }
+  /// @copybrief microhal::rcc::clock_controller::disable_peripheral_clock
   template <typename Config>
   static status disable_peripheral_clock(peripheral_kind peripheral, std::uint8_t instance) noexcept
   {
     return domain<Config>(peripheral, instance, false);
   }
+  /// @brief Handles the interrupt for the clock.
   static void handle_interrupt() noexcept
   {
 #if MICROHAL_NORDIC_HAS_CLOCK
@@ -99,6 +108,7 @@ struct rcc_api final
   }
 
 private:
+  /// @brief Enables or disables a peripheral clock domain.
   template <typename Config>
   static status domain(peripheral_kind peripheral, std::uint8_t instance, bool enable) noexcept
   {

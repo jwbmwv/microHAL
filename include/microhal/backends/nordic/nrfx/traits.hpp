@@ -226,6 +226,7 @@ inline constexpr std::uint32_t twim_instance_count = 2U;
 #endif
 
 inline std::array<twim_transfer_state, twim_instance_count> twim_states{};
+/// @brief Returns the configured nrfx TWIM instance.
 inline nrfx_twim_t* twim_instance(const std::uint8_t index) noexcept
 {
 #if defined(NRF54L15_XXAA) || defined(NRF5340_XXAA_APPLICATION) || defined(NRF54H20_XXAA)
@@ -265,6 +266,7 @@ inline nrfx_twim_t* twim_instance(const std::uint8_t index) noexcept
 #endif
 }
 
+/// @brief Handles an nrfx TWIM event.
 inline void twim_event_handler(nrfx_twim_event_t const* event, void* context) noexcept
 {
   auto* transfer = static_cast<twim_transfer_state*>(context);
@@ -272,6 +274,7 @@ inline void twim_event_handler(nrfx_twim_event_t const* event, void* context) no
     transfer->finish((event->type == NRFX_TWIM_EVT_DONE) ? status::ok : status::io_error);
 }
 
+/// @brief Selects the nrfx TWIM frequency for the configured clock.
 inline nrf_twim_frequency_t twim_frequency(const std::uint32_t clock_hz) noexcept
 {
   switch (clock_hz)
@@ -291,6 +294,7 @@ inline nrf_twim_frequency_t twim_frequency(const std::uint32_t clock_hz) noexcep
   }
 }
 
+/// @brief Checks whether the TWIM binding supplies the required pins.
 template <typename Config> constexpr bool twim_pins_available() noexcept
 {
   return requires {
@@ -302,6 +306,7 @@ template <typename Config> constexpr bool twim_pins_available() noexcept
   };
 }
 
+/// @brief Returns the SCL pin from the TWIM binding.
 template <typename Config> constexpr std::uint32_t twim_scl_pin() noexcept
 {
   if constexpr (requires { Config::scl_pin; })
@@ -314,6 +319,7 @@ template <typename Config> constexpr std::uint32_t twim_scl_pin() noexcept
   }
 }
 
+/// @brief Returns the SDA pin from the TWIM binding.
 template <typename Config> constexpr std::uint32_t twim_sda_pin() noexcept
 {
   if constexpr (requires { Config::sda_pin; })
@@ -326,6 +332,7 @@ template <typename Config> constexpr std::uint32_t twim_sda_pin() noexcept
   }
 }
 
+/// @brief Initializes the configured nrfx TWIM instance.
 template <typename Config> status initialize_twim() noexcept
 {
   if constexpr (requires { Config::address_mode; })
@@ -379,8 +386,10 @@ template <typename Config> status initialize_twim() noexcept
   }
 }
 
+/// @brief Converts the TWIM driver result to a microHAL status.
 inline status twim_result(int result) noexcept;
 
+/// @brief Starts a TWIM transfer and waits for its completion.
 template <typename Config>
 inline status twim_start_and_wait(nrfx_twim_t* instance, twim_transfer_state& transfer,
                                   const nrfx_twim_xfer_desc_t& descriptor) noexcept
@@ -474,6 +483,7 @@ inline constexpr std::uint32_t twim_instance_count = 0U;
 
 struct gpio_api final
 {
+  /// @brief Configures the selected backend resource.
   template <typename PinConfig> static bool configure() noexcept
   {
 #if MICROHAL_NORDIC_HAS_GPIO
@@ -508,6 +518,7 @@ struct gpio_api final
 #endif
   }
 
+  /// @brief Writes data using the configured backend.
   template <typename PinConfig> static void write(const bool level) noexcept
   {
 #if MICROHAL_NORDIC_HAS_GPIO
@@ -531,6 +542,7 @@ struct gpio_api final
 #endif
   }
 
+  /// @copybrief microhal::gpio::pin::read
   template <typename PinConfig> static bool read() noexcept
   {
 #if MICROHAL_NORDIC_HAS_GPIO
@@ -551,6 +563,7 @@ struct gpio_api final
 #endif
   }
 
+  /// @copybrief microhal::gpio::pin::toggle
   template <typename PinConfig> static status toggle() noexcept
   {
 #if MICROHAL_NORDIC_HAS_GPIO
@@ -566,6 +579,7 @@ struct gpio_api final
 #endif
   }
 
+  /// @brief Enables the interrupt for the GPIO pin.
   template <typename PinConfig, auto Handler> static status enable_interrupt() noexcept
   {
 #if MICROHAL_NORDIC_HAS_GPIOTE
@@ -600,6 +614,7 @@ struct gpio_api final
 #endif
   }
 
+  /// @brief Handles the interrupt for the GPIO pin.
   static void handle_interrupt() noexcept
   {
 #if MICROHAL_NORDIC_HAS_GPIOTE
@@ -607,6 +622,7 @@ struct gpio_api final
 #endif
   }
 
+  /// @brief Disables the interrupt for the GPIO pin.
   template <typename PinConfig> static status disable_interrupt() noexcept
   {
 #if MICROHAL_NORDIC_HAS_GPIOTE
@@ -626,6 +642,7 @@ struct gpio_api final
 
 struct i2c_api final
 {
+  /// @copybrief microhal::i2c::master::initialize
   template <typename Config> static status initialize() noexcept
   {
 #if MICROHAL_NORDIC_TWIM_API_AVAILABLE
@@ -639,6 +656,7 @@ struct i2c_api final
     return status::unsupported;
   }
 
+  /// @copybrief microhal::i2c::master::write_blocking
   template <typename Config>
   static status write_blocking(const std::span<const std::uint8_t> payload, const std::uint16_t address) noexcept
   {
@@ -668,6 +686,7 @@ struct i2c_api final
     return status::unsupported;
   }
 
+  /// @copybrief microhal::i2c::master::read_blocking
   template <typename Config>
   static status read_blocking(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
   {
@@ -697,6 +716,7 @@ struct i2c_api final
     return status::unsupported;
   }
 
+  /// @brief Starts the transfer for the I2C peripheral.
   template <typename Config, auto Handler>
   static status start_transfer(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
   {
@@ -728,6 +748,7 @@ struct i2c_api final
 #endif
   }
 
+  /// @copybrief microhal::i2c::master::probe
   template <typename Config> static status probe(const std::uint16_t address) noexcept
   {
 #if MICROHAL_NORDIC_HAS_TWIM
@@ -744,6 +765,7 @@ struct i2c_api final
 #endif
   }
 
+  /// @brief Handles the interrupt for the I2C peripheral.
   static void handle_interrupt(const std::uint8_t index) noexcept
   {
 #if MICROHAL_NORDIC_HAS_TWIM
@@ -754,6 +776,7 @@ struct i2c_api final
 #endif
   }
 
+  /// @brief Writes data and then reads data using the blocking transfer path.
   template <typename Config>
   static status write_read_blocking(const std::span<const std::uint8_t> tx_payload,
                                     const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
@@ -787,6 +810,7 @@ struct i2c_api final
     return status::unsupported;
   }
 
+  /// @brief Starts an asynchronous write followed by a read.
   template <typename Config, auto Handler>
   static status write_read_async(const std::span<const std::uint8_t> tx_payload,
                                  const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
@@ -838,6 +862,7 @@ struct i2c_api final
 
 struct nvmc_api final
 {
+  /// @brief Erases the requested storage range.
   template <typename Config> static status erase(const std::uint32_t address, const std::uint32_t bytes) noexcept
   {
     (void)sizeof(Config);
@@ -865,6 +890,7 @@ struct nvmc_api final
 #endif
   }
 
+  /// @brief Programs the supplied data into storage.
   template <typename Config>
   static status program(const std::uint32_t address, const std::span<const std::uint8_t> data) noexcept
   {
@@ -886,6 +912,7 @@ struct nvmc_api final
 #endif
   }
 
+  /// @brief Reads data using the configured backend.
   template <typename Config>
   static status read(const std::uint32_t address, const std::span<std::uint8_t> data) noexcept
   {
@@ -907,6 +934,7 @@ struct nvmc_api final
 #endif
   }
 
+  /// @brief Returns the erase region containing the supplied address.
   template <typename Config> static result<flash_erase_region> erase_region(const std::uint32_t address) noexcept
   {
     (void)sizeof(Config);
@@ -927,6 +955,7 @@ struct nvmc_api final
 
 struct rram_api final
 {
+  /// @brief Returns the size of the configured resource in bytes.
   static std::uint32_t size_bytes() noexcept
   {
 #if MICROHAL_NORDIC_HAS_RRAMC
@@ -936,6 +965,7 @@ struct rram_api final
 #endif
   }
 
+  /// @brief Initializes the configured backend resource.
   static status initialize() noexcept
   {
 #if MICROHAL_NORDIC_HAS_RRAMC
@@ -963,6 +993,7 @@ struct rram_api final
 #endif
   }
 
+  /// @brief Erases the requested storage range.
   static status erase(std::uint32_t address, std::uint32_t bytes) noexcept
   {
 #if MICROHAL_NORDIC_HAS_RRAMC
@@ -996,6 +1027,7 @@ struct rram_api final
 #endif
   }
 
+  /// @brief Checks whether the address range is accessible to the configured transfer.
   static bool range_accessible(const std::uint32_t address, const std::uint32_t bytes, const bool write) noexcept
   {
 #if MICROHAL_NORDIC_HAS_RRAMC
@@ -1051,6 +1083,7 @@ struct rram_api final
 #endif
   }
 
+  /// @brief Programs the supplied data into storage.
   static status program(const std::uint32_t address, const std::span<const std::uint8_t> data) noexcept
   {
 #if MICROHAL_NORDIC_HAS_RRAMC
@@ -1103,6 +1136,7 @@ struct rram_api final
 #endif
   }
 
+  /// @brief Reads data using the configured backend.
   static status read(const std::uint32_t address, const std::span<std::uint8_t> data) noexcept
   {
 #if MICROHAL_NORDIC_HAS_RRAMC
@@ -1135,12 +1169,14 @@ struct rram_api final
 
 struct dac_api final
 {
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
     return false;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool write_blocking(const std::uint16_t value) noexcept
   {
     (void)sizeof(Config);
@@ -1148,6 +1184,7 @@ struct dac_api final
     return false;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool write_dual(const std::uint16_t a, const std::uint16_t b) noexcept
   {
     (void)sizeof(Config);
@@ -1156,6 +1193,7 @@ struct dac_api final
     return false;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config, auto Handler>
   static bool start_dma_waveform(const std::span<const std::uint16_t> waveform) noexcept
   {
@@ -1172,24 +1210,28 @@ struct dac_api final
 
 struct ethernet_api final
 {
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
     return false;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool start() noexcept
   {
     (void)sizeof(Config);
     return false;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool stop() noexcept
   {
     (void)sizeof(Config);
     return false;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool transmit_frame(const std::span<const std::uint8_t> frame) noexcept
   {
     (void)sizeof(Config);
@@ -1197,6 +1239,7 @@ struct ethernet_api final
     return false;
   }
 
+  /// @brief Returns zero because Ethernet frame reception is not implemented.
   template <typename Config> static std::uint32_t receive_frame(const std::span<std::uint8_t> buffer) noexcept
   {
     (void)sizeof(Config);
@@ -1204,6 +1247,7 @@ struct ethernet_api final
     return 0U;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool set_mac_address(const std::array<std::uint8_t, 6>& address) noexcept
   {
     (void)sizeof(Config);
@@ -1214,12 +1258,14 @@ struct ethernet_api final
 
 struct sd_api final
 {
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
     return false;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config>
   static bool read_blocks(const std::uint32_t start_block, const std::span<std::uint8_t> buffer) noexcept
   {
@@ -1229,6 +1275,7 @@ struct sd_api final
     return false;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config>
   static bool write_blocks(const std::uint32_t start_block, const std::span<const std::uint8_t> buffer) noexcept
   {
@@ -1238,6 +1285,7 @@ struct sd_api final
     return false;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config>
   static bool erase_blocks(const std::uint32_t start_block, const std::uint32_t block_count) noexcept
   {
@@ -1247,6 +1295,7 @@ struct sd_api final
     return false;
   }
 
+  /// @brief Returns zero because SD card access is not implemented.
   template <typename Config> static std::uint32_t capacity_blocks() noexcept
   {
     (void)sizeof(Config);
@@ -1261,6 +1310,7 @@ struct sd_api final
 
 struct crc_api final
 {
+  /// @copybrief microhal::crc::accelerator::initialize
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
@@ -1273,6 +1323,7 @@ struct crc_api final
     return false;
   }
 
+  /// @brief Returns zero because CRC calculation is not implemented.
   template <typename Config> static std::uint32_t calculate(const std::span<const std::uint8_t> data) noexcept
   {
     (void)sizeof(Config);
@@ -1280,17 +1331,20 @@ struct crc_api final
     return 0U;
   }
 
+  /// @brief Performs no operation in this backend configuration.
   template <typename Config> static void reset() noexcept
   {
     (void)sizeof(Config);
   }
 
+  /// @copybrief microhal::crc::accelerator::get_random
   template <typename Config> static std::uint32_t get_random() noexcept
   {
     (void)sizeof(Config);
     return read_random<Config>().value_or(0U);
   }
 
+  /// @copybrief microhal::crc::accelerator::read_random
   template <typename Config> static result<std::uint32_t> read_random() noexcept
   {
     if constexpr (requires {
@@ -1308,6 +1362,7 @@ struct crc_api final
 namespace microhal
 {
 
+/// @brief Describes the backend's peripheral APIs and compile-time capabilities.
 template <> struct backend_traits<nordic_nrf_tag> final
 {
   using backend_tag = nordic_nrf_tag;
@@ -1340,6 +1395,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
   static constexpr std::uint32_t gpio_pins_per_port{32U};
   static constexpr std::uint32_t gpio_alternate_function_count{16U};
 
+  /// @brief Reports the backend's GPIO capabilities.
   static consteval struct gpio_capability gpio_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_GPIO != 0;
@@ -1357,6 +1413,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .output_toggle = supported};
   }
 
+  /// @brief Reports the backend's I2C capabilities.
   static consteval struct i2c_capability i2c_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_TWIM != 0;
@@ -1380,6 +1437,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .transfer_modes = {.polled = supported && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK, .dma = supported}};
   }
 
+  /// @brief Reports the backend's SPI capabilities.
   static consteval struct spi_capability spi_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_SPIM != 0;
@@ -1398,6 +1456,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .transfer_modes = {.polled = supported && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK, .dma = supported}};
   }
 
+  /// @brief Reports the backend's QSPI capabilities.
   static consteval struct qspi_capability qspi_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_QSPI != 0;
@@ -1418,6 +1477,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .max_address_bytes = supported ? std::uint8_t{4U} : std::uint8_t{0U}};
   }
 
+  /// @brief Reports the backend's UART capabilities.
   static consteval struct uart_capability uart_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_UARTE != 0;
@@ -1445,6 +1505,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .transfer_modes = {.polled = supported && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK, .dma = supported}};
   }
 
+  /// @brief Reports the backend's RTC capabilities.
   static consteval struct rtc_capability rtc_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_RTC || MICROHAL_NORDIC_HAS_GRTC;
@@ -1464,6 +1525,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .subsecond = supported};
   }
 
+  /// @brief Reports the backend's flash capabilities.
   static consteval struct flash_capability flash_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_NVMC || MICROHAL_NORDIC_HAS_RRAMC || MICROHAL_NORDIC_HAS_MRAMC ||
@@ -1494,6 +1556,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .program_readback = supported};
   }
 
+  /// @brief Reports the backend's timer capabilities.
   static consteval struct timer_capability timer_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_TIMER != 0;
@@ -1526,6 +1589,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .counter_reset = supported};
   }
 
+  /// @brief Reports the backend's ADC capabilities.
   static consteval struct adc_capability adc_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_SAADC != 0;
@@ -1542,11 +1606,13 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .voltage_conversion = supported};
   }
 
+  /// @brief Reports the backend's DAC capabilities.
   static consteval struct dac_capability dac_capability() noexcept
   {
     return {};
   }
 
+  /// @brief Reports the backend's CAN capabilities.
   static consteval struct can_capability can_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_MCAN;
@@ -1562,6 +1628,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .rx_interrupt = supported};
   }
 
+  /// @brief Reports the backend's USB capabilities.
   static consteval struct usb_capability usb_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_USBD;
@@ -1578,16 +1645,19 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .max_packet_size_bytes = supported ? std::uint16_t{64U} : std::uint16_t{0U}};
   }
 
+  /// @brief Reports the backend's Ethernet capabilities.
   static consteval struct ethernet_capability ethernet_capability() noexcept
   {
     return {};
   }
 
+  /// @brief Reports the backend's SD capabilities.
   static consteval struct sd_capability sd_capability() noexcept
   {
     return {};
   }
 
+  /// @brief Reports the backend's DMA capabilities.
   static consteval struct dma_capability dma_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_MVDMA;
@@ -1605,6 +1675,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .address_width_bits = supported ? std::uint8_t{32U} : std::uint8_t{0U}};
   }
 
+  /// @brief Reports the backend's PWM capabilities.
   static consteval struct pwm_capability pwm_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_PWM != 0;
@@ -1619,6 +1690,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .runtime_start_stop = supported && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK};
   }
 
+  /// @brief Reports the backend's watchdog capabilities.
   static consteval struct watchdog_capability watchdog_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_WDT != 0;
@@ -1634,6 +1706,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .reset_on_timeout = supported};
   }
 
+  /// @brief Reports the backend's I2S capabilities.
   static consteval struct i2s_capability i2s_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_I2S != 0;
@@ -1654,6 +1727,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .transfer_modes = {.polled = supported && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK, .dma = supported}};
   }
 
+  /// @brief Reports the backend's RCC capabilities.
   static consteval struct rcc_capability rcc_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_SYSTEM_CORE_CLOCK != 0;
@@ -1675,6 +1749,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .system_clock_readback = supported};
   }
 
+  /// @brief Reports the backend's CRC capabilities.
   static consteval struct crc_capability crc_capability() noexcept
   {
     constexpr bool supported = MICROHAL_NORDIC_HAS_RNG;
@@ -1684,6 +1759,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
             .random_number_generator = supported};
   }
 
+  /// @brief Checks whether the GPIO pin is valid for the backend.
   template <typename PinConfig> static consteval bool is_valid_gpio_pin() noexcept
   {
 #if defined(NRF54H20_XXAA)
@@ -1704,6 +1780,7 @@ template <> struct backend_traits<nordic_nrf_tag> final
 #endif
   }
 
+  /// @brief Checks whether the alternate function is valid for the backend.
   template <typename PinConfig> static consteval bool is_valid_alternate_function() noexcept
   {
     return (PinConfig::alternate_function == gpio_no_alternate) ||

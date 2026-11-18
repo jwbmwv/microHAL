@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx SPI slave API implementation fragment.
+ */
+/// @brief Initializes the slave for the SPIS.
 template <typename Config> static status initialize_slave() noexcept
 {
 #if MICROHAL_NORDIC_HAS_SPIS
@@ -59,6 +63,7 @@ template <typename Config> static status initialize_slave() noexcept
   return status::unsupported;
 }
 
+/// @brief Submits a transfer using the configured slave peripheral.
 template <typename Config, auto Handler>
 static status slave_transfer(std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx) noexcept
 {
@@ -93,6 +98,7 @@ static status slave_transfer(std::span<const std::uint8_t> tx, std::span<std::ui
 #endif
 }
 
+/// @brief Attempts to cancel the active peripheral operation.
 template <typename Config> static status abort() noexcept
 {
   if constexpr (serial_slave_enabled<Config>())
@@ -135,6 +141,7 @@ template <typename Config> static status abort() noexcept
   return status::unsupported;
 }
 
+/// @brief Queries the current or most recently completed transfer status.
 template <typename Config> static status transfer_status() noexcept
 {
   if constexpr (serial_slave_enabled<Config>())
@@ -168,6 +175,7 @@ template <typename Config> static status transfer_status() noexcept
   return status::unsupported;
 }
 
+/// @brief Dispatches the pending backend event.
 template <typename Config> static status dispatch() noexcept
 {
   if constexpr (serial_slave_enabled<Config>())
@@ -197,10 +205,12 @@ template <typename Config> static status dispatch() noexcept
   return status::unsupported;
 }
 
+/// @brief Performs a blocking write using the configured backend.
 template <typename Config> static status write_blocking(std::span<const std::uint8_t> bytes) noexcept
 {
   return transfer<Config>(bytes, {});
 }
+/// @brief Performs a blocking read using the configured backend.
 template <typename Config> static status read_blocking(std::span<std::uint8_t> bytes) noexcept
 {
   return transfer<Config>({}, bytes);

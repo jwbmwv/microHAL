@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx SPI slave state and event handling.
+ */
 #if MICROHAL_NORDIC_HAS_SPIS
 inline nrfx_spis_t spis_instances[]{
 #if defined(NRF54L15_XXAA)
@@ -24,6 +27,7 @@ struct spis_state
   std::size_t rx_size{};
 };
 inline std::array<spis_state, std::size(spis_instances)> spis_states{};
+/// @brief Handles an nrfx SPI slave event.
 inline void spis_handler(nrfx_spis_event_t const* event, void* context) noexcept
 {
   auto& state = *static_cast<spis_state*>(context);

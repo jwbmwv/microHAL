@@ -30,6 +30,14 @@ struct controller_config final
   static constexpr std::uint32_t timeout_ms{TimeoutMs};
 };
 
+/**
+ * @brief Compile-time QSPI controller configuration using board-owned resources.
+ * @tparam Binding Backend-specific board resource binding.
+ * @tparam ClockHz Requested controller clock in hertz.
+ * @tparam EnableDma Request DMA transfers.
+ * @tparam EnableInterrupts Request interrupt support.
+ * @tparam TimeoutMs Timeout policy for blocking transfers in milliseconds.
+ */
 template <typename Binding, std::uint32_t ClockHz, bool EnableDma = false, bool EnableInterrupts = false,
           std::uint32_t TimeoutMs = 1000U>
 struct bound_controller_config final
@@ -167,6 +175,7 @@ struct controller final
   }
 
 private:
+  /// @brief Checks whether the backend supports the QSPI I/O mode.
   [[nodiscard]] static constexpr bool supports_mode(const io_mode mode) noexcept
   {
     const auto capability = backend_traits<Backend>::qspi_capability();
@@ -185,6 +194,7 @@ private:
     return false;
   }
 
+  /// @brief Checks whether the I/O mode is valid.
   [[nodiscard]] static constexpr bool valid_io_mode(const io_mode mode) noexcept
   {
     switch (mode)
@@ -199,6 +209,7 @@ private:
     return false;
   }
 
+  /// @brief Checks whether the command is valid for the configured controller.
   [[nodiscard]] static constexpr bool valid_command(const command& request, const bool no_data) noexcept
   {
     return valid_io_mode(request.instruction_mode) && valid_io_mode(request.address_mode) &&

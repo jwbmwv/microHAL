@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx I2C slave state and event handling.
+ */
 #if MICROHAL_NORDIC_HAS_TWIS
 inline nrfx_twis_t twis_instances[]{
 #if defined(NRF54L15_XXAA)
@@ -26,6 +29,7 @@ struct twis_state
 };
 inline std::array<twis_state, std::size(twis_instances)> twis_states{};
 
+/// @brief Handles an nrfx TWIS event.
 template <std::size_t Index> void twis_handler(nrfx_twis_event_t const* event) noexcept
 {
   auto& state = twis_states[Index];
@@ -55,6 +59,7 @@ template <std::size_t Index> void twis_handler(nrfx_twis_event_t const* event) n
   state.pending_result = value;
   state.pending_complete = true;
 }
+/// @brief Publishes the pending TWIS transfer completion.
 inline void twis_complete(std::size_t index) noexcept
 {
   auto& state = twis_states[index];
@@ -64,6 +69,7 @@ inline void twis_complete(std::size_t index) noexcept
     state.transfer.finish(state.pending_result);
   }
 }
+/// @brief Builds the table of TWIS event handlers.
 template <std::size_t... Indices> constexpr auto twis_handlers(std::index_sequence<Indices...>) noexcept
 {
   return std::array<nrfx_twis_event_handler_t, sizeof...(Indices)>{twis_handler<Indices>...};

@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx DMA backend implementation fragment.
+ */
 // Included inside microhal::backends::nordic::nrfx.
 namespace system_detail
 {
@@ -14,6 +17,7 @@ struct memory_dma_state
 inline memory_dma_state memory_dma{};
 inline constexpr std::uint32_t memory_dma_interrupts =
     NRF_MVDMA_INT_END_MASK | NRF_MVDMA_INT_SOURCEBUSERROR_MASK | NRF_MVDMA_INT_SINKBUSERROR_MASK;
+/// @brief Completes the memory-DMA operation and updates its state.
 inline void memory_dma_finish(status result) noexcept
 {
   auto& state = memory_dma;
@@ -29,6 +33,7 @@ inline void memory_dma_finish(status result) noexcept
 } // namespace system_detail
 struct dma_api final
 {
+  /// @copybrief microhal::dma::controller::initialize
   template <typename Config> static status initialize() noexcept
   {
 #if MICROHAL_NORDIC_HAS_MVDMA
@@ -50,6 +55,7 @@ struct dma_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::dma::controller::start_transfer
   template <typename Config, auto Handler>
   static status start_transfer(std::uint32_t source, std::uint32_t sink, std::uint32_t length) noexcept
   {
@@ -103,6 +109,7 @@ struct dma_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::dma::controller::abort
   template <typename Config> static status abort() noexcept
   {
 #if MICROHAL_NORDIC_HAS_MVDMA
@@ -136,6 +143,7 @@ struct dma_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::dma::controller::transfer_status
   template <typename Config> static result<dma_transfer_state> transfer_status() noexcept
   {
 #if MICROHAL_NORDIC_HAS_MVDMA
@@ -148,6 +156,7 @@ struct dma_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Handles the interrupt for the DMA transfer.
   static void handle_interrupt() noexcept
   {
 #if MICROHAL_NORDIC_HAS_MVDMA
@@ -177,6 +186,7 @@ struct dma_api final
     }
 #endif
   }
+  /// @brief Handles the interrupt for the DMA transfer.
   template <typename Config> static void handle_interrupt() noexcept
   {
     handle_interrupt();

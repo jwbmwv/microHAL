@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx QSPI backend implementation fragment.
+ */
 // Included inside microhal::backends::nordic::nrfx.
 struct qspi_api final
 {
+  /// @brief Initializes the configured backend resource.
   template <typename Config> static status initialize() noexcept
   {
 #if MICROHAL_NORDIC_HAS_QSPI
@@ -44,6 +48,7 @@ struct qspi_api final
 #endif
     return status::unsupported;
   }
+  /// @copybrief microhal::qspi::controller::command_write
   template <typename Config>
   static status command_write(const qspi_command& request, const std::span<const std::uint8_t> payload) noexcept
   {
@@ -69,6 +74,7 @@ struct qspi_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::qspi::controller::command_read
   template <typename Config>
   static status command_read(const qspi_command& request, const std::span<std::uint8_t> payload) noexcept
   {
@@ -96,6 +102,7 @@ struct qspi_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Enters the configured QSPI memory-mapped mode.
   template <typename Config> static status enter_memory_mapped(const qspi_command& command) noexcept
   {
 #if MICROHAL_NORDIC_HAS_QSPI
@@ -130,6 +137,7 @@ struct qspi_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::qspi::controller::exit_memory_mapped
   template <typename Config> static status exit_memory_mapped() noexcept
   {
 #if MICROHAL_NORDIC_HAS_QSPI
@@ -159,6 +167,7 @@ struct qspi_api final
 
 private:
 #if MICROHAL_NORDIC_HAS_QSPI
+  /// @brief Completes the current operation and updates its state.
   static status finish(status result) noexcept
   {
     if (result == status::timeout && nrfx_qspi_init_check())
@@ -169,6 +178,7 @@ private:
     }
     return result;
   }
+  /// @brief Executes the backend's custom command path.
   static status custom_command(const qspi_command& request, const std::uint8_t* tx, std::uint8_t* rx,
                                const std::size_t size) noexcept
   {
@@ -208,6 +218,7 @@ private:
     result = detail::driver_result(nrfx_qspi_lfm_xfer(tx, rx, size, true));
     return result == status::ok ? result : discard_frame(result);
   }
+  /// @brief Discards the current frame.
   static status discard_frame(status result) noexcept
   {
     // A failed long command can leave CINSTR asserted; do not expose that state to XIP.

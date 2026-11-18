@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx real-time clock implementation fragment.
+ */
 // Included inside microhal::backends::nordic::nrfx.
 namespace system_detail
 {
@@ -29,6 +32,7 @@ inline rtc_clock clocks[
 #endif
 ]{};
 #if MICROHAL_NORDIC_HAS_RTC
+/// @brief Returns the raw tick count from the configured clock.
 inline std::uint64_t raw_ticks(std::uint8_t index) noexcept
 {
   auto& state = clocks[index];
@@ -43,6 +47,7 @@ inline std::uint64_t raw_ticks(std::uint8_t index) noexcept
   return high + ticks;
 }
 #endif
+/// @brief Returns the raw time value in microseconds.
 inline std::uint64_t raw_us(std::uint8_t index) noexcept
 {
 #if MICROHAL_NORDIC_HAS_GRTC
@@ -61,6 +66,7 @@ inline std::uint64_t raw_us(std::uint8_t index) noexcept
   return 0U;
 #endif
 }
+/// @brief Schedules the backend operation.
 inline status schedule(std::uint8_t index, std::uint8_t slot, std::uint64_t when) noexcept
 {
 #if MICROHAL_NORDIC_HAS_GRTC
@@ -77,6 +83,7 @@ inline status schedule(std::uint8_t index, std::uint8_t slot, std::uint64_t when
   return status::unsupported;
 #endif
 }
+/// @brief Disables the selected backend resource.
 inline void disable(std::uint8_t index, std::uint8_t slot) noexcept
 {
 #if MICROHAL_NORDIC_HAS_GRTC
@@ -88,6 +95,7 @@ inline void disable(std::uint8_t index, std::uint8_t slot) noexcept
   (void)slot;
 #endif
 }
+/// @brief Handles a backend event for the active operation.
 inline void event(std::uint8_t index, std::uint8_t slot) noexcept
 {
   auto& state = clocks[index];
@@ -121,6 +129,7 @@ inline void event(std::uint8_t index, std::uint8_t slot) noexcept
   }
 }
 #if MICROHAL_NORDIC_HAS_RTC
+/// @brief Handles an RTC event.
 inline void rtc_event(nrf_rtc_event_t event_id, void* context) noexcept
 {
   const auto index = static_cast<std::uint8_t>(static_cast<rtc_clock*>(context) - clocks);
@@ -136,12 +145,14 @@ inline void rtc_event(nrf_rtc_event_t event_id, void* context) noexcept
 
 struct rtc_api final
 {
+  /// @brief Returns the index associated with the configured resource.
   template <typename Config> static constexpr std::uint8_t index() noexcept
   {
     if constexpr (requires { Config::instance_index; })
       return Config::instance_index;
     return 0U;
   }
+  /// @copybrief microhal::rtc::controller::initialize
   template <typename Config> static status initialize() noexcept
   {
 #if MICROHAL_NORDIC_HAS_RTC || MICROHAL_NORDIC_HAS_GRTC
@@ -206,12 +217,14 @@ struct rtc_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Sets the calendar for the RTC.
   template <typename Config, typename Date> static status set_calendar(const Date& date) noexcept
   {
     if (!calendar::valid(date))
       return status::invalid_argument;
     return set_epoch<Config>(calendar::seconds(date) * 1000000ULL, true);
   }
+  /// @brief Sets the time for the RTC.
   template <typename Config>
   static status set_time(std::uint8_t hour, std::uint8_t minute, std::uint8_t second) noexcept
   {
@@ -219,6 +232,7 @@ struct rtc_api final
       return status::invalid_argument;
     return set_epoch<Config>((hour * 3600ULL + minute * 60ULL + second) * 1000000ULL, false);
   }
+  /// @brief Returns the calendar for the RTC.
   template <typename Config, typename Date> static status get_calendar(Date& date) noexcept
   {
     const auto value = now<Config>();
@@ -229,6 +243,7 @@ struct rtc_api final
       date.year = date.month = date.day = 0U;
     return status::ok;
   }
+  /// @brief Returns the time for the RTC.
   template <typename Config>
   static status get_time(std::uint8_t& hour, std::uint8_t& minute, std::uint8_t& second) noexcept
   {
@@ -241,6 +256,7 @@ struct rtc_api final
     second = static_cast<std::uint8_t>(seconds % 60U);
     return status::ok;
   }
+  /// @brief Returns the RTC subsecond position in microseconds.
   template <typename Config> static result<std::uint32_t> get_subsecond_us() noexcept
   {
     const auto value = now<Config>();
@@ -248,6 +264,7 @@ struct rtc_api final
       return value.error();
     return static_cast<std::uint32_t>(value.value() % 1000000ULL);
   }
+  /// @copybrief microhal::rtc::controller::enable_alarm
   template <typename Config, auto Handler, typename Date> static status enable_alarm(const Date& date) noexcept
   {
     const auto current = now<Config>();
@@ -286,6 +303,7 @@ struct rtc_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Enables a periodic RTC event.
   template <typename Config, auto Handler> static status enable_periodic(std::uint32_t period_us) noexcept
   {
     const auto current = now<Config>();
@@ -323,6 +341,7 @@ struct rtc_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Disables the RTC's periodic event.
   template <typename Config> static status disable_periodic() noexcept
   {
     const auto current = now<Config>();
@@ -335,12 +354,14 @@ struct rtc_api final
     system_detail::clocks[index<Config>()].periodic = nullptr;
     return status::ok;
   }
+  /// @brief Sets the date and time for the RTC.
   template <typename Config> static status set_date_time(const microhal::rtc::date_time& date) noexcept
   {
     if (date.year == 0U && date.month == 0U && date.day == 0U)
       return set_time<Config>(date.hour, date.minute, date.second);
     return set_calendar<Config>(date);
   }
+  /// @brief Returns the date and time for the RTC.
   template <typename Config> static result<microhal::rtc::date_time> get_date_time() noexcept
   {
     microhal::rtc::date_time date{};
@@ -349,10 +370,12 @@ struct rtc_api final
       return result;
     return date;
   }
+  /// @copybrief microhal::rtc::controller::read_subsecond_us
   template <typename Config> static result<std::uint32_t> read_subsecond_us() noexcept
   {
     return get_subsecond_us<Config>();
   }
+  /// @brief Enables the periodic interrupt for the RTC.
   template <typename Config, auto Handler> static status enable_periodic_irq(std::uint32_t frequency_hz) noexcept
   {
 #if MICROHAL_NORDIC_HAS_RTC
@@ -386,10 +409,12 @@ struct rtc_api final
     return enable_periodic<Config, Handler>(1000000U / frequency_hz);
 #endif
   }
+  /// @copybrief microhal::rtc::controller::disable_periodic_irq
   template <typename Config> static status disable_periodic_irq() noexcept
   {
     return disable_periodic<Config>();
   }
+  /// @brief Handles the interrupt for the RTC.
   static void handle_interrupt(std::uint8_t i = 0U) noexcept
   {
 #if MICROHAL_NORDIC_HAS_GRTC
@@ -404,6 +429,7 @@ struct rtc_api final
   }
 
 private:
+  /// @brief Returns the current time from the configured source.
   template <typename Config> static result<std::uint64_t> now() noexcept
   {
     constexpr auto i = index<Config>();
@@ -422,6 +448,7 @@ private:
     return status::unsupported;
 #endif
   }
+  /// @brief Sets the epoch for the RTC.
   template <typename Config> static status set_epoch(std::uint64_t epoch, bool calendar_set) noexcept
   {
     const auto current = now<Config>();

@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx UARTE transfer API implementation fragment.
+ */
+/// @brief Queries the current or most recently completed transmit status.
 template <typename Config> static status tx_status() noexcept
 {
 #if MICROHAL_NORDIC_HAS_UARTE
@@ -15,6 +19,7 @@ template <typename Config> static status tx_status() noexcept
 #endif
 }
 
+/// @brief Queries the current or most recently completed receive status.
 template <typename Config> static status rx_status() noexcept
 {
 #if MICROHAL_NORDIC_HAS_UARTE
@@ -31,6 +36,7 @@ template <typename Config> static status rx_status() noexcept
 #endif
 }
 
+/// @brief Attempts to abort the transmit for the UARTE.
 template <typename Config> static status abort_tx() noexcept
 {
 #if MICROHAL_NORDIC_HAS_UARTE
@@ -58,6 +64,7 @@ template <typename Config> static status abort_tx() noexcept
 #endif
 }
 
+/// @brief Attempts to abort the receive for the UARTE.
 template <typename Config> static status abort_rx() noexcept
 {
 #if MICROHAL_NORDIC_HAS_UARTE
@@ -95,6 +102,7 @@ template <typename Config> static status abort_rx() noexcept
 #endif
 }
 
+/// @brief Attempts to cancel the active peripheral operation.
 template <typename Config> static status abort() noexcept
 {
   const auto tx = abort_tx<Config>();
@@ -102,6 +110,7 @@ template <typename Config> static status abort() noexcept
   return tx == status::ok ? rx : tx;
 }
 
+/// @brief Queries the current or most recently completed transfer status.
 template <typename Config> static status transfer_status() noexcept
 {
   const auto tx = tx_status<Config>();
@@ -111,6 +120,7 @@ template <typename Config> static status transfer_status() noexcept
   return tx == status::ok ? rx : tx;
 }
 
+/// @brief Starts the configured receive operation.
 template <typename Config, auto Handler, bool Circular>
 static status start_receive(std::span<std::uint8_t> buffer) noexcept
 {
@@ -159,10 +169,12 @@ static status start_receive(std::span<std::uint8_t> buffer) noexcept
 #endif
 }
 
+/// @brief Starts UART reception until the buffer fills or the line becomes idle.
 template <typename Config, auto Handler> static status start_receive_to_idle(std::span<std::uint8_t> buffer) noexcept
 {
   return start_receive<Config, Handler, false>(buffer);
 }
+/// @brief Starts continuous reception into a circular buffer.
 template <typename Config, auto Handler> static status start_circular_rx(std::span<std::uint8_t> buffer) noexcept
 {
   return start_receive<Config, Handler, true>(buffer);

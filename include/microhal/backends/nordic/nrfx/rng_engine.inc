@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx random-number backend implementation fragment.
+ */
 // Included inside microhal::backends::nordic::nrfx.
 namespace system_detail
 {
@@ -6,6 +9,7 @@ struct entropy_driver
 {
   static inline std::atomic<bool> initialized{};
   static inline std::atomic<bool> active{};
+  /// @brief Initializes the configured backend resource.
   static status initialize() noexcept
   {
     if (initialized.load())
@@ -18,6 +22,7 @@ struct entropy_driver
     active.store(false);
     return result;
   }
+  /// @brief Reads data using the configured backend.
   static result<std::uint32_t> read() noexcept
   {
     if (!initialized.load())
@@ -30,6 +35,7 @@ struct entropy_driver
   }
 
 private:
+  /// @brief Initializes the hardware selected by the configuration.
   static status initialize_hardware() noexcept
   {
 #if MICROHAL_NORDIC_HAS_RNG_HAL
@@ -50,6 +56,7 @@ private:
 #endif
     return status::ok;
   }
+  /// @brief Generates a 32-bit random value using the selected entropy source.
   static result<std::uint32_t> generate() noexcept
   {
 #if MICROHAL_NORDIC_HAS_RNG_HAL

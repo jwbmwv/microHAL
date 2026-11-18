@@ -58,6 +58,7 @@
 namespace microhal::backends::nuttx
 {
 
+/// @brief Resolves the I2C device path from the configuration.
 template <typename Config> consteval const char* i2c_device_path() noexcept
 {
   if constexpr (requires { typename Config::binding; } && requires { Config::binding::device_path; })
@@ -74,6 +75,7 @@ template <typename Config> consteval const char* i2c_device_path() noexcept
   }
 }
 
+/// @brief Resolves the SPI device path from the configuration.
 template <typename Config> consteval const char* spi_device_path() noexcept
 {
   if constexpr (requires { typename Config::binding; } && requires { Config::binding::device_path; })
@@ -90,6 +92,7 @@ template <typename Config> consteval const char* spi_device_path() noexcept
   }
 }
 
+/// @brief Resolves the QSPI device path from the configuration.
 template <typename Config> consteval const char* qspi_device_path() noexcept
 {
   if constexpr (requires { typename Config::binding; } && requires { Config::binding::device_path; })
@@ -106,6 +109,7 @@ template <typename Config> consteval const char* qspi_device_path() noexcept
   }
 }
 
+/// @brief Resolves the SD device path from the configuration.
 template <typename Config> consteval const char* sd_device_path() noexcept
 {
   if constexpr (requires { typename Config::binding; } && requires { Config::binding::device_path; })
@@ -122,6 +126,7 @@ template <typename Config> consteval const char* sd_device_path() noexcept
   }
 }
 
+/// @brief Resolves the runtime device path from the configuration.
 template <typename Config>
 static const char* runtime_device_path(char* storage, const std::size_t capacity, const char* device_name) noexcept
 {
@@ -150,6 +155,7 @@ static const char* runtime_device_path(char* storage, const std::size_t capacity
 
 struct gpio_api final
 {
+  /// @brief Performs no operation; GPIO setup is board-specific.
   template <typename PinConfig> static void configure() noexcept
   {
 #if defined(__NUTTX__)
@@ -159,6 +165,7 @@ struct gpio_api final
 #endif
   }
 
+  /// @brief Performs no operation; GPIO writes require board-specific integration.
   template <typename PinConfig> static void write(const bool level) noexcept
   {
 #if defined(__NUTTX__)
@@ -169,6 +176,7 @@ struct gpio_api final
 #endif
   }
 
+  /// @brief Returns false because GPIO reads are not implemented.
   template <typename PinConfig> static bool read() noexcept
   {
 #if defined(__NUTTX__)
@@ -179,6 +187,7 @@ struct gpio_api final
 #endif
   }
 
+  /// @brief Returns false because GPIO interrupts are not implemented.
   template <typename PinConfig, auto Handler> static bool enable_interrupt() noexcept
   {
     (void)Handler;
@@ -193,6 +202,7 @@ struct gpio_api final
 
 struct i2c_api final
 {
+  /// @brief Checks whether the address is valid for the configuration.
   template <typename Config> static constexpr bool valid_address(const std::uint16_t address) noexcept
   {
     constexpr std::uint16_t max_address = (Config::address_mode == i2c_address_mode::ten_bit) ? 0x3FFU : 0x7FU;
@@ -201,6 +211,7 @@ struct i2c_api final
 
   // The NuttX I2C character-device ioctl has no timeout argument. A reported
   // ETIMEDOUT is preserved, but Config::timeout_ms cannot bound this call.
+  /// @brief Converts a driver transfer result to a microHAL status.
   static status transfer_status(const int result) noexcept
   {
     if (result >= 0)
@@ -228,6 +239,7 @@ struct i2c_api final
     return status::error;
   }
 
+  /// @copybrief microhal::i2c::master::initialize
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_I2C) && defined(CONFIG_I2C_DRIVER)
@@ -243,6 +255,7 @@ struct i2c_api final
 #endif
   }
 
+  /// @copybrief microhal::i2c::master::write_blocking
   template <typename Config>
   static bool write_blocking(const std::uint8_t addr, const std::uint8_t* data, const std::size_t length) noexcept
   {
@@ -281,6 +294,7 @@ struct i2c_api final
 #endif
   }
 
+  /// @copybrief microhal::i2c::master::write_blocking
   template <typename Config>
   static status write_blocking(const std::span<const std::uint8_t> payload, const std::uint16_t address) noexcept
   {
@@ -334,6 +348,7 @@ struct i2c_api final
 #endif
   }
 
+  /// @copybrief microhal::i2c::master::read_blocking
   template <typename Config>
   static status read_blocking(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
   {
@@ -387,6 +402,7 @@ struct i2c_api final
 #endif
   }
 
+  /// @copybrief microhal::i2c::master::probe
   template <typename Config> static status probe(const std::uint16_t address) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_I2C) && defined(CONFIG_I2C_DRIVER)
@@ -433,6 +449,7 @@ struct i2c_api final
 #endif
   }
 
+  /// @brief Writes data and then reads data using the blocking transfer path.
   template <typename Config>
   static status write_read_blocking(const std::span<const std::uint8_t> tx_payload,
                                     const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
@@ -497,6 +514,7 @@ struct i2c_api final
 #endif
   }
 
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config, auto Handler>
   static status start_transfer(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
   {
@@ -510,6 +528,7 @@ struct i2c_api final
 
 struct spi_api final
 {
+  /// @brief Converts a driver transfer result to a microHAL status.
   static status transfer_status(const int result) noexcept
   {
     if (result >= 0)
@@ -537,6 +556,7 @@ struct spi_api final
     return status::error;
   }
 
+  /// @copybrief microhal::spi::master::initialize
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_SPI) && defined(CONFIG_SPI_DRIVER) && defined(CONFIG_SPI_EXCHANGE)
@@ -551,6 +571,7 @@ struct spi_api final
 #endif
   }
 
+  /// @brief Transfers data using the configured peripheral.
   template <typename Config>
   static status transfer(const std::uint8_t* tx_data, std::uint8_t* rx_data, const std::size_t length) noexcept
   {
@@ -624,6 +645,7 @@ struct spi_api final
 #endif
   }
 
+  /// @brief Transfers data using the configured peripheral.
   template <typename Config>
   static status transfer(const std::span<const std::uint8_t> tx_payload,
                          const std::span<std::uint8_t> rx_payload) noexcept
@@ -635,6 +657,7 @@ struct spi_api final
     return transfer<Config>(tx_payload.data(), rx_payload.data(), tx_payload.size());
   }
 
+  /// @copybrief microhal::spi::master::write_blocking
   template <typename Config> static status write_blocking(const std::span<const std::uint8_t> payload) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_SPI) && defined(CONFIG_SPI_DRIVER) && defined(CONFIG_SPI_EXCHANGE)
@@ -646,6 +669,7 @@ struct spi_api final
 #endif
   }
 
+  /// @copybrief microhal::spi::master::read_blocking
   template <typename Config> static status read_blocking(const std::span<std::uint8_t> payload) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_SPI) && defined(CONFIG_SPI_DRIVER) && defined(CONFIG_SPI_EXCHANGE)
@@ -657,6 +681,7 @@ struct spi_api final
 #endif
   }
 
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config, auto Handler>
   static status transfer_async(const std::span<const std::uint8_t> tx_payload,
                                const std::span<std::uint8_t> rx_payload) noexcept
@@ -671,6 +696,7 @@ struct spi_api final
 
 struct qspi_api final
 {
+  /// @brief Initializes the configured backend resource.
   template <typename Config> static bool initialize() noexcept
   {
     if constexpr (
@@ -681,6 +707,7 @@ struct qspi_api final
     return false;
   }
 
+  /// @copybrief microhal::qspi::controller::command_write
   template <typename Config>
   static status command_write(const qspi_command& request, const std::span<const std::uint8_t> payload) noexcept
   {
@@ -694,6 +721,7 @@ struct qspi_api final
     return status::unsupported;
   }
 
+  /// @copybrief microhal::qspi::controller::command_read
   template <typename Config>
   static status command_read(const qspi_command& request, const std::span<std::uint8_t> payload) noexcept
   {
@@ -707,6 +735,7 @@ struct qspi_api final
     return status::unsupported;
   }
 
+  /// @brief Enters the configured QSPI memory-mapped mode.
   template <typename Config> static status enter_memory_mapped(const qspi_command& request) noexcept
   {
     if constexpr (
@@ -719,6 +748,7 @@ struct qspi_api final
     return status::unsupported;
   }
 
+  /// @copybrief microhal::qspi::controller::exit_memory_mapped
   template <typename Config> static status exit_memory_mapped() noexcept
   {
     if constexpr (
@@ -732,6 +762,7 @@ struct qspi_api final
 
 struct uart_api final
 {
+  /// @brief Selects the driver baud-rate constant for the requested rate.
   template <typename Config> static int baud_constant() noexcept
   {
 #if defined(__NUTTX__) && (defined(CONFIG_SERIAL) || defined(CONFIG_USART3_SERIAL_CONSOLE))
@@ -789,6 +820,7 @@ struct uart_api final
 #endif
   }
 
+  /// @brief Opens the device selected by the configuration.
   template <typename Config> static int open_device() noexcept
   {
 #if defined(__NUTTX__) && (defined(CONFIG_SERIAL) || defined(CONFIG_USART3_SERIAL_CONSOLE))
@@ -823,6 +855,7 @@ struct uart_api final
 #endif
   }
 
+  /// @brief Configures the selected backend resource.
   template <typename Config> static status configure(const int fd) noexcept
   {
 #if defined(__NUTTX__) && (defined(CONFIG_SERIAL) || defined(CONFIG_USART3_SERIAL_CONSOLE))
@@ -890,6 +923,7 @@ struct uart_api final
 #endif
   }
 
+  /// @copybrief microhal::uart::port::initialize
   template <typename Config> static status initialize() noexcept
   {
 #if defined(__NUTTX__) && (defined(CONFIG_SERIAL) || defined(CONFIG_USART3_SERIAL_CONSOLE))
@@ -907,6 +941,7 @@ struct uart_api final
 #endif
   }
 
+  /// @brief Transfers data using the configured peripheral.
   template <typename Config>
   static status transfer(const std::uint8_t* data, const std::size_t length, const short events,
                          const bool write_transfer) noexcept
@@ -969,6 +1004,7 @@ struct uart_api final
 #endif
   }
 
+  /// @copybrief microhal::uart::port::write_blocking
   template <typename Config> static status write_blocking(const std::span<const std::uint8_t> payload) noexcept
   {
 #if defined(__NUTTX__) && (defined(CONFIG_SERIAL) || defined(CONFIG_USART3_SERIAL_CONSOLE))
@@ -980,6 +1016,7 @@ struct uart_api final
 #endif
   }
 
+  /// @copybrief microhal::uart::port::read_blocking
   template <typename Config> static status read_blocking(const std::span<std::uint8_t> payload) noexcept
   {
 #if defined(__NUTTX__) && (defined(CONFIG_SERIAL) || defined(CONFIG_USART3_SERIAL_CONSOLE))
@@ -991,6 +1028,7 @@ struct uart_api final
 #endif
   }
 
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config, auto Handler> static status start_async_rx(const std::span<std::uint8_t> payload) noexcept
   {
     (void)sizeof(Config);
@@ -999,6 +1037,7 @@ struct uart_api final
     return status::unsupported;
   }
 
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config, auto Handler>
   static status start_async_tx(const std::span<const std::uint8_t> payload) noexcept
   {
@@ -1008,6 +1047,7 @@ struct uart_api final
     return status::unsupported;
   }
 
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename UartConfig, typename AutobaudConfig> static status arm_autobaud() noexcept
   {
     (void)sizeof(UartConfig);
@@ -1015,6 +1055,7 @@ struct uart_api final
     return status::unsupported;
   }
 
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename UartConfig> static status apply_autobaud(const std::uint32_t baud_rate) noexcept
   {
     (void)sizeof(UartConfig);
@@ -1025,6 +1066,7 @@ struct uart_api final
 
 struct rtc_api final
 {
+  /// @copybrief microhal::rtc::controller::initialize
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_RTC) && defined(CONFIG_RTC_DRIVER)
@@ -1039,6 +1081,7 @@ struct rtc_api final
 #endif
   }
 
+  /// @brief Sets the time for the RTC.
   template <typename Config>
   static bool set_time(const std::uint8_t hours, const std::uint8_t minutes, const std::uint8_t seconds) noexcept
   {
@@ -1073,6 +1116,7 @@ struct rtc_api final
 #endif
   }
 
+  /// @brief Returns the time for the RTC.
   template <typename Config>
   static bool get_time(std::uint8_t& hours, std::uint8_t& minutes, std::uint8_t& seconds) noexcept
   {
@@ -1105,6 +1149,7 @@ struct rtc_api final
 #endif
   }
 
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config, auto Handler, typename AlarmType>
   static status enable_alarm(const AlarmType& alarm_time) noexcept
   {
@@ -1118,6 +1163,7 @@ struct rtc_api final
 struct flash_api final
 {
 #if defined(__NUTTX__) && defined(CONFIG_MTD)
+  /// @brief Returns the device selected by the configuration.
   template <typename Config> static mtd_dev_s* device() noexcept
   {
     if constexpr (
@@ -1144,6 +1190,7 @@ struct flash_api final
   }
 #endif
 
+  /// @brief Converts an MTD result into a microHAL status.
   static status mtd_status(const int result) noexcept
   {
     if (result >= 0)
@@ -1170,6 +1217,7 @@ struct flash_api final
   }
 
 #if defined(__NUTTX__) && defined(CONFIG_MTD)
+  /// @brief Queries the storage device geometry.
   static status get_geometry(mtd_dev_s* const mtd, mtd_geometry_s& geometry) noexcept
   {
     if ((mtd == nullptr) || (mtd->ioctl == nullptr))
@@ -1189,6 +1237,7 @@ struct flash_api final
     return status::ok;
   }
 
+  /// @brief Returns the base address selected by the configuration.
   template <typename Config> static std::uint64_t base_address() noexcept
   {
     if constexpr (requires { Config::base_address; })
@@ -1205,6 +1254,7 @@ struct flash_api final
     }
   }
 
+  /// @brief Returns the offset of a range within the configured resource.
   template <typename Config>
   static bool range_offset(const std::uint32_t address, const std::size_t length, const mtd_geometry_s& geometry,
                            std::uint64_t& offset) noexcept
@@ -1220,6 +1270,7 @@ struct flash_api final
   }
 #endif
 
+  /// @brief Erases the requested storage range.
   template <typename Config> static status erase(const std::uint32_t address, const std::uint32_t bytes) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_MTD)
@@ -1259,6 +1310,7 @@ struct flash_api final
 #endif
   }
 
+  /// @brief Programs the supplied data into storage.
   template <typename Config>
   static status program(const std::uint32_t address, const std::span<const std::uint8_t> data) noexcept
   {
@@ -1299,6 +1351,7 @@ struct flash_api final
 #endif
   }
 
+  /// @copybrief microhal::flash::controller::read
   template <typename Config>
   static status read(const std::uint32_t address, const std::span<std::uint8_t> data) noexcept
   {
@@ -1348,6 +1401,7 @@ struct flash_api final
 #endif
   }
 
+  /// @copybrief microhal::flash::controller::erase_region
   template <typename Config> static result<flash_erase_region> erase_region(const std::uint32_t address) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_MTD)
@@ -1379,6 +1433,7 @@ struct flash_api final
 
 struct timer_api final
 {
+  /// @brief Opens the device selected by the configuration.
   template <typename Config> static int open_device(const int flags) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_TIMER)
@@ -1392,6 +1447,7 @@ struct timer_api final
 #endif
   }
 
+  /// @brief Returns the configured timeout in microseconds.
   template <typename Config> static std::uint32_t timeout_us(const std::uint32_t period_ticks) noexcept
   {
     if constexpr (requires { Config::clock_hz; })
@@ -1407,6 +1463,7 @@ struct timer_api final
     return 0U;
   }
 
+  /// @brief Converts a duration in microseconds to timer ticks.
   template <typename Config> static std::uint32_t ticks_from_us(const std::uint32_t microseconds) noexcept
   {
     if constexpr (requires { Config::clock_hz; })
@@ -1417,6 +1474,7 @@ struct timer_api final
     return microseconds;
   }
 
+  /// @brief Initializes the configured backend resource.
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_TIMER)
@@ -1438,6 +1496,7 @@ struct timer_api final
 #endif
   }
 
+  /// @copybrief microhal::timers::timer::start
   template <typename Config> static status start() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_TIMER)
@@ -1455,6 +1514,7 @@ struct timer_api final
 #endif
   }
 
+  /// @copybrief microhal::timers::timer::stop
   template <typename Config> static status stop() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_TIMER)
@@ -1472,6 +1532,7 @@ struct timer_api final
 #endif
   }
 
+  /// @brief Resets the counter for the timer.
   template <typename Config> static status reset_counter() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_TIMER)
@@ -1505,6 +1566,7 @@ struct timer_api final
 #endif
   }
 
+  /// @copybrief microhal::timers::timer::set_period
   template <typename Config> static status set_period(const std::uint32_t period_ticks) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_TIMER)
@@ -1528,6 +1590,7 @@ struct timer_api final
 #endif
   }
 
+  /// @brief Returns the counter for the timer.
   template <typename Config> static std::uint32_t get_counter() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_TIMER)
@@ -1547,6 +1610,7 @@ struct timer_api final
 #endif
   }
 
+  /// @copybrief microhal::timers::timer::period
   template <typename Config> static result<std::uint32_t> period() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_TIMER)
@@ -1571,6 +1635,7 @@ struct timer_api final
 #endif
   }
 
+  /// @copybrief microhal::timers::timer::counter
   template <typename Config> static std::uint32_t counter() noexcept
   {
     return get_counter<Config>();
@@ -1579,6 +1644,7 @@ struct timer_api final
 
 struct adc_api final
 {
+  /// @brief Reports whether NuttX ADC support is enabled without initializing an ADC.
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_ADC)
@@ -1591,6 +1657,7 @@ struct adc_api final
 #endif
   }
 
+  /// @brief Reports that ADC reads are unsupported.
   template <typename Config> static result<std::uint16_t> read_blocking(const std::uint8_t channel) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_ADC)
@@ -1605,6 +1672,7 @@ struct adc_api final
 #endif
   }
 
+  /// @brief Returns false because interrupt-driven ADC acquisition is not implemented.
   template <typename Config, auto Handler> static bool start_interrupt(const std::uint8_t channel) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_ADC)
@@ -1619,6 +1687,7 @@ struct adc_api final
 #endif
   }
 
+  /// @brief Returns false because ADC DMA is not implemented.
   template <typename Config, auto Handler>
   static bool start_dma(const std::uint8_t channel, std::span<std::uint16_t> buffer) noexcept
   {
@@ -1635,6 +1704,7 @@ struct adc_api final
 #endif
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool start_continuous(const std::span<const std::uint8_t> channels) noexcept
   {
     (void)sizeof(Config);
@@ -1642,11 +1712,13 @@ struct adc_api final
     return false;
   }
 
+  /// @copybrief microhal::adc::converter::start_async
   template <typename Config, auto Handler> static bool start_async(const std::uint8_t channel) noexcept
   {
     return start_interrupt<Config, Handler>(channel);
   }
 
+  /// @copybrief microhal::adc::converter::start_dma_scan
   template <typename Config, auto Handler>
   static bool start_dma_scan(const std::span<const std::uint8_t> channels, std::span<std::uint16_t> results) noexcept
   {
@@ -1660,6 +1732,7 @@ struct adc_api final
 
 struct dac_api final
 {
+  /// @copybrief microhal::dac::converter::initialize
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_DAC)
@@ -1680,6 +1753,7 @@ struct dac_api final
 #endif
   }
 
+  /// @brief Writes data using the configured backend.
   template <typename Config> static status write(const std::uint16_t value, const std::uint8_t channel) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_DAC)
@@ -1726,6 +1800,7 @@ struct dac_api final
 #endif
   }
 
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config> static status write_dual(const std::uint16_t value1, const std::uint16_t value2) noexcept
   {
     (void)sizeof(Config);
@@ -1734,6 +1809,7 @@ struct dac_api final
     return status::unsupported;
   }
 
+  /// @brief Starts the configured DMA transfer.
   template <typename Config, auto Handler>
   static bool start_dma(const std::span<const std::uint16_t> data, const std::uint8_t channel) noexcept
   {
@@ -1750,11 +1826,13 @@ struct dac_api final
 #endif
   }
 
+  /// @copybrief microhal::dac::converter::write_blocking
   template <typename Config> static bool write_blocking(const std::uint16_t value) noexcept
   {
     return write<Config>(value, Config::channel) == status::ok;
   }
 
+  /// @copybrief microhal::dac::converter::start_dma_waveform
   template <typename Config, auto Handler>
   static bool start_dma_waveform(const std::span<const std::uint16_t> samples) noexcept
   {
@@ -1764,6 +1842,7 @@ struct dac_api final
 
 struct can_api final
 {
+  /// @copybrief microhal::can::bus::initialize
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_CAN)
@@ -1784,6 +1863,7 @@ struct can_api final
 #endif
   }
 
+  /// @copybrief microhal::can::bus::transmit
   template <typename Config> static status transmit(const microhal::can::message& message) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_CAN)
@@ -1849,6 +1929,7 @@ struct can_api final
 #endif
   }
 
+  /// @copybrief microhal::can::bus::receive
   template <typename Config> static status receive(microhal::can::message& message) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_CAN)
@@ -1895,6 +1976,7 @@ struct can_api final
 #endif
   }
 
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config> static status transmit(const std::uint8_t* data, std::size_t length) noexcept
   {
     (void)sizeof(Config);
@@ -1903,6 +1985,7 @@ struct can_api final
     return status::unsupported;
   }
 
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config> static status receive(std::uint8_t* data, std::size_t& length) noexcept
   {
     (void)sizeof(Config);
@@ -1911,6 +1994,7 @@ struct can_api final
     return status::unsupported;
   }
 
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config>
   static status configure_filter(const std::uint32_t id, const std::uint32_t mask, const std::uint8_t fifo) noexcept
   {
@@ -1921,6 +2005,7 @@ struct can_api final
     return status::unsupported;
   }
 
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config, auto Handler> static status enable_rx_interrupt() noexcept
   {
     (void)sizeof(Config);
@@ -1931,6 +2016,7 @@ struct can_api final
 
 struct usb_api final
 {
+  /// @copybrief microhal::usb::device::initialize
   template <typename Config> static bool initialize() noexcept
   {
     if constexpr (
@@ -1941,6 +2027,7 @@ struct usb_api final
     return false;
   }
 
+  /// @copybrief microhal::usb::device::connect
   template <typename Config> static bool connect() noexcept
   {
     if constexpr (requires { typename Config::binding; } && requires { Config::binding::template connect<Config>(); })
@@ -1950,6 +2037,7 @@ struct usb_api final
     return false;
   }
 
+  /// @copybrief microhal::usb::device::disconnect
   template <typename Config> static bool disconnect() noexcept
   {
     if constexpr (
@@ -1960,6 +2048,7 @@ struct usb_api final
     return false;
   }
 
+  /// @copybrief microhal::usb::device::endpoint_transmit
   template <typename Config>
   static bool endpoint_transmit(const std::uint8_t endpoint, const std::span<const std::uint8_t> data) noexcept
   {
@@ -1973,6 +2062,7 @@ struct usb_api final
     return false;
   }
 
+  /// @copybrief microhal::usb::device::endpoint_receive
   template <typename Config>
   static std::uint32_t endpoint_receive(const std::uint8_t endpoint, const std::span<std::uint8_t> buffer) noexcept
   {
@@ -1990,6 +2080,7 @@ struct ethernet_api final
 {
 #if defined(__NUTTX__) && defined(CONFIG_NET) && defined(CONFIG_NET_PKT) &&                                            \
     (defined(CONFIG_NET_ETHERNET) || defined(CONFIG_STM32H7_ETHMAC))
+  /// @brief Handles a USB interface request.
   template <typename Config> static bool interface_request(struct ifreq& request) noexcept
   {
     std::string_view name{"eth0"};
@@ -2025,6 +2116,7 @@ struct ethernet_api final
   }
 #endif
 
+  /// @brief Returns the packet socket associated with the interface.
   template <typename Config> static int packet_socket(const bool non_blocking = false) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_NET) && defined(CONFIG_NET_PKT) &&                                            \
@@ -2074,6 +2166,7 @@ struct ethernet_api final
 #endif
   }
 
+  /// @brief Verifies that a packet socket can be opened and closed for the configured interface.
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_NET) && defined(CONFIG_NET_PKT) &&                                            \
@@ -2090,6 +2183,7 @@ struct ethernet_api final
 #endif
   }
 
+  /// @brief Enables or disables the selected Ethernet network interface.
   template <typename Config> static bool set_interface_up(const bool enabled) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_NET) && defined(CONFIG_NET_PKT) &&                                            \
@@ -2126,16 +2220,19 @@ struct ethernet_api final
 #endif
   }
 
+  /// @copybrief microhal::ethernet::mac::start
   template <typename Config> static bool start() noexcept
   {
     return set_interface_up<Config>(true);
   }
 
+  /// @copybrief microhal::ethernet::mac::stop
   template <typename Config> static bool stop() noexcept
   {
     return set_interface_up<Config>(false);
   }
 
+  /// @copybrief microhal::ethernet::mac::transmit_frame
   template <typename Config> static bool transmit_frame(const std::span<const std::uint8_t> frame) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_NET) && defined(CONFIG_NET_PKT) &&                                            \
@@ -2174,6 +2271,7 @@ struct ethernet_api final
 #endif
   }
 
+  /// @copybrief microhal::ethernet::mac::receive_frame
   template <typename Config> static std::uint32_t receive_frame(const std::span<std::uint8_t> buffer) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_NET) && defined(CONFIG_NET_PKT) &&                                            \
@@ -2197,6 +2295,7 @@ struct ethernet_api final
 #endif
   }
 
+  /// @copybrief microhal::ethernet::mac::set_mac_address
   template <typename Config> static bool set_mac_address(const std::array<std::uint8_t, 6>& address) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_NET) && defined(CONFIG_NET_PKT) &&                                            \
@@ -2231,6 +2330,7 @@ struct ethernet_api final
 
 struct sd_api final
 {
+  /// @copybrief microhal::sd::card::initialize
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_MMCSD)
@@ -2246,6 +2346,7 @@ struct sd_api final
 #endif
   }
 
+  /// @copybrief microhal::sd::card::read_blocks
   template <typename Config>
   static bool read_blocks(const std::uint32_t start_block, const std::span<std::uint8_t> buffer) noexcept
   {
@@ -2273,6 +2374,7 @@ struct sd_api final
 #endif
   }
 
+  /// @copybrief microhal::sd::card::write_blocks
   template <typename Config>
   static bool write_blocks(const std::uint32_t start_block, const std::span<const std::uint8_t> buffer) noexcept
   {
@@ -2300,6 +2402,7 @@ struct sd_api final
 #endif
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config>
   static bool erase_blocks(const std::uint32_t start_block, const std::uint32_t block_count) noexcept
   {
@@ -2308,6 +2411,7 @@ struct sd_api final
     return false;
   }
 
+  /// @copybrief microhal::sd::card::capacity_blocks
   template <typename Config> static std::uint32_t capacity_blocks() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_MMCSD)
@@ -2334,6 +2438,7 @@ struct sd_api final
 
 struct dma_api final
 {
+  /// @brief Reports whether architecture DMA support is enabled without setting up a channel.
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_ARCH_DMA)
@@ -2345,6 +2450,7 @@ struct dma_api final
 #endif
   }
 
+  /// @brief Returns false because DMA transfers are not implemented.
   template <typename Config, auto Handler>
   static bool start_transfer(const std::uint32_t src_addr, const std::uint32_t dst_addr,
                              const std::uint32_t length) noexcept
@@ -2367,6 +2473,7 @@ struct dma_api final
 #endif
   }
 
+  /// @brief Returns false because DMA cancellation is not implemented.
   template <typename Config> static bool abort() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_ARCH_DMA)
@@ -2380,6 +2487,7 @@ struct dma_api final
 
 struct pwm_api final
 {
+  /// @copybrief microhal::pwm::output::initialize
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_PWM)
@@ -2400,6 +2508,7 @@ struct pwm_api final
 #endif
   }
 
+  /// @copybrief microhal::pwm::output::set_duty_cycle
   template <typename Config> static status set_duty_cycle(const std::uint16_t duty_permille) noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_PWM)
@@ -2468,6 +2577,7 @@ struct pwm_api final
 #endif
   }
 
+  /// @copybrief microhal::pwm::output::start
   template <typename Config> static status start() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_PWM)
@@ -2487,6 +2597,7 @@ struct pwm_api final
 #endif
   }
 
+  /// @copybrief microhal::pwm::output::stop
   template <typename Config> static status stop() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_PWM)
@@ -2509,6 +2620,7 @@ struct pwm_api final
 
 struct watchdog_api final
 {
+  /// @copybrief microhal::watchdog::timer::initialize
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_WATCHDOG)
@@ -2529,6 +2641,7 @@ struct watchdog_api final
 #endif
   }
 
+  /// @copybrief microhal::watchdog::timer::start
   template <typename Config> static status start() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_WATCHDOG)
@@ -2548,6 +2661,7 @@ struct watchdog_api final
 #endif
   }
 
+  /// @copybrief microhal::watchdog::timer::refresh
   template <typename Config> static status refresh() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_WATCHDOG)
@@ -2570,6 +2684,7 @@ struct watchdog_api final
 
 struct i2s_api final
 {
+  /// @copybrief microhal::i2s::interface::initialize
   template <typename Config> static bool initialize() noexcept
   {
     if constexpr (
@@ -2580,6 +2695,7 @@ struct i2s_api final
     return false;
   }
 
+  /// @copybrief microhal::i2s::interface::transmit_blocking
   template <typename Config> static bool transmit_blocking(const std::span<const std::uint16_t> samples) noexcept
   {
     if constexpr (
@@ -2592,6 +2708,7 @@ struct i2s_api final
     return false;
   }
 
+  /// @copybrief microhal::i2s::interface::receive_blocking
   template <typename Config> static bool receive_blocking(const std::span<std::uint16_t> samples) noexcept
   {
     if constexpr (
@@ -2604,6 +2721,7 @@ struct i2s_api final
     return false;
   }
 
+  /// @copybrief microhal::i2s::interface::start_dma_tx
   template <typename Config, auto Handler>
   static bool start_dma_tx(const std::span<const std::uint16_t> samples) noexcept
   {
@@ -2620,6 +2738,7 @@ struct i2s_api final
 
 struct rcc_api final
 {
+  /// @brief Reports whether NuttX is selected; system clock setup remains board-owned.
   template <typename Config> static bool configure() noexcept
   {
 #if defined(__NUTTX__)
@@ -2632,6 +2751,7 @@ struct rcc_api final
 #endif
   }
 
+  /// @brief Returns zero because the board-specific system clock is not queried.
   template <typename Config> static std::uint32_t get_system_clock_hz() noexcept
   {
 #if defined(__NUTTX__)
@@ -2643,6 +2763,7 @@ struct rcc_api final
 #endif
   }
 
+  /// @brief Performs no operation; peripheral clock setup remains board-owned.
   template <typename Config>
   static void enable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
   {
@@ -2657,6 +2778,7 @@ struct rcc_api final
 #endif
   }
 
+  /// @brief Performs no operation; peripheral clock setup remains board-owned.
   template <typename Config>
   static void disable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
   {
@@ -2672,6 +2794,7 @@ struct rcc_api final
 
 struct crc_api final
 {
+  /// @brief Reports whether NuttX is selected without configuring a CRC device.
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(__NUTTX__)
@@ -2683,6 +2806,7 @@ struct crc_api final
 #endif
   }
 
+  /// @brief Returns zero because CRC calculation is not implemented.
   template <typename Config> static std::uint32_t calculate(const std::span<const std::uint8_t> data) noexcept
   {
 #if defined(__NUTTX__)
@@ -2696,6 +2820,7 @@ struct crc_api final
 #endif
   }
 
+  /// @brief Performs no operation for the CRC placeholder.
   template <typename Config> static void reset() noexcept
   {
 #if defined(__NUTTX__)
@@ -2703,6 +2828,7 @@ struct crc_api final
 #endif
   }
 
+  /// @brief Returns zero because random-number access is not implemented.
   template <typename Config> static std::uint32_t get_random() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_DEV_RANDOM)
@@ -2722,6 +2848,7 @@ struct crc_api final
 namespace microhal
 {
 
+/// @brief Describes the backend's peripheral APIs and compile-time capabilities.
 template <> struct backend_traits<nuttx_tag> final
 {
   using backend_tag = nuttx_tag;
@@ -2753,11 +2880,13 @@ template <> struct backend_traits<nuttx_tag> final
   static constexpr std::uint32_t gpio_pins_per_port{32U};
   static constexpr std::uint32_t gpio_alternate_function_count{32U};
 
+  /// @brief Reports the backend's GPIO capabilities.
   static consteval struct gpio_capability gpio_capability() noexcept
   {
     return {};
   }
 
+  /// @brief Reports the backend's I2C capabilities.
   static consteval struct i2c_capability i2c_capability() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_I2C) && defined(CONFIG_I2C_DRIVER)
@@ -2787,6 +2916,7 @@ template <> struct backend_traits<nuttx_tag> final
 #endif
   }
 
+  /// @brief Reports the backend's SPI capabilities.
   static consteval struct spi_capability spi_capability() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_SPI) && defined(CONFIG_SPI_DRIVER) && defined(CONFIG_SPI_EXCHANGE)
@@ -2805,11 +2935,13 @@ template <> struct backend_traits<nuttx_tag> final
 #endif
   }
 
+  /// @brief Reports the backend's QSPI capabilities.
   static consteval struct qspi_capability qspi_capability() noexcept
   {
     return {};
   }
 
+  /// @brief Reports the backend's UART capabilities.
   static consteval struct uart_capability uart_capability() noexcept
   {
 #if defined(__NUTTX__) && (defined(CONFIG_SERIAL) || defined(CONFIG_USART3_SERIAL_CONSOLE))
@@ -2835,6 +2967,7 @@ template <> struct backend_traits<nuttx_tag> final
 #endif
   }
 
+  /// @brief Reports the backend's RTC capabilities.
   static consteval struct rtc_capability rtc_capability() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_RTC) && defined(CONFIG_RTC_DRIVER)
@@ -2854,6 +2987,7 @@ template <> struct backend_traits<nuttx_tag> final
 #endif
   }
 
+  /// @brief Reports the backend's flash capabilities.
   static consteval struct flash_capability flash_capability() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_MTD)
@@ -2874,6 +3008,7 @@ template <> struct backend_traits<nuttx_tag> final
 #endif
   }
 
+  /// @brief Reports the backend's timer capabilities.
   static consteval struct timer_capability timer_capability() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_TIMER)
@@ -2895,11 +3030,13 @@ template <> struct backend_traits<nuttx_tag> final
 #endif
   }
 
+  /// @brief Reports the backend's ADC capabilities.
   static consteval struct adc_capability adc_capability() noexcept
   {
     return {};
   }
 
+  /// @brief Reports the backend's DAC capabilities.
   static consteval struct dac_capability dac_capability() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_DAC)
@@ -2922,6 +3059,7 @@ template <> struct backend_traits<nuttx_tag> final
 #endif
   }
 
+  /// @brief Reports the backend's CAN capabilities.
   static consteval struct can_capability can_capability() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_CAN)
@@ -2948,6 +3086,7 @@ template <> struct backend_traits<nuttx_tag> final
 #endif
   }
 
+  /// @brief Reports the backend's USB capabilities.
   static consteval struct usb_capability usb_capability() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_USBDEV)
@@ -2971,6 +3110,7 @@ template <> struct backend_traits<nuttx_tag> final
 #endif
   }
 
+  /// @brief Reports the backend's Ethernet capabilities.
   static consteval struct ethernet_capability ethernet_capability() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_NET) && defined(CONFIG_NET_PKT) &&                                            \
@@ -2996,6 +3136,7 @@ template <> struct backend_traits<nuttx_tag> final
 #endif
   }
 
+  /// @brief Reports the backend's SD capabilities.
   static consteval struct sd_capability sd_capability() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_MMCSD)
@@ -3020,11 +3161,13 @@ template <> struct backend_traits<nuttx_tag> final
 #endif
   }
 
+  /// @brief Reports the backend's DMA capabilities.
   static consteval struct dma_capability dma_capability() noexcept
   {
     return {};
   }
 
+  /// @brief Reports the backend's PWM capabilities.
   static consteval struct pwm_capability pwm_capability() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_PWM)
@@ -3049,6 +3192,7 @@ template <> struct backend_traits<nuttx_tag> final
 #endif
   }
 
+  /// @brief Reports the backend's watchdog capabilities.
   static consteval struct watchdog_capability watchdog_capability() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_WATCHDOG)
@@ -3070,6 +3214,7 @@ template <> struct backend_traits<nuttx_tag> final
 #endif
   }
 
+  /// @brief Reports the backend's I2S capabilities.
   static consteval struct i2s_capability i2s_capability() noexcept
   {
 #if defined(__NUTTX__) && defined(CONFIG_AUDIO)
@@ -3093,21 +3238,25 @@ template <> struct backend_traits<nuttx_tag> final
 #endif
   }
 
+  /// @brief Reports the backend's RCC capabilities.
   static consteval struct rcc_capability rcc_capability() noexcept
   {
     return {};
   }
 
+  /// @brief Reports the backend's CRC capabilities.
   static consteval struct crc_capability crc_capability() noexcept
   {
     return {};
   }
 
+  /// @brief Checks whether the GPIO pin is valid for the backend.
   template <typename PinConfig> static consteval bool is_valid_gpio_pin() noexcept
   {
     return (PinConfig::port_index < gpio_port_count) && (PinConfig::pin_index < gpio_pins_per_port);
   }
 
+  /// @brief Checks whether the alternate function is valid for the backend.
   template <typename PinConfig> static consteval bool is_valid_alternate_function() noexcept
   {
     return (PinConfig::alternate_function == gpio_no_alternate) ||

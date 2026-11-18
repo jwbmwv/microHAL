@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Kinetis serial transfer-mode implementations.
+ */
 #pragma once
 
 #include "microhal/core/traits.hpp"
@@ -143,9 +146,13 @@ namespace microhal::backends::kinetis::espresso::serial
 struct unavailable
 {
 };
+/// @brief Selects the driver matching the supplied serial peripheral instance.
 template <typename T> unavailable select(T*) noexcept;
+/// @brief Selects the driver matching the supplied serial peripheral instance.
 inline unavailable select(...) noexcept;
+/// @brief Provides an identity token for a serial-resource owner.
 template <typename Binding> inline constexpr unsigned owner_token = 0;
+/// @brief Returns the configured timeout in milliseconds.
 template <typename Config> constexpr std::uint32_t timeout_ms() noexcept
 {
   if constexpr (requires { Config::timeout_ms; })
@@ -153,6 +160,7 @@ template <typename Config> constexpr std::uint32_t timeout_ms() noexcept
   return 1000U;
 }
 
+/// @brief Identifies a synchronous serial completion handler.
 template <auto Handler>
 inline constexpr bool synchronous_handler = []
 {
@@ -162,6 +170,7 @@ inline constexpr bool synchronous_handler = []
     return false;
 }();
 
+/// @brief Invokes the configured completion handler.
 template <auto Handler> void notify(status value) noexcept
 {
   if constexpr (!synchronous_handler<Handler>)
@@ -175,10 +184,12 @@ template <auto Handler> void notify(status value) noexcept
   }
 }
 
+/// @brief Tracks a deadline for a polled serial operation.
 template <typename Config> struct poll_deadline
 {
   using B = typename Config::binding;
   std::uint32_t start = B::now_ms(), last = start, spins{};
+  /// @brief Checks whether the operation's deadline has expired.
   bool expired() noexcept
   {
     const std::uint32_t now = B::now_ms();
@@ -189,6 +200,7 @@ template <typename Config> struct poll_deadline
     }
     return static_cast<std::uint32_t>(now - start) >= timeout_ms<Config>() || ++spins == 1'000'000U;
   }
+  /// @brief Invokes the optional idle hook while polling.
   void idle() noexcept
   {
     if constexpr (requires { B::idle(); })
@@ -196,6 +208,7 @@ template <typename Config> struct poll_deadline
   }
 };
 
+/// @brief Polls until the operation is no longer busy or the deadline expires.
 template <typename Config, typename Predicate>
 status poll_until(poll_deadline<Config>& deadline, Predicate predicate) noexcept
 {
@@ -211,6 +224,7 @@ status poll_until(poll_deadline<Config>& deadline, Predicate predicate) noexcept
 }
 
 #if MICROHAL_KINETIS_SDK_PRESENT && MICROHAL_KINETIS_HAS_I2C_DRIVER
+/// @brief Polls an I2C transfer.
 template <typename Config, typename S> status poll_i2c(S& s) noexcept
 {
   auto* base = s.base;
@@ -286,6 +300,7 @@ template <typename Config, typename S> status poll_i2c(S& s) noexcept
 #endif
 
 #if MICROHAL_KINETIS_SDK_PRESENT && MICROHAL_KINETIS_HAS_LPI2C_DRIVER
+/// @brief Polls an LPI2C transfer.
 template <typename Config, typename S> status poll_lpi2c(S& s) noexcept
 {
   auto* base = s.base;
@@ -357,6 +372,7 @@ template <typename Config, typename S> status poll_lpi2c(S& s) noexcept
 #endif
 
 #if MICROHAL_KINETIS_SERIAL_DSPI
+/// @brief Polls a DSPI transfer.
 template <typename Config, typename S> status poll_dspi(S& s) noexcept
 {
   auto* base = s.base;
@@ -415,6 +431,7 @@ template <typename Config, typename S> status poll_dspi(S& s) noexcept
 #endif
 
 #if MICROHAL_KINETIS_SERIAL_LPSPI
+/// @brief Polls an LPSPI transfer.
 template <typename Config, typename S> status poll_lpspi(S& s) noexcept
 {
   auto* base = s.base;
@@ -481,10 +498,14 @@ struct no_dma
 {
 };
 
+/// @brief Performs no operation in this backend configuration.
 template <typename S> void quiesce_i2c(S&) noexcept {}
+/// @brief Identifies the classic I2C base type used by the serial backend.
 template <typename Base> inline constexpr bool classic_i2c_base = false;
 #if MICROHAL_KINETIS_SDK_PRESENT && MICROHAL_KINETIS_HAS_I2C_DRIVER
+/// @brief Identifies the classic I2C base type used by the serial backend.
 template <> inline constexpr bool classic_i2c_base<I2C_Type> = true;
+/// @brief Stops activity on the classic I2C peripheral before reuse.
 template <typename S> void quiesce_classic_i2c(S& s) noexcept
 {
   // SDK I2C_MasterTransferAbort may wait forever for IICIF. Disable local
@@ -496,6 +517,7 @@ template <typename S> void quiesce_classic_i2c(S& s) noexcept
   s.faulted = true;
   s.cancel_result = (s.base->S & I2C_S_BUSY_MASK) ? status::timeout : status::ok;
 }
+/// @brief Quiesces the I2C transfer when the selected driver requires it.
 template <typename S>
 void quiesce_i2c(S& s) noexcept
   requires std::is_same_v<decltype(s.base), I2C_Type*>
@@ -511,10 +533,12 @@ struct interrupt_guard
 #if MICROHAL_KINETIS_SDK_PRESENT && (defined(__arm__) || defined(__thumb__))
   std::uint32_t mask = __get_PRIMASK();
   bool acquired = true;
+  /// @brief Acquires the interrupt-state guard.
   interrupt_guard() noexcept
   {
     __disable_irq();
   }
+  /// @brief Releases resources owned by this guard when it is destroyed.
   ~interrupt_guard()
   {
     __set_PRIMASK(mask);
@@ -522,6 +546,7 @@ struct interrupt_guard
 #else
   inline static std::atomic_flag lock = ATOMIC_FLAG_INIT;
   bool acquired = !lock.test_and_set(std::memory_order_acquire);
+  /// @brief Releases resources owned by this guard when it is destroyed.
   ~interrupt_guard()
   {
     if (acquired)
@@ -533,6 +558,7 @@ struct interrupt_guard
 // One slot per physical peripheral, not per Config or callback instantiation.
 // The board must reserve this peripheral and its DMA channels for this engine;
 // legacy SDK users must not replace its SDK handle while it is initialized.
+/// @brief Implements the configured peripheral transfer engine.
 template <typename Driver> struct engine
 {
   using base_type = typename Driver::base_type;
@@ -553,6 +579,7 @@ template <typename Driver> struct engine
     bool reading{};
   };
   inline static std::array<state, 8> states{};
+  /// @brief Advances the state of the current transfer phase.
   static bool change_phase(state& s, unsigned& expected, unsigned desired) noexcept
   {
     interrupt_guard guard;
@@ -568,6 +595,7 @@ template <typename Driver> struct engine
     return true;
   }
 
+  /// @brief Finds the requested backend resource.
   static state* find(base_type* base) noexcept
   {
     interrupt_guard guard;
@@ -591,6 +619,7 @@ template <typename Driver> struct engine
     return result;
   }
 
+  /// @brief Completes the active transfer and updates its state.
   static void complete(state& s, status result) noexcept
   {
     if (s.phase.load(std::memory_order_acquire) != 1U)
@@ -616,12 +645,14 @@ template <typename Driver> struct engine
     }
   }
 
+  /// @brief Checks ownership of the configured resource.
   template <typename Binding> static state* owned() noexcept
   {
     auto* s = find(Binding::instance);
     return s != nullptr && s->owner == &owner_token<Binding> && s->initialized ? s : nullptr;
   }
 
+  /// @brief Initializes the configured backend resource.
   template <typename Config> static status initialize() noexcept
   {
     using B = typename Config::binding;
@@ -658,6 +689,7 @@ template <typename Driver> struct engine
     }
   }
 
+  /// @brief Runs the configured backend operation.
   template <typename Config, auto Handler, typename Prepare> static status run(Prepare prepare) noexcept
   {
     using B = typename Config::binding;
@@ -734,6 +766,7 @@ template <typename Driver> struct engine
     }
   }
 
+  /// @brief Attempts to cancel the active peripheral operation.
   template <typename Config> static status abort() noexcept
   {
     auto* s = owned<typename Config::binding>();
@@ -750,6 +783,7 @@ template <typename Driver> struct engine
     return s->cancel_result;
   }
 
+  /// @brief Queries the current or most recently completed transfer status.
   template <typename Config> static status transfer_status() noexcept
   {
     auto* s = owned<typename Config::binding>();
@@ -759,6 +793,7 @@ template <typename Driver> struct engine
     return phase == 1U || phase == 3U ? status::busy : s->result;
   }
 
+  /// @brief Processes the peripheral interrupt for the active operation.
   template <typename Config> static status irq() noexcept
   {
     auto* s = owned<typename Config::binding>();
@@ -770,6 +805,7 @@ template <typename Driver> struct engine
 };
 
 #if MICROHAL_KINETIS_SDK_PRESENT
+/// @brief Converts a vendor result into a microHAL status.
 inline status map(status_t value) noexcept
 {
   if (value == kStatus_Success)
@@ -783,6 +819,7 @@ inline status map(status_t value) noexcept
   return status::io_error;
 }
 
+/// @brief Checks whether the SPI configuration uses eight-bit frames.
 template <typename SdkConfig> bool byte_spi_config(const SdkConfig& config) noexcept
 {
   if constexpr (requires { config.ctarConfig.bitsPerFrame; })
@@ -791,6 +828,7 @@ template <typename SdkConfig> bool byte_spi_config(const SdkConfig& config) noex
     return config.bitsPerFrame == 8U;
 }
 
+/// @brief Applies the configured UART stop-bit setting to the driver configuration.
 template <typename C, typename SdkConfig> status stop_bits(SdkConfig& config) noexcept
 {
   if constexpr (requires { C::stop_bits; })
@@ -815,11 +853,14 @@ template <typename C, typename SdkConfig> status stop_bits(SdkConfig& config) no
     using handle_type = Handle;                                                                                        \
     using transfer_type = Transfer;                                                                                    \
     static constexpr bool polled = true;                                                                               \
+    /** @brief Polls the I2C transfer until completion or timeout. */                                                  \
     template <typename C, typename S> static status poll(S& s) noexcept                                                \
     {                                                                                                                  \
       return Poll<C>(s);                                                                                               \
     }                                                                                                                  \
-    MICROHAL_KINETIS_##Prefix##_DMA_TYPES template <typename C, typename S> static status initialize(S& s) noexcept    \
+    MICROHAL_KINETIS_##Prefix##_DMA_TYPES /** @brief Initializes the I2C master and selected transfer mode. */         \
+        template <typename C, typename S>                                                                              \
+        static status initialize(S& s) noexcept                                                                        \
     {                                                                                                                  \
       using B = typename C::binding;                                                                                   \
       if constexpr (!requires { B::source_clock_hz; })                                                                 \
@@ -841,6 +882,7 @@ template <typename C, typename SdkConfig> status stop_bits(SdkConfig& config) no
         return status::ok;                                                                                             \
       }                                                                                                                \
     }                                                                                                                  \
+    /** @brief Converts an SDK I2C result to a microHAL status. */                                                     \
     static status convert(status_t value) noexcept                                                                     \
     {                                                                                                                  \
       if (value == Busy)                                                                                               \
@@ -849,12 +891,14 @@ template <typename C, typename SdkConfig> status stop_bits(SdkConfig& config) no
         return status::timeout;                                                                                        \
       return map(value);                                                                                               \
     }                                                                                                                  \
+    /** @brief Starts the configured I2C transfer. */                                                                  \
     template <typename S> static status start(S& s) noexcept                                                           \
     {                                                                                                                  \
       if (s.mode == transfer_mode::dma)                                                                                \
         return start_dma(s);                                                                                           \
       return convert(Prefix##_MasterTransferNonBlocking(s.base, &s.handle, &s.transfer));                              \
     }                                                                                                                  \
+    /** @brief Aborts and quiesces the active I2C transfer. */                                                         \
     template <typename S> static void abort(S& s) noexcept                                                             \
     {                                                                                                                  \
       s.cancel_result = status::ok;                                                                                    \
@@ -864,10 +908,12 @@ template <typename C, typename SdkConfig> status stop_bits(SdkConfig& config) no
         Prefix##_MasterTransferAbort(s.base, &s.handle);                                                               \
       quiesce_i2c(s);                                                                                                  \
     }                                                                                                                  \
+    /** @brief Services the I2C transfer interrupt. */                                                                 \
     template <typename S> static void irq(S& s) noexcept                                                               \
     {                                                                                                                  \
       Prefix##_MasterTransferHandleIRQ(s.base, &s.handle);                                                             \
     }                                                                                                                  \
+    /** @brief Prepares the SDK descriptor for an I2C transfer. */                                                     \
     template <typename S>                                                                                              \
     static void prepare(S& s, std::uint8_t* data, std::size_t count, std::uint16_t address, bool reading) noexcept     \
     {                                                                                                                  \
@@ -883,19 +929,23 @@ template <typename C, typename SdkConfig> status stop_bits(SdkConfig& config) no
 #define MICROHAL_KINETIS_NO_DMA                                                                                        \
   using dma_handle_type = no_dma;                                                                                      \
   static constexpr bool dma = false;                                                                                   \
+  /** @brief Reports that DMA handle creation is unavailable. */                                                       \
   template <typename B, typename S> static status create_dma(S&) noexcept                                              \
   {                                                                                                                    \
     return status::unsupported;                                                                                        \
   }                                                                                                                    \
+  /** @brief Reports that DMA transfers are unavailable. */                                                            \
   template <typename S> static status start_dma(S&) noexcept                                                           \
   {                                                                                                                    \
     return status::unsupported;                                                                                        \
   }                                                                                                                    \
+  /** @brief Performs no operation because DMA is unavailable. */                                                      \
   template <typename S> static void abort_dma(S&) noexcept {}
 
 #define MICROHAL_KINETIS_I2C_EDMA(Name, Prefix, Base, DmaHandle, Resource, Suffix, Create)                             \
   using dma_handle_type = DmaHandle;                                                                                   \
   static constexpr bool dma = true;                                                                                    \
+  /** @brief Creates the I2C DMA handle using the board binding. */                                                    \
   template <typename B, typename S> static status create_dma(S& s) noexcept                                            \
   {                                                                                                                    \
     if constexpr (requires { static_cast<Resource*>(B::dma_handle); })                                                 \
@@ -910,10 +960,12 @@ template <typename C, typename SdkConfig> status stop_bits(SdkConfig& config) no
     }                                                                                                                  \
     return status::unsupported;                                                                                        \
   }                                                                                                                    \
+  /** @brief Starts the configured I2C DMA transfer. */                                                                \
   template <typename S> static status start_dma(S& s) noexcept                                                         \
   {                                                                                                                    \
     return convert(Prefix##_MasterTransfer##Suffix(s.base, &s.dma_handle, &s.transfer));                               \
   }                                                                                                                    \
+  /** @brief Aborts the active I2C DMA transfer. */                                                                    \
   template <typename S> static void abort_dma(S& s) noexcept                                                           \
   {                                                                                                                    \
     Prefix##_MasterTransferAbort##Suffix(s.base, &s.dma_handle);                                                       \
@@ -941,6 +993,7 @@ template <typename C, typename SdkConfig> status stop_bits(SdkConfig& config) no
 #if MICROHAL_KINETIS_HAS_I2C_DRIVER
 MICROHAL_KINETIS_I2C_DRIVER(i2c_driver, I2C, I2C_Type, i2c_master_handle_t, i2c_master_transfer_t, i2c_master_config_t,
                             baudRate_Bps, kI2C_Read, kI2C_Write, kStatus_I2C_Busy, poll_i2c)
+/// @brief Selects the driver matching the supplied serial peripheral instance.
 inline i2c_driver select(I2C_Type*) noexcept
 {
   return {};
@@ -950,6 +1003,7 @@ inline i2c_driver select(I2C_Type*) noexcept
 MICROHAL_KINETIS_I2C_DRIVER(lpi2c_driver, LPI2C, LPI2C_Type, lpi2c_master_handle_t, lpi2c_master_transfer_t,
                             lpi2c_master_config_t, baudRate_Hz, kLPI2C_Read, kLPI2C_Write, kStatus_LPI2C_Busy,
                             poll_lpi2c)
+/// @brief Selects the driver matching the supplied serial peripheral instance.
 inline lpi2c_driver select(LPI2C_Type*) noexcept
 {
   return {};
@@ -963,6 +1017,7 @@ inline lpi2c_driver select(LPI2C_Type*) noexcept
 #define MICROHAL_KINETIS_SPI_EDMA_BODY(Name, Prefix, Base, DmaHandle, Create)                                          \
   using dma_handle_type = DmaHandle;                                                                                   \
   static constexpr bool dma = true;                                                                                    \
+  /** @brief Creates the SPI DMA handle using the board binding. */                                                    \
   template <typename B, typename S> static status create_dma(S& s) noexcept                                            \
   {                                                                                                                    \
     if constexpr (requires {                                                                                           \
@@ -980,10 +1035,12 @@ inline lpi2c_driver select(LPI2C_Type*) noexcept
     }                                                                                                                  \
     return status::unsupported;                                                                                        \
   }                                                                                                                    \
+  /** @brief Starts the configured SPI DMA transfer. */                                                                \
   template <typename S> static status start_dma(S& s) noexcept                                                         \
   {                                                                                                                    \
     return convert(Prefix##_MasterTransferEDMA(s.base, &s.dma_handle, &s.transfer));                                   \
   }                                                                                                                    \
+  /** @brief Aborts the active SPI DMA transfer. */                                                                    \
   template <typename S> static void abort_dma(S& s) noexcept                                                           \
   {                                                                                                                    \
     Prefix##_MasterTransferAbortEDMA(s.base, &s.dma_handle);                                                           \
@@ -1023,11 +1080,14 @@ inline lpi2c_driver select(LPI2C_Type*) noexcept
     using handle_type = Handle;                                                                                        \
     using transfer_type = Transfer;                                                                                    \
     static constexpr bool polled = true;                                                                               \
+    /** @brief Polls the SPI transfer until completion or timeout. */                                                  \
     template <typename C, typename S> static status poll(S& s) noexcept                                                \
     {                                                                                                                  \
       return Poll<C>(s);                                                                                               \
     }                                                                                                                  \
-    MICROHAL_KINETIS_##Prefix##_DMA_TYPES template <typename C, typename S> static status initialize(S& s) noexcept    \
+    MICROHAL_KINETIS_##Prefix##_DMA_TYPES /** @brief Initializes the SPI master and selected transfer mode. */         \
+        template <typename C, typename S>                                                                              \
+        static status initialize(S& s) noexcept                                                                        \
     {                                                                                                                  \
       using B = typename C::binding;                                                                                   \
       if constexpr (!requires { B::source_clock_hz; })                                                                 \
@@ -1049,18 +1109,21 @@ inline lpi2c_driver select(LPI2C_Type*) noexcept
         return status::ok;                                                                                             \
       }                                                                                                                \
     }                                                                                                                  \
+    /** @brief Converts an SDK SPI result to a microHAL status. */                                                     \
     static status convert(status_t value) noexcept                                                                     \
     {                                                                                                                  \
       if (value == Busy)                                                                                               \
         return status::busy;                                                                                           \
       return map(value);                                                                                               \
     }                                                                                                                  \
+    /** @brief Starts the configured SPI transfer. */                                                                  \
     template <typename S> static status start(S& s) noexcept                                                           \
     {                                                                                                                  \
       if (s.mode == transfer_mode::dma)                                                                                \
         return start_dma(s);                                                                                           \
       return convert(Prefix##_MasterTransferNonBlocking(s.base, &s.handle, &s.transfer));                              \
     }                                                                                                                  \
+    /** @brief Aborts the active SPI transfer. */                                                                      \
     template <typename S> static void abort(S& s) noexcept                                                             \
     {                                                                                                                  \
       if (s.mode == transfer_mode::dma)                                                                                \
@@ -1068,6 +1131,7 @@ inline lpi2c_driver select(LPI2C_Type*) noexcept
       else                                                                                                             \
         Prefix##_MasterTransferAbort(s.base, &s.handle);                                                               \
     }                                                                                                                  \
+    /** @brief Services the SPI transfer interrupt. */                                                                 \
     template <typename S> static void irq(S& s) noexcept                                                               \
     {                                                                                                                  \
       Prefix##_MasterTransferHandleIRQ(s.base, &s.handle);                                                             \
@@ -1088,6 +1152,7 @@ MICROHAL_KINETIS_SPI_DRIVER(
     if constexpr (requires { C::bit_order; })
         config.ctarConfig.direction = C::bit_order == spi_bit_order::lsb_first ? kDSPI_LsbFirst : kDSPI_MsbFirst;
     if constexpr (requires { B::sdk_config; }) config = B::sdk_config;)
+/// @brief Selects the driver matching the supplied serial peripheral instance.
 inline dspi_driver select(SPI_Type*) noexcept
 {
   return {};
@@ -1107,6 +1172,7 @@ MICROHAL_KINETIS_SPI_DRIVER(
     if constexpr (requires { C::bit_order; })
         config.direction = C::bit_order == spi_bit_order::lsb_first ? kLPSPI_LsbFirst : kLPSPI_MsbFirst;
     if constexpr (requires { B::sdk_config; }) config = B::sdk_config;)
+/// @brief Selects the driver matching the supplied serial peripheral instance.
 inline lpspi_driver select(LPSPI_Type*) noexcept
 {
   return {};
@@ -1120,6 +1186,7 @@ inline lpspi_driver select(LPSPI_Type*) noexcept
 #define MICROHAL_KINETIS_UART_EDMA(Name, Prefix, Base, DmaHandle, Resource, Suffix, Send, Receive)                     \
   using dma_handle_type = DmaHandle;                                                                                   \
   static constexpr bool dma = true;                                                                                    \
+  /** @brief Creates the UART DMA handle using the board binding. */                                                   \
   template <typename B, typename S> static status create_dma(S& s) noexcept                                            \
   {                                                                                                                    \
     if constexpr (requires {                                                                                           \
@@ -1146,11 +1213,13 @@ inline lpspi_driver select(LPSPI_Type*) noexcept
     }                                                                                                                  \
     return status::unsupported;                                                                                        \
   }                                                                                                                    \
+  /** @brief Starts the configured UART DMA transfer. */                                                               \
   template <typename S> static status start_dma(S& s) noexcept                                                         \
   {                                                                                                                    \
     return convert(s.reading ? Prefix##_##Receive(s.base, &s.dma_handle, &s.transfer)                                  \
                              : Prefix##_##Send(s.base, &s.dma_handle, &s.transfer));                                   \
   }                                                                                                                    \
+  /** @brief Aborts the active UART DMA transfer. */                                                                   \
   template <typename S> static void abort_dma(S& s) noexcept                                                           \
   {                                                                                                                    \
     if (s.reading)                                                                                                     \
@@ -1189,12 +1258,15 @@ inline lpspi_driver select(LPSPI_Type*) noexcept
     using handle_type = Handle;                                                                                        \
     using transfer_type = Transfer;                                                                                    \
     static constexpr bool polled = true;                                                                               \
-    MICROHAL_KINETIS_##Prefix##_DMA_TYPES static status convert(status_t value) noexcept                               \
+    MICROHAL_KINETIS_##Prefix##_DMA_TYPES /** @brief Converts an SDK UART result to a microHAL status. */              \
+        static status                                                                                                  \
+        convert(status_t value) noexcept                                                                               \
     {                                                                                                                  \
       if (value == kStatus_##Prefix##_TxBusy || value == kStatus_##Prefix##_RxBusy)                                    \
         return status::busy;                                                                                           \
       return map(value);                                                                                               \
     }                                                                                                                  \
+    /** @brief Initializes the UART and selected transfer mode. */                                                     \
     template <typename C, typename S> static status initialize(S& s) noexcept                                          \
     {                                                                                                                  \
       using B = typename C::binding;                                                                                   \
@@ -1237,6 +1309,7 @@ inline lpspi_driver select(LPSPI_Type*) noexcept
         return status::ok;                                                                                             \
       }                                                                                                                \
     }                                                                                                                  \
+    /** @brief Starts the configured UART transfer. */                                                                 \
     template <typename S> static status start(S& s) noexcept                                                           \
     {                                                                                                                  \
       if (s.mode == transfer_mode::dma)                                                                                \
@@ -1244,6 +1317,7 @@ inline lpspi_driver select(LPSPI_Type*) noexcept
       return convert(s.reading ? Prefix##_TransferReceiveNonBlocking(s.base, &s.handle, &s.transfer, nullptr)          \
                                : Prefix##_TransferSendNonBlocking(s.base, &s.handle, &s.transfer));                    \
     }                                                                                                                  \
+    /** @brief Aborts the active UART transfer. */                                                                     \
     template <typename S> static void abort(S& s) noexcept                                                             \
     {                                                                                                                  \
       if (s.mode == transfer_mode::dma)                                                                                \
@@ -1253,10 +1327,12 @@ inline lpspi_driver select(LPSPI_Type*) noexcept
       else                                                                                                             \
         Prefix##_TransferAbortSend(s.base, &s.handle);                                                                 \
     }                                                                                                                  \
+    /** @brief Services the UART transfer interrupt. */                                                                \
     template <typename S> static void irq(S& s) noexcept                                                               \
     {                                                                                                                  \
       Prefix##_TransferHandleIRQ(s.base, &s.handle);                                                                   \
     }                                                                                                                  \
+    /** @brief Polls the UART transfer until completion or timeout. */                                                 \
     template <typename C, typename S> static status poll(S& s) noexcept                                                \
     {                                                                                                                  \
       using B = typename C::binding;                                                                                   \
@@ -1293,6 +1369,7 @@ inline lpspi_driver select(LPSPI_Type*) noexcept
   };
 #if MICROHAL_KINETIS_HAS_UART_DRIVER
 MICROHAL_KINETIS_UART_DRIVER(uart_driver, UART, UART_Type, uart_handle_t, uart_transfer_t, uart_config_t)
+/// @brief Selects the driver matching the supplied serial peripheral instance.
 inline uart_driver select(UART_Type*) noexcept
 {
   return {};
@@ -1300,6 +1377,7 @@ inline uart_driver select(UART_Type*) noexcept
 #endif
 #if MICROHAL_KINETIS_HAS_LPUART_DRIVER
 MICROHAL_KINETIS_UART_DRIVER(lpuart_driver, LPUART, LPUART_Type, lpuart_handle_t, lpuart_transfer_t, lpuart_config_t)
+/// @brief Selects the driver matching the supplied serial peripheral instance.
 inline lpuart_driver select(LPUART_Type*) noexcept
 {
   return {};
@@ -1326,6 +1404,7 @@ struct sai_driver
 #if MICROHAL_KINETIS_SERIAL_SAI_EDMA
   using dma_handle_type = sai_edma_handle_t;
   static constexpr bool dma = true;
+  /// @brief Creates the DMA for the serial transfer.
   template <typename B, typename S> static status create_dma(S& s) noexcept
   {
     if constexpr (requires { static_cast<edma_handle_t*>(B::dma_handle); })
@@ -1342,11 +1421,13 @@ struct sai_driver
     }
     return status::unsupported;
   }
+  /// @brief Starts the configured DMA transfer.
   template <typename S> static status start_dma(S& s) noexcept
   {
     return convert(s.reading ? SAI_TransferReceiveEDMA(s.base, &s.dma_handle, &s.transfer)
                              : SAI_TransferSendEDMA(s.base, &s.dma_handle, &s.transfer));
   }
+  /// @brief Attempts to abort the DMA for the serial transfer.
   template <typename S> static void abort_dma(S& s) noexcept
   {
     if (s.reading)
@@ -1357,16 +1438,20 @@ struct sai_driver
 #else
   using dma_handle_type = no_dma;
   static constexpr bool dma = false;
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename B, typename S> static status create_dma(S&) noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename S> static status start_dma(S&) noexcept
   {
     return status::unsupported;
   }
+  /// @brief Performs no operation in this backend configuration.
   template <typename S> static void abort_dma(S&) noexcept {}
 #endif
+  /// @brief Converts a backend value to the corresponding microHAL representation.
   static status convert(status_t value) noexcept
   {
     if (value == kStatus_SAI_TxIdle || value == kStatus_SAI_RxIdle)
@@ -1375,6 +1460,7 @@ struct sai_driver
       return status::busy;
     return map(value);
   }
+  /// @brief Initializes the configured backend resource.
   template <typename C, typename S> static status initialize(S& s) noexcept
   {
     using B = typename C::binding;
@@ -1434,6 +1520,7 @@ struct sai_driver
       return status::ok;
     }
   }
+  /// @brief Starts the configured peripheral operation.
   template <typename S> static status start(S& s) noexcept
   {
     if (s.mode == transfer_mode::dma)
@@ -1441,6 +1528,7 @@ struct sai_driver
     return convert(s.reading ? SAI_TransferReceiveNonBlocking(s.base, &s.handle, &s.transfer)
                              : SAI_TransferSendNonBlocking(s.base, &s.handle, &s.transfer));
   }
+  /// @brief Polls the associated backend operation.
   template <typename C, typename S> static status poll(S& s) noexcept
   {
     poll_deadline<C> deadline;
@@ -1494,6 +1582,7 @@ struct sai_driver
     }
     return result;
   }
+  /// @brief Attempts to cancel the active peripheral operation.
   template <typename S> static void abort(S& s) noexcept
   {
     if (s.mode == transfer_mode::dma)
@@ -1503,6 +1592,7 @@ struct sai_driver
     else
       SAI_TransferTerminateSend(s.base, &s.handle);
   }
+  /// @brief Processes the peripheral interrupt for the active operation.
   template <typename S> static void irq(S& s) noexcept
   {
     if (s.reading)
@@ -1511,6 +1601,7 @@ struct sai_driver
       SAI_TransferTxHandleIRQ(s.base, &s.handle);
   }
 };
+/// @brief Selects the driver matching the supplied serial peripheral instance.
 inline sai_driver select(I2S_Type*) noexcept
 {
   return {};
@@ -1528,15 +1619,19 @@ inline sai_driver select(I2S_Type*) noexcept
 
 namespace microhal::backends::kinetis::espresso::serial
 {
+/// @brief Selects a serial driver for the configuration.
 template <typename Config, typename = void> struct driver_for
 {
   using type = unavailable;
 };
+/// @brief Selects a serial driver for the configuration.
 template <typename Config> struct driver_for<Config, std::void_t<decltype(Config::binding::instance)>>
 {
   using type = decltype(select(Config::binding::instance));
 };
+/// @brief Names the serial driver selected for the configuration.
 template <typename Config> using driver_t = typename driver_for<Config>::type;
+/// @brief Reports whether the selected driver matches the configured peripheral.
 template <typename Config, peripheral_kind Kind>
 inline constexpr bool matches = []
 {
@@ -1547,36 +1642,45 @@ inline constexpr bool matches = []
     return driver_t<Config>::kind == Kind;
 }();
 
+/// @brief Implements a configured serial transfer mode.
 template <peripheral_kind Kind> struct api
 {
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config, auto Handler> static status start_receive_to_idle(std::span<std::uint8_t>) noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config, auto Handler> static status start_circular_rx(std::span<std::uint8_t>) noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config> static status abort_tx() noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config> static status abort_rx() noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config> static status tx_status() noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config> static status rx_status() noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config> static status handle_dma_interrupt() noexcept
   {
     return status::unsupported;
   }
+  /// @brief Initializes the configured backend resource.
   template <typename Config> static status initialize() noexcept
   {
     if constexpr (!matches<Config, Kind> || serial_slave_enabled<Config>())
@@ -1584,6 +1688,7 @@ template <peripheral_kind Kind> struct api
     else
       return engine<driver_t<Config>>::template initialize<Config>();
   }
+  /// @brief Attempts to cancel the active peripheral operation.
   template <typename Config> static status abort() noexcept
   {
     if constexpr (!matches<Config, Kind> || serial_slave_enabled<Config>())
@@ -1591,6 +1696,7 @@ template <peripheral_kind Kind> struct api
     else
       return engine<driver_t<Config>>::template abort<Config>();
   }
+  /// @brief Queries the current or most recently completed transfer status.
   template <typename Config> static status transfer_status() noexcept
   {
     if constexpr (!matches<Config, Kind> || serial_slave_enabled<Config>())
@@ -1598,6 +1704,7 @@ template <peripheral_kind Kind> struct api
     else
       return engine<driver_t<Config>>::template transfer_status<Config>();
   }
+  /// @brief Processes the peripheral interrupt for the active operation.
   template <typename Config> static status irq() noexcept
   {
     if constexpr (!matches<Config, Kind> || serial_slave_enabled<Config>())
@@ -1605,14 +1712,17 @@ template <peripheral_kind Kind> struct api
     else
       return engine<driver_t<Config>>::template irq<Config>();
   }
+  /// @brief Handles the interrupt for the serial transfer.
   template <typename Config> static status handle_interrupt() noexcept
   {
     return irq<Config>();
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config> static status probe(std::uint16_t) noexcept
   {
     return status::unsupported;
   }
+  /// @brief Writes data using the configured backend.
   template <typename Config, auto Handler>
   static status write(std::span<const std::uint8_t> data, std::uint16_t address = 0U) noexcept
   {
@@ -1621,6 +1731,7 @@ template <peripheral_kind Kind> struct api
     else
       return bytes<Config, Handler>(const_cast<std::uint8_t*>(data.data()), data.size(), address, false);
   }
+  /// @brief Reads data using the configured backend.
   template <typename Config, auto Handler>
   static status read(std::span<std::uint8_t> data, std::uint16_t address = 0U) noexcept
   {
@@ -1629,6 +1740,7 @@ template <peripheral_kind Kind> struct api
     else
       return bytes<Config, Handler>(data.data(), data.size(), address, true);
   }
+  /// @brief Submits a UART or I2C byte transfer in the requested direction.
   template <typename Config, auto Handler>
   static status bytes(std::uint8_t* data, std::size_t count, std::uint16_t address, bool reading) noexcept
   {
@@ -1662,6 +1774,7 @@ template <peripheral_kind Kind> struct api
           });
     }
   }
+  /// @brief Transfers data using the configured peripheral.
   template <typename Config, auto Handler>
   static status transfer(std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx) noexcept
   {
@@ -1683,6 +1796,7 @@ template <peripheral_kind Kind> struct api
           });
     }
   }
+  /// @brief Starts a write followed by a read using the configured backend.
   template <typename Config, auto Handler>
   static status write_read(std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx, std::uint16_t address) noexcept
   {
@@ -1710,15 +1824,18 @@ template <peripheral_kind Kind> struct api
           });
     }
   }
+  /// @brief Transmits data using the configured peripheral.
   template <typename Config, auto Handler> static status transmit(std::span<const std::uint16_t> samples) noexcept
   {
     return audio<Config, Handler>(reinterpret_cast<std::uint8_t*>(const_cast<std::uint16_t*>(samples.data())),
                                   samples.size_bytes(), false);
   }
+  /// @brief Receives data using the configured peripheral.
   template <typename Config, auto Handler> static status receive(std::span<std::uint16_t> samples) noexcept
   {
     return audio<Config, Handler>(reinterpret_cast<std::uint8_t*>(samples.data()), samples.size_bytes(), true);
   }
+  /// @brief Submits an I2S transmit or receive using byte-addressed sample storage.
   template <typename Config, auto Handler>
   static status audio(std::uint8_t* data, std::size_t count, bool reading) noexcept
   {
@@ -1745,21 +1862,25 @@ template <peripheral_kind Kind> struct api
 
 namespace microhal
 {
+/// @brief Selects the serial transfer-mode implementation for the backend and peripheral.
 template <>
 struct serial_mode_api<kinetis_espresso_tag, peripheral_kind::i2c>
     : backends::kinetis::espresso::serial::api<peripheral_kind::i2c>
 {
 };
+/// @brief Selects the serial transfer-mode implementation for the backend and peripheral.
 template <>
 struct serial_mode_api<kinetis_espresso_tag, peripheral_kind::spi>
     : backends::kinetis::espresso::serial::api<peripheral_kind::spi>
 {
 };
+/// @brief Selects the serial transfer-mode implementation for the backend and peripheral.
 template <>
 struct serial_mode_api<kinetis_espresso_tag, peripheral_kind::uart>
     : backends::kinetis::espresso::serial::api<peripheral_kind::uart>
 {
 };
+/// @brief Selects the serial transfer-mode implementation for the backend and peripheral.
 template <>
 struct serial_mode_api<kinetis_espresso_tag, peripheral_kind::i2s>
     : backends::kinetis::espresso::serial::api<peripheral_kind::i2s>

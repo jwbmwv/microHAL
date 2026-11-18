@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief STM32 ADC API implementation fragment.
+ */
 // Included inside a backend namespace, after vendor peripheral declarations.
 struct adc_instance
 {
 #if defined(ADC1)
+  /// @brief Returns the ADC instance selected by the configuration.
   template <typename C> static ADC_TypeDef* get() noexcept
   {
     using board = microhal::backends::stm32::adc_detail::binding_t<C>;
@@ -39,10 +43,12 @@ struct adc_instance
 struct adc_api final : microhal::backends::stm32::adc_detail::engine<
                            microhal::backends::stm32::adc_detail::register_hardware<ADC_TypeDef, adc_instance>>
 {
+  /// @brief Starts the configured interrupt-driven transfer.
   template <typename C, auto H> static status start_interrupt(std::uint8_t channel) noexcept
   {
     return start_async<C, H>(channel);
   }
+  /// @brief Starts the configured DMA transfer.
   template <typename C, auto H> static status start_dma(std::uint8_t channel, std::span<std::uint16_t> buffer) noexcept
   {
     return start_dma_scan<C, H>({&channel, 1}, buffer);
@@ -51,45 +57,56 @@ struct adc_api final : microhal::backends::stm32::adc_detail::engine<
 #else
 struct adc_api final
 {
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename C> static status initialize() noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename C> static result<std::uint16_t> read_blocking(std::uint8_t) noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename C> static status start_continuous(std::span<const std::uint8_t>) noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename C, auto H> static status start_async(std::uint8_t) noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename C, auto H>
   static status start_dma_scan(std::span<const std::uint8_t>, std::span<std::uint16_t>) noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename C, auto H>
   static status start_dma_stream(std::span<const std::uint8_t>, std::span<std::uint16_t>, bool = true) noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename C> static status stop() noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename C> static status abort() noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename C> static result<dma_transfer_state> transfer_status() noexcept
   {
     return status::unsupported;
   }
+  /// @brief Performs no operation in this backend configuration.
   template <typename C> static void handle_interrupt() noexcept {}
+  /// @brief Performs no operation in this backend configuration.
   template <typename C> static void handle_dma_interrupt() noexcept {}
 };
 #endif

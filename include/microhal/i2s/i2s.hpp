@@ -35,6 +35,16 @@ struct i2s_config final
                                    (TransferMode == transfer_mode::automatic && EnableDma)};
 };
 
+/**
+ * @brief Compile-time I2S configuration using board-owned resources.
+ * @tparam Binding Backend-specific board resource binding.
+ * @tparam Mode Requested I2S operating mode.
+ * @tparam Standard Requested I2S frame standard.
+ * @tparam SampleRate Requested sample rate in hertz.
+ * @tparam EnableMasterClock Request a master-clock output.
+ * @tparam EnableDma Request DMA when @c TransferMode is automatic.
+ * @tparam TransferMode Transfer mechanism selected for the interface.
+ */
 template <typename Binding, i2s_mode Mode = i2s_mode::master_tx, i2s_standard Standard = i2s_standard::philips,
           std::uint32_t SampleRate = 48000U, bool EnableMasterClock = false, bool EnableDma = true,
           transfer_mode TransferMode = transfer_mode::automatic>

@@ -16,6 +16,15 @@
 namespace microhal::sd
 {
 
+/**
+ * @brief Compile-time SD host configuration using a numeric instance.
+ * @tparam InstanceIndex Backend-specific host instance index.
+ * @tparam ClockHz Requested host clock in hertz.
+ * @tparam BusWidth Requested SD bus width.
+ * @tparam TimingMode Requested SD timing mode.
+ * @tparam EnableDma Request DMA transfers.
+ * @tparam EnableInterrupts Request interrupt support.
+ */
 template <std::uint8_t InstanceIndex, std::uint32_t ClockHz = 25'000'000U, sd_bus_width BusWidth = sd_bus_width::four,
           sd_timing_mode TimingMode = sd_timing_mode::default_speed, bool EnableDma = true,
           bool EnableInterrupts = true>
@@ -29,6 +38,15 @@ struct host_config final
   static constexpr bool enable_interrupts{EnableInterrupts};
 };
 
+/**
+ * @brief Compile-time SD host configuration using board-owned resources.
+ * @tparam Binding Backend-specific board resource binding.
+ * @tparam ClockHz Requested host clock in hertz.
+ * @tparam BusWidth Requested SD bus width.
+ * @tparam TimingMode Requested SD timing mode.
+ * @tparam EnableDma Request DMA transfers.
+ * @tparam EnableInterrupts Request interrupt support.
+ */
 template <typename Binding, std::uint32_t ClockHz = 25'000'000U, sd_bus_width BusWidth = sd_bus_width::four,
           sd_timing_mode TimingMode = sd_timing_mode::default_speed, bool EnableDma = true,
           bool EnableInterrupts = true>
@@ -43,6 +61,12 @@ struct bound_host_config final
   static constexpr bool enable_interrupts{EnableInterrupts};
 };
 
+/**
+ * @brief Compile-time SD card and host facade.
+ * @tparam Backend Registered backend tag.
+ * @tparam Config Host configuration accepted by @c SdConcept.
+ * @note The application must serialize access to the configured host.
+ */
 template <typename Backend, typename Config>
   requires SdConcept<Backend, Config>
 struct card final

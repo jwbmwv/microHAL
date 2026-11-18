@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief STM32 ADC DMA binding and register helpers.
+ */
 #pragma once
 #include "microhal/backends/stm32/adc_engine.hpp"
 #include "microhal/backends/stm32/dma_resource.hpp"
@@ -11,14 +14,17 @@ template <std::uint8_t Instance> struct adc_binding
 };
 namespace adc_detail
 {
+/// @brief Selects the ADC binding supplied by the configuration.
 template <typename C, typename = void> struct binding_for
 {
   using type = adc_binding<C::instance_index>;
 };
+/// @brief Selects the ADC binding supplied by the configuration.
 template <typename C> struct binding_for<C, std::void_t<typename C::binding>>
 {
   using type = typename C::binding;
 };
+/// @brief Names the ADC binding selected for the configuration.
 template <typename C> using binding_t = typename binding_for<C>::type;
 
 /// Bind typed register resources; the shared native endpoint implements transfers.
@@ -28,6 +34,7 @@ template <unsigned Instance> struct dma_resource_state
   inline static detail::serial_dma_resource endpoint{};
 };
 
+/// @brief Provides the DMA register operations used by ADC transfers.
 template <typename C> struct dma_registers
 {
   using board = binding_t<C>;
@@ -39,6 +46,7 @@ template <typename C> struct dma_registers
     board::dma_index;
   };
 
+  /// @brief Returns the resource associated with the configuration.
   template <typename D, typename Controller> static detail::serial_dma_resource resource(D* d, Controller* c) noexcept
   {
     if constexpr (requires {
@@ -62,6 +70,7 @@ template <typename C> struct dma_registers
     else
       return detail::channel_dma(*d, *c, board::dma_index);
   }
+  /// @brief Returns the flags associated with the selected transfer.
   static unsigned flags() noexcept
   {
     if (!state::endpoint)
@@ -72,6 +81,7 @@ template <typename C> struct dma_registers
     return ((flags & state::endpoint.half_mask) ? 1U : 0U) | ((flags & state::endpoint.complete_mask) ? 2U : 0U) |
            ((flags & state::endpoint.error_mask) ? 4U : 0U);
   }
+  /// @brief Stops the active peripheral operation.
   static status stop() noexcept
   {
     if constexpr (!available)
@@ -83,6 +93,7 @@ template <typename C> struct dma_registers
       return s;
     }
   }
+  /// @brief Sets up the selected peripheral or transfer resource.
   static status setup(std::uintptr_t source, std::span<std::uint16_t> buffer, bool circular,
                       bool halves = false) noexcept
   {

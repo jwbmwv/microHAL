@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx serial-resource ownership helpers.
+ */
 // Serial personalities on the same register block must not be enabled together.
 inline std::array<std::atomic<std::uintptr_t>, 32U> serial_resources{};
 inline std::atomic_flag serial_resource_lock = ATOMIC_FLAG_INIT;
+/// @brief Attempts to claim the serial transfer resource.
 inline status serial_claim(const void* peripheral, std::uintptr_t owner) noexcept
 {
   // Never spin: an interrupt may preempt another initialization on this core.
@@ -9,6 +13,7 @@ inline status serial_claim(const void* peripheral, std::uintptr_t owner) noexcep
     return status::busy;
   struct unlock
   {
+    /// @brief Releases resources owned by this guard when it is destroyed.
     ~unlock()
     {
       serial_resource_lock.clear(std::memory_order_release);
@@ -26,6 +31,7 @@ inline status serial_claim(const void* peripheral, std::uintptr_t owner) noexcep
   }
   return status::busy;
 }
+/// @brief Releases the claimed serial resource.
 inline void serial_release(const void* peripheral, std::uintptr_t owner) noexcept
 {
   const auto token = reinterpret_cast<std::uintptr_t>(peripheral) | owner;
@@ -36,6 +42,7 @@ inline void serial_release(const void* peripheral, std::uintptr_t owner) noexcep
       return;
   }
 }
+/// @brief Initializes the selected serial resource.
 template <typename Initialize>
 status serial_initialize(const void* peripheral, std::uintptr_t owner, Initialize initialize) noexcept
 {

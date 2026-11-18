@@ -111,6 +111,7 @@ struct recorder final
   static constexpr std::uint32_t sd_block_count{64U};
   inline static std::array<std::uint8_t, sd_block_size_bytes * sd_block_count> sd_storage{};
 
+  /// @brief Resets the associated backend state.
   static void reset() noexcept
   {
     call_count = 0U;
@@ -142,6 +143,7 @@ struct recorder final
     failure_armed = true;
   }
 
+  /// @brief Records a backend operation and its arguments.
   static void record(const peripheral_kind peripheral, const operation op, const std::uint32_t argument = 0U,
                      const std::size_t length = 0U) noexcept
   {
@@ -167,11 +169,13 @@ struct recorder final
     return index < fail_after;
   }
 
+  /// @brief Returns the recorded backend calls.
   [[nodiscard]] static std::span<const call_record> log() noexcept
   {
     return std::span<const call_record>{calls.data(), call_count};
   }
 
+  /// @brief Checks whether the recorder contains the requested operation.
   [[nodiscard]] static bool called(const peripheral_kind peripheral, const operation op) noexcept
   {
     for (std::size_t index = 0U; index < call_count; ++index)
@@ -187,23 +191,27 @@ struct recorder final
 
 struct gpio_api final
 {
+  /// @brief Configures the selected backend resource.
   template <typename PinConfig> static bool configure() noexcept
   {
     return recorder::step(peripheral_kind::gpio, operation::configure, PinConfig::pin_index);
   }
 
+  /// @brief Writes data using the configured backend.
   template <typename PinConfig> static void write(const bool level) noexcept
   {
     recorder::gpio_level = level;
     recorder::record(peripheral_kind::gpio, operation::write, PinConfig::pin_index, level ? 1U : 0U);
   }
 
+  /// @copybrief microhal::gpio::pin::read
   template <typename PinConfig> static bool read() noexcept
   {
     recorder::record(peripheral_kind::gpio, operation::read, PinConfig::pin_index);
     return recorder::gpio_level;
   }
 
+  /// @copybrief microhal::gpio::pin::toggle
   template <typename PinConfig> static status toggle() noexcept
   {
     if (!recorder::step(peripheral_kind::gpio, operation::toggle, PinConfig::pin_index))
@@ -214,6 +222,7 @@ struct gpio_api final
     return status::ok;
   }
 
+  /// @brief Enables the interrupt for the GPIO pin.
   template <typename PinConfig, auto Handler> static bool enable_interrupt() noexcept
   {
     return recorder::step(peripheral_kind::gpio, operation::enable_interrupt, PinConfig::pin_index);
@@ -222,16 +231,19 @@ struct gpio_api final
 
 struct uart_api final
 {
+  /// @copybrief microhal::uart::port::initialize
   template <typename Config> static bool initialize() noexcept
   {
     return recorder::step(peripheral_kind::uart, operation::initialize, Config::instance_index);
   }
 
+  /// @copybrief microhal::uart::port::write_blocking
   template <typename Config> static bool write_blocking(const std::span<const std::uint8_t> payload) noexcept
   {
     return recorder::step(peripheral_kind::uart, operation::write, Config::instance_index, payload.size());
   }
 
+  /// @copybrief microhal::uart::port::read_blocking
   template <typename Config> static bool read_blocking(const std::span<std::uint8_t> payload) noexcept
   {
     for (std::uint8_t& byte : payload)
@@ -241,17 +253,20 @@ struct uart_api final
     return recorder::step(peripheral_kind::uart, operation::read, Config::instance_index, payload.size());
   }
 
+  /// @brief Starts an asynchronous receive operation.
   template <typename Config, auto Handler> static bool start_async_rx(const std::span<std::uint8_t> payload) noexcept
   {
     return recorder::step(peripheral_kind::uart, operation::start, Config::instance_index, payload.size());
   }
 
+  /// @brief Starts an asynchronous transmit operation.
   template <typename Config, auto Handler>
   static bool start_async_tx(const std::span<const std::uint8_t> payload) noexcept
   {
     return recorder::step(peripheral_kind::uart, operation::start, Config::instance_index, payload.size());
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename UartConfig, typename AutobaudConfig> static bool arm_autobaud() noexcept
   {
     (void)sizeof(UartConfig);
@@ -259,6 +274,7 @@ struct uart_api final
     return false;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename UartConfig> static bool apply_autobaud(const std::uint32_t baud_rate) noexcept
   {
     (void)sizeof(UartConfig);
@@ -269,17 +285,20 @@ struct uart_api final
 
 struct i2c_api final
 {
+  /// @copybrief microhal::i2c::master::initialize
   template <typename Config> static bool initialize() noexcept
   {
     return recorder::step(peripheral_kind::i2c, operation::initialize, Config::instance_index);
   }
 
+  /// @copybrief microhal::i2c::master::write_blocking
   template <typename Config>
   static bool write_blocking(const std::span<const std::uint8_t> payload, const std::uint16_t address) noexcept
   {
     return recorder::step(peripheral_kind::i2c, operation::write, address, payload.size());
   }
 
+  /// @copybrief microhal::i2c::master::read_blocking
   template <typename Config>
   static bool read_blocking(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
   {
@@ -290,6 +309,7 @@ struct i2c_api final
     return recorder::step(peripheral_kind::i2c, operation::read, address, payload.size());
   }
 
+  /// @copybrief microhal::i2c::master::probe
   template <typename Config> static status probe(const std::uint16_t address) noexcept
   {
     (void)sizeof(Config);
@@ -300,6 +320,7 @@ struct i2c_api final
     return recorder::i2c_result;
   }
 
+  /// @brief Writes data and then reads data using the blocking transfer path.
   template <typename Config>
   static status write_read_blocking(const std::span<const std::uint8_t> tx_payload,
                                     const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
@@ -316,6 +337,7 @@ struct i2c_api final
     return recorder::i2c_result;
   }
 
+  /// @brief Starts an asynchronous write followed by a read.
   template <typename Config, auto Handler>
   static status write_read_async(const std::span<const std::uint8_t> tx_payload,
                                  const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
@@ -332,6 +354,7 @@ struct i2c_api final
     return result;
   }
 
+  /// @brief Starts the transfer for the I2C peripheral.
   template <typename Config, auto Handler>
   static bool start_transfer(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
   {
@@ -341,11 +364,13 @@ struct i2c_api final
 
 struct spi_api final
 {
+  /// @copybrief microhal::spi::master::initialize
   template <typename Config> static bool initialize() noexcept
   {
     return recorder::step(peripheral_kind::spi, operation::initialize, Config::instance_index);
   }
 
+  /// @brief Transfers data using the configured peripheral.
   template <typename Config>
   static bool transfer(const std::span<const std::uint8_t> tx_payload,
                        const std::span<std::uint8_t> rx_payload) noexcept
@@ -357,11 +382,13 @@ struct spi_api final
     return recorder::step(peripheral_kind::spi, operation::transfer, Config::instance_index, tx_payload.size());
   }
 
+  /// @copybrief microhal::spi::master::write_blocking
   template <typename Config> static bool write_blocking(const std::span<const std::uint8_t> payload) noexcept
   {
     return recorder::step(peripheral_kind::spi, operation::write, Config::instance_index, payload.size());
   }
 
+  /// @copybrief microhal::spi::master::read_blocking
   template <typename Config> static bool read_blocking(const std::span<std::uint8_t> payload) noexcept
   {
     for (std::uint8_t& byte : payload)
@@ -371,6 +398,7 @@ struct spi_api final
     return recorder::step(peripheral_kind::spi, operation::read, Config::instance_index, payload.size());
   }
 
+  /// @brief Starts an asynchronous transfer using the configured peripheral.
   template <typename Config, auto Handler>
   static bool transfer_async(const std::span<const std::uint8_t> tx_payload,
                              const std::span<std::uint8_t> rx_payload) noexcept
@@ -382,12 +410,14 @@ struct spi_api final
 
 struct qspi_api final
 {
+  /// @brief Initializes the configured backend resource.
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
     return recorder::step(peripheral_kind::qspi, operation::initialize);
   }
 
+  /// @copybrief microhal::qspi::controller::command_write
   template <typename Config>
   static bool command_write(const qspi_command& request, const std::span<const std::uint8_t> payload) noexcept
   {
@@ -395,6 +425,7 @@ struct qspi_api final
     return recorder::step(peripheral_kind::qspi, operation::write, request.instruction, payload.size());
   }
 
+  /// @copybrief microhal::qspi::controller::command_read
   template <typename Config>
   static bool command_read(const qspi_command& request, const std::span<std::uint8_t> payload) noexcept
   {
@@ -410,6 +441,7 @@ struct qspi_api final
     return true;
   }
 
+  /// @brief Enters the configured QSPI memory-mapped mode.
   template <typename Config> static bool enter_memory_mapped(const qspi_command& request) noexcept
   {
     (void)sizeof(Config);
@@ -419,6 +451,7 @@ struct qspi_api final
     return success;
   }
 
+  /// @copybrief microhal::qspi::controller::exit_memory_mapped
   template <typename Config> static bool exit_memory_mapped() noexcept
   {
     (void)sizeof(Config);
@@ -430,12 +463,14 @@ struct qspi_api final
 
 struct rtc_api final
 {
+  /// @copybrief microhal::rtc::controller::initialize
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
     return recorder::step(peripheral_kind::rtc, operation::initialize);
   }
 
+  /// @brief Sets the time for the RTC.
   template <typename Config>
   static bool set_time(const std::uint8_t hours, const std::uint8_t minutes, const std::uint8_t seconds) noexcept
   {
@@ -447,6 +482,7 @@ struct rtc_api final
                               static_cast<std::uint32_t>(seconds));
   }
 
+  /// @brief Returns the time for the RTC.
   template <typename Config>
   static bool get_time(std::uint8_t& hours, std::uint8_t& minutes, std::uint8_t& seconds) noexcept
   {
@@ -456,6 +492,7 @@ struct rtc_api final
     return recorder::step(peripheral_kind::rtc, operation::read);
   }
 
+  /// @copybrief microhal::rtc::controller::enable_alarm
   template <typename Config, auto Handler, typename AlarmTime> static bool enable_alarm(const AlarmTime&) noexcept
   {
     (void)Handler;
@@ -465,6 +502,7 @@ struct rtc_api final
 
 struct timer_api final
 {
+  /// @brief Initializes the configured backend resource.
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
@@ -476,18 +514,21 @@ struct timer_api final
     return true;
   }
 
+  /// @copybrief microhal::timers::timer::start
   template <typename Config> static bool start() noexcept
   {
     (void)sizeof(Config);
     return recorder::step(peripheral_kind::timer, operation::start);
   }
 
+  /// @copybrief microhal::timers::timer::stop
   template <typename Config> static bool stop() noexcept
   {
     (void)sizeof(Config);
     return recorder::step(peripheral_kind::timer, operation::stop);
   }
 
+  /// @copybrief microhal::timers::timer::set_period
   template <typename Config> static bool set_period(const std::uint32_t period) noexcept
   {
     (void)sizeof(Config);
@@ -499,6 +540,7 @@ struct timer_api final
     return true;
   }
 
+  /// @brief Resets the counter for the timer.
   template <typename Config> static bool reset_counter() noexcept
   {
     (void)sizeof(Config);
@@ -510,6 +552,7 @@ struct timer_api final
     return true;
   }
 
+  /// @copybrief microhal::timers::timer::period
   template <typename Config> static result<std::uint32_t> period() noexcept
   {
     (void)sizeof(Config);
@@ -520,12 +563,14 @@ struct timer_api final
     return recorder::timer_period;
   }
 
+  /// @copybrief microhal::timers::timer::counter
   template <typename Config> static std::uint32_t counter() noexcept
   {
     recorder::record(peripheral_kind::timer, operation::read);
     return recorder::timer_count++;
   }
 
+  /// @copybrief microhal::timers::timer::capture_value
   template <typename Config, typename ChannelConfig> static result<std::uint32_t> capture_value() noexcept
   {
     (void)sizeof(Config);
@@ -542,11 +587,13 @@ struct adc_api final
   /// @brief Sample value returned by @ref read_blocking.
   inline static std::uint16_t sample{0U};
 
+  /// @copybrief microhal::adc::converter::initialize
   template <typename Config> static bool initialize() noexcept
   {
     return recorder::step(peripheral_kind::adc, operation::initialize, Config::instance_index);
   }
 
+  /// @copybrief microhal::adc::converter::read_blocking
   template <typename Config> static result<std::uint16_t> read_blocking(const std::uint8_t channel) noexcept
   {
     if (!recorder::step(peripheral_kind::adc, operation::read, channel))
@@ -556,17 +603,20 @@ struct adc_api final
     return sample;
   }
 
+  /// @copybrief microhal::adc::converter::start_continuous
   template <typename Config> static bool start_continuous(const std::span<const std::uint8_t> channels) noexcept
   {
     return recorder::step(peripheral_kind::adc, operation::start, Config::instance_index, channels.size());
   }
 
+  /// @copybrief microhal::adc::converter::start_async
   template <typename Config, auto Handler> static bool start_async(const std::uint8_t channel) noexcept
   {
     (void)Handler;
     return recorder::step(peripheral_kind::adc, operation::start, channel);
   }
 
+  /// @copybrief microhal::adc::converter::start_dma_scan
   template <typename Config, auto Handler>
   static bool start_dma_scan(const std::span<const std::uint8_t> channels,
                              const std::span<std::uint16_t> buffer) noexcept
@@ -579,23 +629,27 @@ struct adc_api final
 
 struct dac_api final
 {
+  /// @copybrief microhal::dac::converter::initialize
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
     return recorder::step(peripheral_kind::dac, operation::initialize);
   }
 
+  /// @copybrief microhal::dac::converter::write_blocking
   template <typename Config> static bool write_blocking(const std::uint16_t value) noexcept
   {
     return recorder::step(peripheral_kind::dac, operation::write, value);
   }
 
+  /// @copybrief microhal::dac::converter::write_dual
   template <typename Config> static bool write_dual(const std::uint16_t a, const std::uint16_t b) noexcept
   {
     return recorder::step(peripheral_kind::dac, operation::write,
                           (static_cast<std::uint32_t>(a) << 16U) | static_cast<std::uint32_t>(b));
   }
 
+  /// @copybrief microhal::dac::converter::start_dma_waveform
   template <typename Config, auto Handler>
   static bool start_dma_waveform(const std::span<const std::uint16_t> waveform) noexcept
   {
@@ -608,30 +662,35 @@ struct can_api final
 {
   inline static microhal::can::message last_message{};
 
+  /// @copybrief microhal::can::bus::initialize
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
     return recorder::step(peripheral_kind::can, operation::initialize);
   }
 
+  /// @copybrief microhal::can::bus::transmit
   template <typename Config> static bool transmit(const microhal::can::message& message) noexcept
   {
     last_message = message;
     return recorder::step(peripheral_kind::can, operation::write, message.id, message.dlc);
   }
 
+  /// @copybrief microhal::can::bus::receive
   template <typename Config> static bool receive(microhal::can::message& message) noexcept
   {
     message = last_message;
     return recorder::step(peripheral_kind::can, operation::read, message.id, message.dlc);
   }
 
+  /// @copybrief microhal::can::bus::transmit
   template <typename Config> static bool transmit(const std::uint8_t* frame, const std::size_t length) noexcept
   {
     (void)frame;
     return recorder::step(peripheral_kind::can, operation::write, 0U, length);
   }
 
+  /// @copybrief microhal::can::bus::receive
   template <typename Config> static bool receive(std::uint8_t* frame, std::size_t& length) noexcept
   {
     for (std::size_t index = 0U; index < length; ++index)
@@ -641,6 +700,7 @@ struct can_api final
     return recorder::step(peripheral_kind::can, operation::read, 0U, length);
   }
 
+  /// @copybrief microhal::can::bus::configure_filter
   template <typename Config>
   static bool configure_filter(const std::uint32_t filter_id, const std::uint32_t mask,
                                const std::uint32_t fifo) noexcept
@@ -648,6 +708,7 @@ struct can_api final
     return recorder::step(peripheral_kind::can, operation::set_filter, filter_id ^ mask ^ (fifo << 24U));
   }
 
+  /// @brief Enables the receive interrupt for the CAN peripheral.
   template <typename Config, auto Handler> static bool enable_rx_interrupt() noexcept
   {
     (void)Handler;
@@ -657,28 +718,33 @@ struct can_api final
 
 struct usb_api final
 {
+  /// @copybrief microhal::usb::device::initialize
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
     return recorder::step(peripheral_kind::usb, operation::initialize);
   }
 
+  /// @copybrief microhal::usb::device::connect
   template <typename Config> static bool connect() noexcept
   {
     return recorder::step(peripheral_kind::usb, operation::connect);
   }
 
+  /// @copybrief microhal::usb::device::disconnect
   template <typename Config> static bool disconnect() noexcept
   {
     return recorder::step(peripheral_kind::usb, operation::disconnect);
   }
 
+  /// @copybrief microhal::usb::device::endpoint_transmit
   template <typename Config>
   static bool endpoint_transmit(const std::uint8_t endpoint, const std::span<const std::uint8_t> data) noexcept
   {
     return recorder::step(peripheral_kind::usb, operation::write, endpoint, data.size());
   }
 
+  /// @copybrief microhal::usb::device::endpoint_receive
   template <typename Config>
   static std::uint32_t endpoint_receive(const std::uint8_t endpoint, const std::span<std::uint8_t> buffer) noexcept
   {
@@ -696,27 +762,32 @@ struct usb_api final
 
 struct ethernet_api final
 {
+  /// @copybrief microhal::ethernet::mac::initialize
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
     return recorder::step(peripheral_kind::ethernet, operation::initialize);
   }
 
+  /// @copybrief microhal::ethernet::mac::start
   template <typename Config> static bool start() noexcept
   {
     return recorder::step(peripheral_kind::ethernet, operation::start);
   }
 
+  /// @copybrief microhal::ethernet::mac::stop
   template <typename Config> static bool stop() noexcept
   {
     return recorder::step(peripheral_kind::ethernet, operation::stop);
   }
 
+  /// @copybrief microhal::ethernet::mac::transmit_frame
   template <typename Config> static bool transmit_frame(const std::span<const std::uint8_t> frame) noexcept
   {
     return recorder::step(peripheral_kind::ethernet, operation::write, 0U, frame.size());
   }
 
+  /// @copybrief microhal::ethernet::mac::receive_frame
   template <typename Config> static std::uint32_t receive_frame(const std::span<std::uint8_t> buffer) noexcept
   {
     for (std::uint8_t& byte : buffer)
@@ -730,6 +801,7 @@ struct ethernet_api final
     return static_cast<std::uint32_t>(buffer.size());
   }
 
+  /// @copybrief microhal::ethernet::mac::set_mac_address
   template <typename Config> static bool set_mac_address(const std::array<std::uint8_t, 6U>& address) noexcept
   {
     recorder::mac_address = address;
@@ -739,12 +811,14 @@ struct ethernet_api final
 
 struct sd_api final
 {
+  /// @copybrief microhal::sd::card::initialize
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
     return recorder::step(peripheral_kind::sd, operation::initialize);
   }
 
+  /// @copybrief microhal::sd::card::read_blocks
   template <typename Config>
   static bool read_blocks(const std::uint32_t start_block, const std::span<std::uint8_t> buffer) noexcept
   {
@@ -768,6 +842,7 @@ struct sd_api final
     return recorder::step(peripheral_kind::sd, operation::read, start_block, buffer.size());
   }
 
+  /// @copybrief microhal::sd::card::write_blocks
   template <typename Config>
   static bool write_blocks(const std::uint32_t start_block, const std::span<const std::uint8_t> buffer) noexcept
   {
@@ -791,6 +866,7 @@ struct sd_api final
     return recorder::step(peripheral_kind::sd, operation::write, start_block, buffer.size());
   }
 
+  /// @copybrief microhal::sd::card::erase_blocks
   template <typename Config>
   static bool erase_blocks(const std::uint32_t start_block, const std::uint32_t block_count) noexcept
   {
@@ -808,6 +884,7 @@ struct sd_api final
     return recorder::step(peripheral_kind::sd, operation::erase, start_block, block_count);
   }
 
+  /// @copybrief microhal::sd::card::capacity_blocks
   template <typename Config> static std::uint32_t capacity_blocks() noexcept
   {
     recorder::record(peripheral_kind::sd, operation::read);
@@ -817,12 +894,14 @@ struct sd_api final
 
 struct dma_api final
 {
+  /// @copybrief microhal::dma::controller::initialize
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
     return recorder::step(peripheral_kind::dma, operation::initialize);
   }
 
+  /// @copybrief microhal::dma::controller::start_transfer
   template <typename Config, auto Handler>
   static bool start_transfer(const std::uint32_t src_addr, const std::uint32_t dst_addr,
                              const std::uint32_t length) noexcept
@@ -839,6 +918,7 @@ struct dma_api final
     return success;
   }
 
+  /// @copybrief microhal::dma::controller::abort
   template <typename Config> static bool abort() noexcept
   {
     (void)sizeof(Config);
@@ -850,6 +930,7 @@ struct dma_api final
     return success;
   }
 
+  /// @copybrief microhal::dma::controller::transfer_status
   template <typename Config> static result<dma_transfer_state> transfer_status() noexcept
   {
     (void)sizeof(Config);
@@ -863,17 +944,20 @@ struct dma_api final
 
 struct flash_api final
 {
+  /// @brief Erases the requested storage range.
   template <typename Config> static bool erase(const std::uint32_t address, const std::uint32_t bytes) noexcept
   {
     return recorder::step(peripheral_kind::flash, operation::erase, address, bytes);
   }
 
+  /// @brief Programs the supplied data into storage.
   template <typename Config>
   static bool program(const std::uint32_t address, const std::span<const std::uint8_t> data) noexcept
   {
     return recorder::step(peripheral_kind::flash, operation::program, address, data.size());
   }
 
+  /// @copybrief microhal::flash::controller::read
   template <typename Config> static bool read(const std::uint32_t address, const std::span<std::uint8_t> data) noexcept
   {
     for (std::uint8_t& byte : data)
@@ -883,6 +967,7 @@ struct flash_api final
     return recorder::step(peripheral_kind::flash, operation::read, address, data.size());
   }
 
+  /// @copybrief microhal::flash::controller::erase_region
   template <typename Config> static result<flash_erase_region> erase_region(const std::uint32_t address) noexcept
   {
     constexpr std::uint32_t erase_size = Config::erase_size_bytes;
@@ -893,16 +978,19 @@ struct flash_api final
 
 struct watchdog_api final
 {
+  /// @copybrief microhal::watchdog::timer::initialize
   template <typename Config> static bool initialize() noexcept
   {
     return recorder::step(peripheral_kind::watchdog, operation::initialize);
   }
 
+  /// @copybrief microhal::watchdog::timer::start
   template <typename Config> static bool start() noexcept
   {
     return recorder::step(peripheral_kind::watchdog, operation::start);
   }
 
+  /// @copybrief microhal::watchdog::timer::refresh
   template <typename Config> static bool refresh() noexcept
   {
     return recorder::step(peripheral_kind::watchdog, operation::refresh);
@@ -911,21 +999,25 @@ struct watchdog_api final
 
 struct pwm_api final
 {
+  /// @copybrief microhal::pwm::output::initialize
   template <typename Config> static bool initialize() noexcept
   {
     return recorder::step(peripheral_kind::pwm, operation::initialize, Config::timer_index);
   }
 
+  /// @copybrief microhal::pwm::output::set_duty_cycle
   template <typename Config> static bool set_duty_cycle(const std::uint16_t duty_permille) noexcept
   {
     return recorder::step(peripheral_kind::pwm, operation::set_duty_cycle, duty_permille);
   }
 
+  /// @copybrief microhal::pwm::output::start
   template <typename Config> static bool start() noexcept
   {
     return recorder::step(peripheral_kind::pwm, operation::start, Config::timer_index);
   }
 
+  /// @copybrief microhal::pwm::output::stop
   template <typename Config> static bool stop() noexcept
   {
     return recorder::step(peripheral_kind::pwm, operation::stop, Config::timer_index);
@@ -934,17 +1026,20 @@ struct pwm_api final
 
 struct i2s_api final
 {
+  /// @copybrief microhal::i2s::interface::initialize
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
     return recorder::step(peripheral_kind::i2s, operation::initialize);
   }
 
+  /// @copybrief microhal::i2s::interface::transmit_blocking
   template <typename Config> static bool transmit_blocking(const std::span<const std::uint16_t> samples) noexcept
   {
     return recorder::step(peripheral_kind::i2s, operation::write, 0U, samples.size());
   }
 
+  /// @copybrief microhal::i2s::interface::receive_blocking
   template <typename Config> static bool receive_blocking(const std::span<std::uint16_t> samples) noexcept
   {
     for (std::uint16_t& sample : samples)
@@ -954,6 +1049,7 @@ struct i2s_api final
     return recorder::step(peripheral_kind::i2s, operation::read, 0U, samples.size());
   }
 
+  /// @copybrief microhal::i2s::interface::start_dma_tx
   template <typename Config, auto Handler>
   static bool start_dma_tx(const std::span<const std::uint16_t> samples) noexcept
   {
@@ -971,24 +1067,28 @@ struct i2s_api final
 
 struct rcc_api final
 {
+  /// @copybrief microhal::rcc::clock_controller::configure
   template <typename Config> static bool configure() noexcept
   {
     (void)sizeof(Config);
     return recorder::step(peripheral_kind::rcc, operation::configure);
   }
 
+  /// @brief Returns the system-clock frequency in hertz.
   template <typename Config> static std::uint32_t get_system_clock_hz() noexcept
   {
     recorder::record(peripheral_kind::rcc, operation::read);
     return 48'000'000U;
   }
 
+  /// @copybrief microhal::rcc::clock_controller::enable_peripheral_clock
   template <typename Config>
   static void enable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
   {
     recorder::record(peripheral, operation::start, instance);
   }
 
+  /// @copybrief microhal::rcc::clock_controller::disable_peripheral_clock
   template <typename Config>
   static void disable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
   {
@@ -998,12 +1098,14 @@ struct rcc_api final
 
 struct crc_api final
 {
+  /// @copybrief microhal::crc::accelerator::initialize
   template <typename Config> static bool initialize() noexcept
   {
     (void)sizeof(Config);
     return recorder::step(peripheral_kind::crc, operation::initialize);
   }
 
+  /// @brief Calculates the configured checksum.
   template <typename Config> static std::uint32_t calculate(const std::span<const std::uint8_t> data) noexcept
   {
     std::uint32_t crc = 0xFFFFFFFFU;
@@ -1024,12 +1126,14 @@ struct crc_api final
     return ~crc;
   }
 
+  /// @copybrief microhal::crc::accelerator::reset
   template <typename Config> static void reset() noexcept
   {
     (void)sizeof(Config);
     recorder::record(peripheral_kind::crc, operation::configure);
   }
 
+  /// @copybrief microhal::crc::accelerator::get_random
   template <typename Config> static std::uint32_t get_random() noexcept
   {
     recorder::timer_count = recorder::timer_count * 1664525U + 1013904223U;
@@ -1081,6 +1185,7 @@ template <> struct backend_traits<mock_tag> final
   static constexpr std::uint32_t gpio_pins_per_port{16U};
   static constexpr std::uint32_t gpio_alternate_function_count{16U};
 
+  /// @brief Reports the backend's GPIO capabilities.
   static consteval struct gpio_capability gpio_capability() noexcept
   {
     return {.supported = true,
@@ -1097,6 +1202,7 @@ template <> struct backend_traits<mock_tag> final
             .output_toggle = true};
   }
 
+  /// @brief Reports the backend's I2C capabilities.
   static consteval struct i2c_capability i2c_capability() noexcept
   {
     return {.supported = true,
@@ -1113,6 +1219,7 @@ template <> struct backend_traits<mock_tag> final
             .smbus_pec = true};
   }
 
+  /// @brief Reports the backend's SPI capabilities.
   static consteval struct spi_capability spi_capability() noexcept
   {
     return {.supported = true,
@@ -1127,6 +1234,7 @@ template <> struct backend_traits<mock_tag> final
             .async_transfer = true};
   }
 
+  /// @brief Reports the backend's QSPI capabilities.
   static consteval struct qspi_capability qspi_capability() noexcept
   {
     return {.supported = true,
@@ -1145,6 +1253,7 @@ template <> struct backend_traits<mock_tag> final
             .max_address_bytes = 4U};
   }
 
+  /// @brief Reports the backend's UART capabilities.
   static consteval struct uart_capability uart_capability() noexcept
   {
     return {.supported = true,
@@ -1169,6 +1278,7 @@ template <> struct backend_traits<mock_tag> final
                 uart_data_bits_mask(uart_data_bits::nine))};
   }
 
+  /// @brief Reports the backend's RTC capabilities.
   static consteval struct rtc_capability rtc_capability() noexcept
   {
     return {.supported = true,
@@ -1184,6 +1294,7 @@ template <> struct backend_traits<mock_tag> final
             .subsecond = false};
   }
 
+  /// @brief Reports the backend's flash capabilities.
   static consteval struct flash_capability flash_capability() noexcept
   {
     return {.supported = true,
@@ -1199,6 +1310,7 @@ template <> struct backend_traits<mock_tag> final
             .program_readback = true};
   }
 
+  /// @brief Reports the backend's timer capabilities.
   static consteval struct timer_capability timer_capability() noexcept
   {
     return {.supported = true,
@@ -1216,6 +1328,7 @@ template <> struct backend_traits<mock_tag> final
             .counter_reset = true};
   }
 
+  /// @brief Reports the backend's ADC capabilities.
   static consteval struct adc_capability adc_capability() noexcept
   {
     return {.supported = true,
@@ -1233,6 +1346,7 @@ template <> struct backend_traits<mock_tag> final
             .voltage_conversion = true};
   }
 
+  /// @brief Reports the backend's DAC capabilities.
   static consteval struct dac_capability dac_capability() noexcept
   {
     return {.supported = true,
@@ -1251,6 +1365,7 @@ template <> struct backend_traits<mock_tag> final
             .sequence_write = true};
   }
 
+  /// @brief Reports the backend's CAN capabilities.
   static consteval struct can_capability can_capability() noexcept
   {
     return {.supported = true,
@@ -1269,6 +1384,7 @@ template <> struct backend_traits<mock_tag> final
             .rx_interrupt = true};
   }
 
+  /// @brief Reports the backend's USB capabilities.
   static consteval struct usb_capability usb_capability() noexcept
   {
     return {.supported = true,
@@ -1288,6 +1404,7 @@ template <> struct backend_traits<mock_tag> final
             .max_packet_size_bytes = 64U};
   }
 
+  /// @brief Reports the backend's Ethernet capabilities.
   static consteval struct ethernet_capability ethernet_capability() noexcept
   {
     return {.supported = true,
@@ -1304,6 +1421,7 @@ template <> struct backend_traits<mock_tag> final
             .mtu_bytes = 1'518U};
   }
 
+  /// @brief Reports the backend's SD capabilities.
   static consteval struct sd_capability sd_capability() noexcept
   {
     return {.supported = true,
@@ -1324,6 +1442,7 @@ template <> struct backend_traits<mock_tag> final
             .bus_width_1 = true};
   }
 
+  /// @brief Reports the backend's DMA capabilities.
   static consteval struct dma_capability dma_capability() noexcept
   {
     return {.supported = true,
@@ -1344,6 +1463,7 @@ template <> struct backend_traits<mock_tag> final
             .address_width_bits = 32U};
   }
 
+  /// @brief Reports the backend's PWM capabilities.
   static consteval struct pwm_capability pwm_capability() noexcept
   {
     return {.supported = true,
@@ -1360,6 +1480,7 @@ template <> struct backend_traits<mock_tag> final
             .runtime_start_stop = true};
   }
 
+  /// @brief Reports the backend's watchdog capabilities.
   static consteval struct watchdog_capability watchdog_capability() noexcept
   {
     return {.supported = true,
@@ -1377,6 +1498,7 @@ template <> struct backend_traits<mock_tag> final
             .reset_on_timeout = true};
   }
 
+  /// @brief Reports the backend's I2S capabilities.
   static consteval struct i2s_capability i2s_capability() noexcept
   {
     return {.supported = true,
@@ -1396,6 +1518,7 @@ template <> struct backend_traits<mock_tag> final
             .sample_bits = 16U};
   }
 
+  /// @brief Reports the backend's RCC capabilities.
   static consteval struct rcc_capability rcc_capability() noexcept
   {
     return {.supported = true,
@@ -1414,6 +1537,7 @@ template <> struct backend_traits<mock_tag> final
             .system_clock_readback = true};
   }
 
+  /// @brief Reports the backend's CRC capabilities.
   static consteval struct crc_capability crc_capability() noexcept
   {
     return {.supported = true,
@@ -1431,11 +1555,13 @@ template <> struct backend_traits<mock_tag> final
             .checksum_width_bits = 32U};
   }
 
+  /// @brief Checks whether the GPIO pin is valid for the backend.
   template <typename PinConfig> static consteval bool is_valid_gpio_pin() noexcept
   {
     return (PinConfig::port_index < gpio_port_count) && (PinConfig::pin_index < gpio_pins_per_port);
   }
 
+  /// @brief Checks whether the alternate function is valid for the backend.
   template <typename PinConfig> static consteval bool is_valid_alternate_function() noexcept
   {
     return (PinConfig::alternate_function == gpio_no_alternate) ||

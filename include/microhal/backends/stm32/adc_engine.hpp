@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief STM32 ADC transfer engine and state.
+ */
 #pragma once
 #include "microhal/core/adc_types.hpp"
 #include "microhal/core/traits.hpp"
@@ -14,15 +17,18 @@ struct irq_guard
 {
 #if defined(__arm__) || defined(__thumb__)
   std::uint32_t mask;
+  /// @brief Creates a guard for the current interrupt state.
   irq_guard() noexcept
   {
     asm volatile("mrs %0, primask\ncpsid i" : "=r"(mask)::"memory");
   }
+  /// @brief Releases resources owned by this guard when it is destroyed.
   ~irq_guard()
   {
     asm volatile("msr primask, %0" ::"r"(mask) : "memory");
   }
 #else
+  /// @brief Creates a guard for the current interrupt state.
   irq_guard() noexcept = default;
 #endif
 };
@@ -38,13 +44,16 @@ struct transfer
 // Shared by every Config, callback, and backend that names the same physical ADC.
 inline transfer transfers[6]{};
 
+/// @brief Implements the configured peripheral transfer engine.
 template <typename Hardware> struct engine
 {
+  /// @brief Returns the stored state associated with the configuration.
   template <typename C> static transfer& state() noexcept
   {
     static_assert(C::instance_index > 0 && C::instance_index < 6);
     return transfers[C::instance_index];
   }
+  /// @brief Handles the backend callback.
   template <auto H, bool Stream = false>
   static void callback(status s, std::uint16_t sample, std::span<std::uint16_t> block) noexcept
   {
@@ -62,6 +71,7 @@ template <typename Hardware> struct engine
     else
       H();
   }
+  /// @brief Attempts to acquire the associated backend resource.
   template <typename C> static bool acquire() noexcept
   {
 #if defined(__arm__) || defined(__thumb__)
@@ -78,6 +88,7 @@ template <typename Hardware> struct engine
     state<C>().state = dma_transfer_state::active;
     return true;
   }
+  /// @brief Releases the associated backend resource.
   template <typename C> static status release(status s) noexcept
   {
     auto& t = state<C>();
@@ -88,6 +99,7 @@ template <typename Hardware> struct engine
     t.owned.store(false, std::memory_order_release);
     return s;
   }
+  /// @brief Initializes the configured backend resource.
   template <typename C> static status initialize() noexcept
   {
     [[maybe_unused]] irq_guard guard;
@@ -99,6 +111,7 @@ template <typename Hardware> struct engine
       state<C>().state = dma_transfer_state::idle;
     return s;
   }
+  /// @brief Stops the active peripheral operation.
   template <typename C> static status stop() noexcept
   {
     [[maybe_unused]] irq_guard guard;
@@ -113,6 +126,7 @@ template <typename Hardware> struct engine
     }
     return release<C>(s);
   }
+  /// @brief Attempts to cancel the active peripheral operation.
   template <typename C> static status abort() noexcept
   {
     [[maybe_unused]] irq_guard guard;
@@ -126,10 +140,12 @@ template <typename Hardware> struct engine
       callback(status::error, 0, {});
     return s;
   }
+  /// @brief Queries the current or most recently completed transfer status.
   template <typename C> static result<dma_transfer_state> transfer_status() noexcept
   {
     return state<C>().state.load(std::memory_order_acquire);
   }
+  /// @brief Performs a blocking read using the configured backend.
   template <typename C> static result<std::uint16_t> read_blocking(std::uint8_t channel) noexcept
   {
     if (!acquire<C>())
@@ -151,25 +167,30 @@ template <typename Hardware> struct engine
       return s;
     return sample;
   }
+  /// @brief Starts continuous ADC conversions.
   template <typename C> static status start_continuous(std::span<const std::uint8_t> channels) noexcept
   {
     return begin<C>(channels, {}, true, false, false, nullptr);
   }
+  /// @brief Starts one asynchronous ADC conversion.
   template <typename C, auto H> static status start_async(std::uint8_t channel) noexcept
   {
     return begin<C>({&channel, 1}, {}, false, false, true, callback<H>);
   }
+  /// @brief Starts the DMA scan for the ADC.
   template <typename C, auto H>
   static status start_dma_scan(std::span<const std::uint8_t> channels, std::span<std::uint16_t> buffer) noexcept
   {
     return begin<C>(channels, buffer, false, true, false, callback<H>);
   }
+  /// @brief Starts DMA streaming using the configured peripheral.
   template <typename C, auto H>
   static status start_dma_stream(std::span<const std::uint8_t> channels, std::span<std::uint16_t> buffer,
                                  bool circular = true) noexcept
   {
     return begin<C>(channels, buffer, circular, true, false, callback<H, true>, true, circular);
   }
+  /// @brief Claims or begins the associated operation.
   template <typename C>
   static status begin(std::span<const std::uint8_t> channels, std::span<std::uint16_t> buffer, bool continuous,
                       bool dma, bool irq, void (*notify)(status, std::uint16_t, std::span<std::uint16_t>) noexcept,
@@ -220,6 +241,7 @@ template <typename Hardware> struct engine
     }
     return s;
   }
+  /// @brief Attempts to stop the ADC transfer and reports an I/O error to its callback.
   template <typename C> static void fail() noexcept
   {
     auto notify = state<C>().notify;
@@ -234,6 +256,7 @@ template <typename Hardware> struct engine
     if (notify)
       notify(status::io_error, 0, {});
   }
+  /// @brief Handles the interrupt for the ADC.
   template <typename C> static void handle_interrupt() noexcept
   {
     auto& t = state<C>();
@@ -264,6 +287,7 @@ template <typename Hardware> struct engine
       notify(s, sample, {});
     }
   }
+  /// @brief Handles the DMA interrupt for the ADC.
   template <typename C> static void handle_dma_interrupt() noexcept
   {
     auto& t = state<C>();

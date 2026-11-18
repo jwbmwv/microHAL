@@ -100,6 +100,7 @@ struct master final
   using mode_api = serial_mode_api<Backend, peripheral_kind::i2c>;
 
 private:
+  /// @brief Checks whether the transfer length fits the configured limit.
   [[nodiscard]] static constexpr bool transfer_size_valid(const std::size_t size) noexcept
   {
     constexpr std::uint32_t maximum = backend_traits<Backend>::i2c_capability().max_transfer_size_bytes;
@@ -491,6 +492,12 @@ struct slave_config final
   static constexpr auto timeout_ms = TimeoutMs;
 };
 
+/**
+ * @brief Asynchronous I2C slave facade using the selected serial transfer mode.
+ * @tparam Backend Registered backend tag.
+ * @tparam Config Slave configuration accepted by @c I2cMasterConcept.
+ * @note The application owns serialization and must retain transfer buffers until completion or successful abort.
+ */
 template <typename Backend, typename Config>
   requires I2cMasterConcept<Backend, Config>
 struct slave final

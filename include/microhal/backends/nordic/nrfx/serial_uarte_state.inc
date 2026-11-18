@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx UARTE state and event handling.
+ */
 // Included in the nrfx detail namespace after the UARTE instance table.
 struct uarte_state
 {
@@ -32,6 +35,7 @@ struct uarte_state
 };
 inline std::array<uarte_state, std::size(uarte_instances)> uarte_states{};
 
+/// @brief Releases the UARTE receive-timeout resources.
 inline void uarte_timeout_release(uarte_state& state) noexcept
 {
 #if MICROHAL_NORDIC_HAS_SERIAL_TIMEOUT
@@ -56,6 +60,7 @@ inline void uarte_timeout_release(uarte_state& state) noexcept
 #endif
 }
 
+/// @brief Handles an nrfx UARTE transmit or receive event.
 inline void uarte_handler(nrfx_uarte_event_t const* event, void* context) noexcept
 {
   auto& state = *static_cast<uarte_state*>(context);
@@ -122,6 +127,7 @@ inline void uarte_handler(nrfx_uarte_event_t const* event, void* context) noexce
 #if !defined(NRF54H20_XXAA)
 inline std::atomic<nrfx_gppi_t*> uarte_gppi_resource{};
 #endif
+/// @brief Handles an UARTE receive-timeout timer event.
 inline void uarte_timeout_handler(nrf_timer_event_t event, void* context) noexcept
 {
   auto& state = *static_cast<uarte_state*>(context);
@@ -133,6 +139,7 @@ inline void uarte_timeout_handler(nrf_timer_event_t event, void* context) noexce
   }
 }
 
+/// @brief Acquires and configures the optional UARTE receive-timeout resources.
 template <typename Config> status uarte_timeout_acquire(uarte_state& state) noexcept
 {
 #if defined(NRF54H20_XXAA)
@@ -239,6 +246,7 @@ template <typename Config> status uarte_timeout_acquire(uarte_state& state) noex
   return status::unsupported;
 }
 #else
+/// @brief Reports that this operation is unsupported by the backend.
 template <typename Config> status uarte_timeout_acquire(uarte_state&) noexcept
 {
   return status::unsupported;

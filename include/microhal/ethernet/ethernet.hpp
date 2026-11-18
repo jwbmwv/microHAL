@@ -16,6 +16,15 @@
 namespace microhal::ethernet
 {
 
+/**
+ * @brief Compile-time Ethernet MAC configuration using a numeric instance.
+ * @tparam InstanceIndex Backend-specific MAC instance index.
+ * @tparam LinkSpeed Requested link speed.
+ * @tparam Duplex Requested duplex mode.
+ * @tparam EnableChecksumOffload Request hardware checksum offload.
+ * @tparam EnableDma Request DMA transfers.
+ * @tparam EnableInterrupts Request interrupt support.
+ */
 template <std::uint8_t InstanceIndex, ethernet_link_speed LinkSpeed = ethernet_link_speed::mbps100,
           ethernet_duplex Duplex = ethernet_duplex::full, bool EnableChecksumOffload = true, bool EnableDma = true,
           bool EnableInterrupts = true>
@@ -29,6 +38,15 @@ struct mac_config final
   static constexpr bool enable_interrupts{EnableInterrupts};
 };
 
+/**
+ * @brief Compile-time Ethernet MAC configuration using board-owned resources.
+ * @tparam Binding Backend-specific board resource binding.
+ * @tparam LinkSpeed Requested link speed.
+ * @tparam Duplex Requested duplex mode.
+ * @tparam EnableChecksumOffload Request hardware checksum offload.
+ * @tparam EnableDma Request DMA transfers.
+ * @tparam EnableInterrupts Request interrupt support.
+ */
 template <typename Binding, ethernet_link_speed LinkSpeed = ethernet_link_speed::mbps100,
           ethernet_duplex Duplex = ethernet_duplex::full, bool EnableChecksumOffload = true, bool EnableDma = true,
           bool EnableInterrupts = true>
@@ -43,6 +61,12 @@ struct bound_mac_config final
   static constexpr bool enable_interrupts{EnableInterrupts};
 };
 
+/**
+ * @brief Compile-time Ethernet MAC facade.
+ * @tparam Backend Registered backend tag.
+ * @tparam Config MAC configuration accepted by @c EthernetConcept.
+ * @note The application must serialize access to the configured MAC.
+ */
 template <typename Backend, typename Config>
   requires EthernetConcept<Backend, Config>
 struct mac final

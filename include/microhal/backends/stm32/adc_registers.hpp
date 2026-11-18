@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief STM32 ADC register configuration helpers.
+ */
 #pragma once
 #include "microhal/backends/stm32/adc_dma.hpp"
 #include "microhal/backends/stm32/adc_engine.hpp"
 
 namespace microhal::backends::stm32::adc_detail
 {
+/// @brief Returns the polling limit for the configured operation.
 template <typename C> constexpr unsigned poll_limit() noexcept
 {
   if constexpr (requires { C::poll_limit; })
@@ -12,6 +16,7 @@ template <typename C> constexpr unsigned poll_limit() noexcept
   else
     return 1000000U;
 }
+/// @brief Selects the configured trigger edge.
 template <typename C> constexpr auto edge() noexcept
 {
   if constexpr (requires { C::trigger_edge; })
@@ -19,6 +24,7 @@ template <typename C> constexpr auto edge() noexcept
   else
     return adc_trigger_edge::software;
 }
+/// @brief Selects the ADC trigger configured for the operation.
 template <typename C> constexpr std::uint32_t trigger() noexcept
 {
   if constexpr (requires { C::external_trigger; })
@@ -26,10 +32,12 @@ template <typename C> constexpr std::uint32_t trigger() noexcept
   else
     return 0;
 }
+/// @brief Updates the selected register or resource.
 template <typename R> static void modify(R& reg, std::uint32_t mask, std::uint32_t value) noexcept
 {
   reg = (reg & ~mask) | value;
 }
+/// @brief Polls the predicate up to the configured iteration limit, returning timeout if it never succeeds.
 template <typename C, typename Predicate> status until(Predicate predicate) noexcept
 {
   for (unsigned i = 0; i < poll_limit<C>(); ++i)
@@ -38,8 +46,14 @@ template <typename C, typename Predicate> status until(Predicate predicate) noex
   return status::timeout;
 }
 
+/**
+ * @brief Implements STM32 ADC operations for a register layout and instance provider.
+ * @tparam Registers ADC register-block type.
+ * @tparam Instance Provider that resolves the configured ADC instance.
+ */
 template <typename Registers, typename Instance> struct register_hardware
 {
+  /// @brief Reports whether the ADC uses a fixed channel sequence.
   template <typename C> static constexpr bool fixed_sequence() noexcept
   {
 #if defined(STM32U5)
@@ -49,10 +63,12 @@ template <typename Registers, typename Instance> struct register_hardware
     return requires(Registers* a) { a->CHSELR; };
 #endif
   }
+  /// @brief Returns the ADC instance selected by the configuration.
   template <typename C> static Registers* adc() noexcept
   {
     return Instance::template get<C>();
   }
+  /// @brief Initializes the configured backend resource.
   template <typename C> static status initialize() noexcept
   {
     using board = binding_t<C>;
@@ -116,6 +132,7 @@ template <typename Registers, typename Instance> struct register_hardware
 #endif
     return status::ok;
   }
+  /// @brief Selects the configured sampling setting.
   template <typename C> static constexpr unsigned sampling() noexcept
   {
     static_assert(static_cast<unsigned>(C::sample_time) < 8, "microHAL: invalid ADC sampling time.");
@@ -163,6 +180,7 @@ template <typename Registers, typename Instance> struct register_hardware
         return i;
     return 8;
   }
+  /// @brief Configures ADC channels and the requested transfer mode.
   template <typename C>
   static status configure(std::span<const std::uint8_t> channels, [[maybe_unused]] bool continuous,
                           [[maybe_unused]] bool dma, [[maybe_unused]] bool irq) noexcept
@@ -518,6 +536,7 @@ template <typename Registers, typename Instance> struct register_hardware
 #endif
     return status::ok;
   }
+  /// @brief Starts the configured peripheral operation.
   template <typename C> static status start() noexcept
   {
     [[maybe_unused]] auto a = adc<C>();
@@ -551,6 +570,7 @@ template <typename Registers, typename Instance> struct register_hardware
 #endif
     return status::unsupported;
   }
+  /// @brief Checks whether an ADC conversion sample is ready.
   template <typename C> static bool ready() noexcept
   {
     auto a = adc<C>();
@@ -559,6 +579,7 @@ template <typename Registers, typename Instance> struct register_hardware
     else
       return (a->SR & (1U << 1)) != 0;
   }
+  /// @brief Checks whether the ADC overrun flag is set.
   template <typename C> static bool error() noexcept
   {
     [[maybe_unused]] auto a = adc<C>();
@@ -572,15 +593,18 @@ template <typename Registers, typename Instance> struct register_hardware
 #endif
     return false;
   }
+  /// @brief Returns the sample associated with the operation.
   template <typename C> static std::uint16_t sample() noexcept
   {
     return static_cast<std::uint16_t>(adc<C>()->DR);
   }
+  /// @brief Waits for the active backend operation to complete.
   template <typename C> static status wait() noexcept
   {
     const auto s = until<C>([] { return ready<C>() || error<C>(); });
     return s != status::ok ? s : (error<C>() ? status::io_error : status::ok);
   }
+  /// @brief Stops the ADC conversion.
   template <typename C> static status stop_adc([[maybe_unused]] Registers* a) noexcept
   {
 #if defined(ADC_CR_ADSTP)
@@ -601,6 +625,7 @@ template <typename Registers, typename Instance> struct register_hardware
 #endif
     return status::ok;
   }
+  /// @brief Stops the active peripheral operation.
   template <typename C> static status stop(bool dma) noexcept
   {
     auto a = adc<C>();
@@ -629,10 +654,12 @@ template <typename Registers, typename Instance> struct register_hardware
 #endif
     return s;
   }
+  /// @brief Configures DMA resources for the transfer.
   template <typename C> static status setup_dma(std::span<std::uint16_t> buffer, bool circular, bool halves) noexcept
   {
     return dma_registers<C>::setup(reinterpret_cast<std::uintptr_t>(&adc<C>()->DR), buffer, circular, halves);
   }
+  /// @brief Returns the DMA flags associated with the transfer.
   template <typename C> static unsigned dma_flags() noexcept
   {
     return dma_registers<C>::flags();

@@ -30,6 +30,14 @@ struct usb_config final
   static constexpr bool otg_mode{OtgMode};
 };
 
+/**
+ * @brief Compile-time USB configuration using board-owned resources.
+ * @tparam Binding Backend-specific board resource binding.
+ * @tparam Speed Requested USB speed.
+ * @tparam DeviceMode Request device-mode support.
+ * @tparam HostMode Request host-mode support.
+ * @tparam OtgMode Request OTG support.
+ */
 template <typename Binding, usb_speed Speed = usb_speed::full, bool DeviceMode = true, bool HostMode = false,
           bool OtgMode = false>
 struct bound_usb_config final
@@ -53,6 +61,7 @@ struct device final
   using config_type = Config;
 
 private:
+  /// @brief Checks whether the backend exposes a USB control-transfer operation.
   static consteval bool backend_has_control_transfer()
   {
     return requires(const usb_setup_packet& setup, const std::span<const std::uint8_t> tx,
@@ -61,6 +70,7 @@ private:
     };
   }
 
+  /// @brief Checks whether the backend exposes a USB descriptor-read operation.
   static consteval bool backend_has_descriptor_access()
   {
     return requires(const std::uint8_t type, const std::uint8_t index, const std::uint16_t language,

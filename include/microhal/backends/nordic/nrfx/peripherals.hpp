@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx peripheral implementations and state.
+ */
 #pragma once
 
 #include <array>
@@ -119,6 +122,11 @@ namespace microhal::backends::nordic::nrfx
 {
 namespace detail
 {
+/**
+ * @brief Converts an nrfx error code to the microHAL status vocabulary.
+ * @param[in] error nrfx result code.
+ * @return The corresponding status, or @ref status::io_error for an unmapped failure.
+ */
 constexpr status driver_result(const int error) noexcept
 {
   switch (error)
@@ -141,6 +149,11 @@ constexpr status driver_result(const int error) noexcept
   }
 }
 
+/**
+ * @brief Selects the configured blocking timeout, defaulting to 1000 milliseconds.
+ * @tparam Config Configuration that may provide @c timeout_ms.
+ * @return The configured or default timeout in milliseconds.
+ */
 template <typename Config> constexpr std::uint32_t timeout_ms() noexcept
 {
   if constexpr (requires { Config::timeout_ms; })
@@ -148,6 +161,11 @@ template <typename Config> constexpr std::uint32_t timeout_ms() noexcept
   return 1000U;
 }
 
+/**
+ * @brief Invokes a completion handler with a status or, if applicable, no arguments.
+ * @tparam Handler Callback to invoke; an incompatible handler is not called.
+ * @param[in] value Completion status passed to a status-taking handler.
+ */
 template <auto Handler> void notify(const status value) noexcept
 {
   if constexpr (requires { Handler(value); })
@@ -161,6 +179,12 @@ struct pwm_timing
   std::uint32_t prescaler;
   std::uint16_t top;
 };
+
+/**
+ * @brief Finds an exact PWM prescaler and top value derived from the 16 MHz clock.
+ * @param[in] frequency Requested PWM frequency in hertz.
+ * @return The timing, or @ref status::invalid_argument if no exact supported timing exists.
+ */
 constexpr result<pwm_timing> pwm_clock(const std::uint32_t frequency) noexcept
 {
   if (frequency == 0U)
@@ -177,6 +201,11 @@ constexpr result<pwm_timing> pwm_clock(const std::uint32_t frequency) noexcept
   return pwm_timing{prescaler, static_cast<std::uint16_t>(clock / frequency)};
 }
 
+/**
+ * @brief Converts an ordered SAADC channel list into a channel mask.
+ * @param[in] channels Strictly increasing channel indices in the range zero through seven.
+ * @return The mask, or @ref status::invalid_argument for an empty, oversized, or invalid list.
+ */
 constexpr result<std::uint32_t> saadc_channel_mask(const std::span<const std::uint8_t> channels) noexcept
 {
   if (channels.empty() || channels.size() > 8U)
@@ -193,11 +222,22 @@ constexpr result<std::uint32_t> saadc_channel_mask(const std::span<const std::ui
 
 #include "microhal/backends/nordic/nrfx/qspi_state.inc"
 
+/**
+ * @brief Checks whether an I2S sample count fits the backend's word-count limits.
+ * @param[in] samples Number of 16-bit samples.
+ * @param[in] max_words Maximum number of 32-bit words accepted by the target.
+ * @return True for an even sample count from 4 through 65534 that also fits @p max_words.
+ */
 constexpr bool i2s_count_valid(const std::size_t samples, const std::size_t max_words) noexcept
 {
   return samples >= 4U && samples <= 65534U && samples % 2U == 0U && samples / 2U <= max_words;
 }
 
+/**
+ * @brief Checks whether a serial transfer count fits the backend's 16-bit DMA limit.
+ * @param[in] bytes Number of bytes, including zero for an empty phase.
+ * @return True when the count is at most 65535.
+ */
 constexpr bool serial_count_valid(const std::size_t bytes) noexcept
 {
   return bytes <= UINT16_MAX;
@@ -205,6 +245,14 @@ constexpr bool serial_count_valid(const std::size_t bytes) noexcept
 
 #include "microhal/backends/nordic/nrfx/serial_transfer_state.inc"
 
+/**
+ * @brief Polls a predicate until it succeeds or the configured timeout expires.
+ * @tparam Config Configuration supplying the timeout policy.
+ * @tparam Predicate Callable returning whether the operation is ready.
+ * @param[in] ready Predicate checked between one-microsecond delays.
+ * @return True when ready; false on timeout or when a usable system clock is unavailable.
+ * @note This blocking helper must not run in an interrupt that prevents completion.
+ */
 template <typename Config, typename Predicate> bool wait_until(Predicate ready) noexcept
 {
 #if MICROHAL_NORDIC_SYSTEM_CORE_CLOCK
@@ -246,6 +294,7 @@ inline nrfx_spim_t spim_instances[]{
 #endif
 };
 inline std::array<transfer_state, std::size(spim_instances)> spim_states{};
+/// @brief Handles an nrfx SPI master completion event.
 inline void spim_handler(nrfx_spim_event_t const*, void* context) noexcept
 {
   auto& state = *static_cast<transfer_state*>(context);
@@ -276,6 +325,7 @@ inline nrfx_uarte_t uarte_instances[]{
 #include "microhal/backends/nordic/nrfx/serial_uarte_config.inc"
 #include "microhal/backends/nordic/nrfx/serial_uarte_state.inc"
 
+/// @brief Maps the requested baud rate to an nrfx UARTE baud-rate value.
 constexpr nrf_uarte_baudrate_t uarte_baudrate(const std::uint32_t baud) noexcept
 {
   switch (baud)
@@ -361,6 +411,7 @@ struct timer_state
   std::uint8_t periodic{};
 };
 inline std::array<timer_state, std::size(timer_instances)> timer_states{};
+/// @brief Returns the number of capture/compare channels for a timer instance.
 constexpr std::uint8_t timer_cc_count(const std::size_t index) noexcept
 {
 #if defined(NRF52840_XXAA)
@@ -372,6 +423,7 @@ constexpr std::uint8_t timer_cc_count(const std::size_t index) noexcept
   return 6U;
 #endif
 }
+/// @brief Handles an nrfx timer event.
 inline void timer_handler(const nrf_timer_event_t event, void* context) noexcept
 {
   auto& state = *static_cast<timer_state*>(context);
@@ -470,12 +522,14 @@ inline std::array<std::uint8_t, 8U> saadc_continuous_channels{};
 inline std::uint8_t saadc_continuous_count{};
 inline std::array<std::atomic<std::uint16_t>, 8U> saadc_latest{};
 inline std::atomic<std::uint32_t> saadc_latest_valid{};
+/// @brief Converts a signed SAADC sample to an unsigned sample.
 inline std::uint16_t saadc_unsigned(const nrf_saadc_value_t sample) noexcept
 {
   if (saadc_differential)
     return static_cast<std::uint16_t>(static_cast<std::int32_t>(sample) + (1L << (saadc_bits - 1U)));
   return static_cast<std::uint16_t>(sample < 0 ? 0 : sample);
 }
+/// @brief Releases resources used by the SAADC trigger.
 inline void saadc_release_trigger() noexcept
 {
   if (saadc_trigger_stop != nullptr)
@@ -486,6 +540,7 @@ inline void saadc_release_trigger() noexcept
   saadc_trigger_stop = nullptr;
   saadc_trigger_disconnect = nullptr;
 }
+/// @brief Completes the active SAADC operation.
 inline void saadc_finish(const status result) noexcept
 {
   saadc_release_trigger();
@@ -501,6 +556,7 @@ inline void saadc_finish(const status result) noexcept
   if (completion != nullptr)
     completion(result);
 }
+/// @brief Handles an SAADC streaming event.
 inline void saadc_stream_handler(const nrfx_saadc_evt_t* event) noexcept
 {
   if (!saadc_active.load(std::memory_order_acquire) || !saadc_streaming)
@@ -549,6 +605,7 @@ inline void saadc_stream_handler(const nrfx_saadc_evt_t* event) noexcept
   }
   saadc_in_callback = false;
 }
+/// @brief Converts the ADC resolution to an SAADC resolution.
 constexpr nrf_saadc_resolution_t saadc_resolution(const adc_resolution resolution) noexcept
 {
   switch (resolution)
@@ -612,6 +669,7 @@ inline std::uint8_t i2s_blocks{};
 inline std::size_t i2s_half_samples{};
 inline void (*i2s_block_completion)(status, std::span<const std::uint16_t>, std::span<std::uint16_t>) noexcept {};
 
+/// @brief Handles an nrfx I2S buffer or transfer event.
 inline void i2s_handler(nrfx_i2s_buffers_t const* released, const std::uint32_t flags) noexcept
 {
   if (!i2s_transfer.active.load())
@@ -740,6 +798,7 @@ inline nrfx_rtc_t rtc_instances[]{{NRF_RTC0, {}},
 
 struct spi_api final
 {
+  /// @copybrief microhal::spi::master::initialize
   template <typename Config> static status initialize() noexcept
   {
 #if MICROHAL_NORDIC_HAS_SPIM
@@ -798,6 +857,7 @@ struct spi_api final
     return status::unsupported;
   }
 
+  /// @brief Starts an asynchronous transfer using the configured peripheral.
   template <typename Config, auto Handler>
   static status transfer_async(const std::span<const std::uint8_t> tx, const std::span<std::uint8_t> rx) noexcept
   {
@@ -852,6 +912,7 @@ struct spi_api final
 #endif
   }
 
+  /// @brief Transfers data using the configured peripheral.
   template <typename Config>
   static status transfer(const std::span<const std::uint8_t> tx, const std::span<std::uint8_t> rx) noexcept
   {
@@ -882,6 +943,7 @@ struct spi_api final
 #endif
   }
 
+  /// @brief Handles the interrupt for the SPI peripheral.
   static void handle_interrupt(const std::uint8_t index) noexcept
   {
 #if MICROHAL_NORDIC_HAS_SPIM
@@ -896,6 +958,7 @@ struct spi_api final
 
 struct uart_api final
 {
+  /// @copybrief microhal::uart::port::initialize
   template <typename Config> static status initialize() noexcept
   {
 #if MICROHAL_NORDIC_HAS_UARTE
@@ -961,6 +1024,7 @@ struct uart_api final
     return status::unsupported;
   }
 
+  /// @brief Starts an asynchronous transmit operation.
   template <typename Config, auto Handler>
   static status start_async_tx(const std::span<const std::uint8_t> payload) noexcept
   {
@@ -989,6 +1053,7 @@ struct uart_api final
 #endif
   }
 
+  /// @brief Starts an asynchronous receive operation.
   template <typename Config, auto Handler> static status start_async_rx(const std::span<std::uint8_t> payload) noexcept
   {
 #if MICROHAL_NORDIC_HAS_UARTE
@@ -1026,6 +1091,7 @@ struct uart_api final
 #endif
   }
 
+  /// @copybrief microhal::uart::port::write_blocking
   template <typename Config> static status write_blocking(const std::span<const std::uint8_t> payload) noexcept
   {
 #if MICROHAL_NORDIC_HAS_UARTE && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK
@@ -1059,6 +1125,7 @@ struct uart_api final
 #endif
   }
 
+  /// @copybrief microhal::uart::port::read_blocking
   template <typename Config> static status read_blocking(const std::span<std::uint8_t> payload) noexcept
   {
 #if MICROHAL_NORDIC_HAS_UARTE && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK
@@ -1093,14 +1160,17 @@ struct uart_api final
 #endif
   }
 
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config, typename AutobaudConfig> static status arm_autobaud() noexcept
   {
     return status::unsupported;
   }
+  /// @brief Reports that this operation is unsupported by the backend.
   template <typename Config> static status apply_autobaud(std::uint32_t) noexcept
   {
     return status::unsupported;
   }
+  /// @brief Handles the interrupt for the UART peripheral.
   static void handle_interrupt(const std::uint8_t index) noexcept
   {
 #if MICROHAL_NORDIC_HAS_UARTE
@@ -1115,6 +1185,7 @@ struct uart_api final
 
 struct timer_api final
 {
+  /// @brief Initializes the configured backend resource.
   template <typename Config> static status initialize() noexcept
   {
 #if MICROHAL_NORDIC_HAS_TIMER
@@ -1144,6 +1215,7 @@ struct timer_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::timers::timer::start
   template <typename Config> static status start() noexcept
   {
 #if MICROHAL_NORDIC_HAS_TIMER
@@ -1160,6 +1232,7 @@ struct timer_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::timers::timer::stop
   template <typename Config> static status stop() noexcept
   {
 #if MICROHAL_NORDIC_HAS_TIMER
@@ -1174,6 +1247,7 @@ struct timer_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Resets the counter for the timer.
   template <typename Config> static status reset_counter() noexcept
   {
 #if MICROHAL_NORDIC_HAS_TIMER
@@ -1188,6 +1262,7 @@ struct timer_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::timers::timer::set_period
   template <typename Config> static status set_period(const std::uint32_t ticks) noexcept
   {
 #if MICROHAL_NORDIC_HAS_TIMER
@@ -1219,6 +1294,7 @@ struct timer_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::timers::timer::period
   template <typename Config> static result<std::uint32_t> period() noexcept
   {
 #if MICROHAL_NORDIC_HAS_TIMER
@@ -1231,6 +1307,7 @@ struct timer_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::timers::timer::counter
   template <typename Config> static std::uint32_t counter() noexcept
   {
 #if MICROHAL_NORDIC_HAS_TIMER
@@ -1242,6 +1319,7 @@ struct timer_api final
 #endif
     return 0U;
   }
+  /// @brief Enables the configured timer capture/compare channel.
   template <typename Config, typename Channel, auto Handler> static status enable_capture_compare() noexcept
   {
 #if MICROHAL_NORDIC_HAS_TIMER
@@ -1292,6 +1370,7 @@ struct timer_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::timers::timer::capture_value
   template <typename Config, typename Channel> static result<std::uint32_t> capture_value() noexcept
   {
 #if MICROHAL_NORDIC_HAS_TIMER
@@ -1306,6 +1385,7 @@ struct timer_api final
 #endif
     return status::unsupported;
   }
+  /// @brief Disables the configured timer capture/compare channel.
   template <typename Config, typename Channel> static status disable_capture_compare() noexcept
   {
 #if MICROHAL_NORDIC_HAS_TIMER
@@ -1329,6 +1409,7 @@ struct timer_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Handles the interrupt for the timer.
   static void handle_interrupt(const std::uint8_t index) noexcept
   {
 #if MICROHAL_NORDIC_HAS_TIMER
@@ -1342,6 +1423,7 @@ struct timer_api final
 
 struct pwm_api final
 {
+  /// @copybrief microhal::pwm::output::initialize
   template <typename Config> static status initialize() noexcept
   {
 #if MICROHAL_NORDIC_HAS_PWM
@@ -1402,6 +1484,7 @@ struct pwm_api final
 #endif
     return status::unsupported;
   }
+  /// @copybrief microhal::pwm::output::set_duty_cycle
   template <typename Config> static status set_duty_cycle(const std::uint16_t permille) noexcept
   {
 #if MICROHAL_NORDIC_HAS_PWM
@@ -1440,6 +1523,7 @@ struct pwm_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::pwm::output::start
   template <typename Config> static status start() noexcept
   {
 #if MICROHAL_NORDIC_HAS_PWM
@@ -1465,6 +1549,7 @@ struct pwm_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::pwm::output::stop
   template <typename Config> static status stop() noexcept
   {
 #if MICROHAL_NORDIC_HAS_PWM && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK
@@ -1492,6 +1577,7 @@ struct pwm_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::pwm::output::set_frequency
   template <typename Config> static status set_frequency(const std::uint32_t frequency) noexcept
   {
 #if MICROHAL_NORDIC_HAS_PWM
@@ -1523,6 +1609,7 @@ struct pwm_api final
 
 struct watchdog_api final
 {
+  /// @copybrief microhal::watchdog::timer::initialize
   template <typename Config> static status initialize() noexcept
   {
 #if MICROHAL_NORDIC_HAS_WDT
@@ -1552,6 +1639,7 @@ struct watchdog_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::watchdog::timer::start
   template <typename Config> static status start() noexcept
   {
 #if MICROHAL_NORDIC_HAS_WDT
@@ -1569,6 +1657,7 @@ struct watchdog_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::watchdog::timer::refresh
   template <typename Config> static status refresh() noexcept
   {
 #if MICROHAL_NORDIC_HAS_WDT
@@ -1586,6 +1675,7 @@ struct watchdog_api final
 
 struct adc_api final
 {
+  /// @copybrief microhal::adc::converter::initialize
   template <typename Config> static status initialize() noexcept
   {
 #if MICROHAL_NORDIC_HAS_SAADC
@@ -1631,6 +1721,7 @@ struct adc_api final
     return status::unsupported;
   }
 
+  /// @copybrief microhal::adc::converter::read_blocking
   template <typename Config> static result<std::uint16_t> read_blocking(const std::uint8_t channel) noexcept
   {
 #if MICROHAL_NORDIC_HAS_SAADC && MICROHAL_NORDIC_SYSTEM_CORE_CLOCK
@@ -1677,6 +1768,7 @@ struct adc_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Performs a blocking differential ADC conversion.
   template <typename Config> static result<std::int16_t> read_differential_blocking(const std::uint8_t channel) noexcept
   {
     constexpr auto bits = static_cast<std::uint32_t>(Config::resolution);
@@ -1691,6 +1783,7 @@ struct adc_api final
                                        static_cast<std::int32_t>(1U << (bits - 1U)));
     }
   }
+  /// @copybrief microhal::adc::converter::start_continuous
   template <typename Config> static status start_continuous(const std::span<const std::uint8_t> channels) noexcept
   {
 #if MICROHAL_NORDIC_HAS_SAADC
@@ -1726,6 +1819,7 @@ struct adc_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::adc::converter::start_async
   template <typename Config, auto Handler> static status start_async(const std::uint8_t channel) noexcept
   {
 #if MICROHAL_NORDIC_HAS_SAADC
@@ -1792,6 +1886,7 @@ struct adc_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::adc::converter::start_dma_scan
   template <typename Config, auto Handler>
   static status start_dma_scan(const std::span<const std::uint8_t> channels,
                                const std::span<std::uint16_t> samples) noexcept
@@ -1855,6 +1950,7 @@ struct adc_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Starts DMA streaming using the configured peripheral.
   template <typename Config, auto Handler>
   static status start_dma_stream(const std::span<const std::uint8_t> channels, const std::span<std::uint16_t> samples,
                                  const bool circular = true) noexcept
@@ -1970,14 +2066,17 @@ struct adc_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Stops the active peripheral operation.
   template <typename Config> static status stop() noexcept
   {
     return cancel<Config>(status::ok, false);
   }
+  /// @copybrief microhal::adc::converter::abort
   template <typename Config> static status abort() noexcept
   {
     return cancel<Config>(status::error, true);
   }
+  /// @brief Queries the current or most recently completed transfer status.
   template <typename Config> static result<dma_transfer_state> transfer_status() noexcept
   {
 #if MICROHAL_NORDIC_HAS_SAADC
@@ -1992,6 +2091,7 @@ struct adc_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Handles the interrupt for the ADC.
   static void handle_interrupt() noexcept
   {
 #if MICROHAL_NORDIC_HAS_SAADC
@@ -1999,16 +2099,19 @@ struct adc_api final
       nrfx_saadc_irq_handler();
 #endif
   }
+  /// @brief Handles the interrupt for the ADC.
   template <typename Config> static void handle_interrupt() noexcept
   {
     handle_interrupt();
   }
+  /// @brief Handles the DMA interrupt for the ADC.
   template <typename Config> static void handle_dma_interrupt() noexcept
   {
     handle_interrupt();
   }
 
 private:
+  /// @brief Cancels the active transfer and updates its completion state.
   template <typename Config> static status cancel(const status result, const bool notify) noexcept
   {
 #if MICROHAL_NORDIC_HAS_SAADC
@@ -2038,6 +2141,7 @@ private:
 
 struct i2s_api final
 {
+  /// @copybrief microhal::i2s::interface::initialize
   template <typename Config> static status initialize() noexcept
   {
 #if MICROHAL_NORDIC_HAS_I2S
@@ -2121,15 +2225,18 @@ struct i2s_api final
     return status::unsupported;
   }
 
+  /// @copybrief microhal::i2s::interface::start_dma_tx
   template <typename Config, auto Handler>
   static status start_dma_tx(const std::span<const std::uint16_t> samples) noexcept
   {
     return start<Config, Handler>(samples.data(), nullptr, samples.size());
   }
+  /// @copybrief microhal::i2s::interface::start_dma_rx
   template <typename Config, auto Handler> static status start_dma_rx(const std::span<std::uint16_t> samples) noexcept
   {
     return start<Config, Handler>(nullptr, samples.data(), samples.size());
   }
+  /// @brief Starts the DMA transfer for the I2S interface.
   template <typename Config, auto Handler>
   static status start_dma_transfer(const std::span<const std::uint16_t> tx, const std::span<std::uint16_t> rx) noexcept
   {
@@ -2137,6 +2244,7 @@ struct i2s_api final
       return status::invalid_argument;
     return start<Config, Handler>(tx.data(), rx.data(), tx.size());
   }
+  /// @brief Starts DMA streaming using the configured peripheral.
   template <typename Config, auto Handler>
   static status start_dma_stream(const std::span<const std::uint16_t> tx, const std::span<std::uint16_t> rx,
                                  const bool circular = true) noexcept
@@ -2154,14 +2262,17 @@ struct i2s_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Stops the active peripheral operation.
   template <typename Config> static status stop() noexcept
   {
     return cancel<Config>(status::ok, false);
   }
+  /// @copybrief microhal::i2s::interface::abort
   template <typename Config> static status abort() noexcept
   {
     return cancel<Config>(status::error, true);
   }
+  /// @brief Queries the current or most recently completed transfer status.
   template <typename Config> static result<dma_transfer_state> transfer_status() noexcept
   {
 #if MICROHAL_NORDIC_HAS_I2S
@@ -2174,6 +2285,7 @@ struct i2s_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::i2s::interface::transmit_blocking
   template <typename Config> static status transmit_blocking(const std::span<const std::uint16_t> samples) noexcept
   {
 #if MICROHAL_NORDIC_SYSTEM_CORE_CLOCK
@@ -2186,6 +2298,7 @@ struct i2s_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::i2s::interface::receive_blocking
   template <typename Config> static status receive_blocking(const std::span<std::uint16_t> samples) noexcept
   {
 #if MICROHAL_NORDIC_SYSTEM_CORE_CLOCK
@@ -2198,6 +2311,7 @@ struct i2s_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Transfers data using the backend's blocking path.
   template <typename Config>
   static status transfer_blocking(const std::span<const std::uint16_t> tx, const std::span<std::uint16_t> rx) noexcept
   {
@@ -2212,6 +2326,7 @@ struct i2s_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Handles the interrupt for the I2S interface.
   static void handle_interrupt() noexcept
   {
 #if MICROHAL_NORDIC_HAS_I2S
@@ -2221,11 +2336,13 @@ struct i2s_api final
   }
 
 private:
+  /// @brief Starts the configured peripheral operation.
   template <typename Config, auto Handler>
   static status start(const std::uint16_t* tx, std::uint16_t* rx, const std::size_t count) noexcept
   {
     return start<Config, Handler>(tx, rx, count, false, false);
   }
+  /// @brief Starts the configured peripheral operation.
   template <typename Config, auto Handler>
   static status start(const std::uint16_t* tx, std::uint16_t* rx, const std::size_t count, const bool streaming,
                       const bool circular) noexcept
@@ -2299,6 +2416,7 @@ private:
     return status::unsupported;
 #endif
   }
+  /// @brief Waits for the active backend operation to complete.
   template <typename Config> static status wait() noexcept
   {
 #if MICROHAL_NORDIC_HAS_I2S
@@ -2318,6 +2436,7 @@ private:
     return status::unsupported;
 #endif
   }
+  /// @brief Cancels the active transfer and updates its completion state.
   template <typename Config> static status cancel(const status result, const bool notify) noexcept
   {
 #if MICROHAL_NORDIC_HAS_I2S

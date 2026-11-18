@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx CAN backend implementation fragment.
+ */
 // Included inside microhal::backends::nordic::nrfx.
 namespace system_detail
 {
@@ -11,6 +14,7 @@ struct can_state
   std::uint8_t standard_count{}, extended_count{};
 };
 inline can_state can{};
+/// @brief Selects nominal CAN timing for the configuration.
 constexpr result<std::uint32_t> can_nominal_timing(std::uint32_t clock, std::uint32_t baud) noexcept
 {
   if (baud == 0U || baud > 1000000U || clock == 0U)
@@ -30,15 +34,18 @@ constexpr result<std::uint32_t> can_nominal_timing(std::uint32_t clock, std::uin
 struct can_irq_lock
 {
   const std::uint32_t saved{__get_PRIMASK()};
+  /// @brief Saves the interrupt mask and prevents interrupts while the guard is held.
   can_irq_lock() noexcept
   {
     __disable_irq();
   }
+  /// @brief Releases resources owned by this guard when it is destroyed.
   ~can_irq_lock()
   {
     __set_PRIMASK(saved);
   }
 };
+/// @brief Selects the backend CAN initialization mode.
 inline bool can_init_mode(bool enter) noexcept
 {
   auto value = NRF_MCAN120->CCCR;
@@ -52,6 +59,7 @@ inline bool can_init_mode(bool enter) noexcept
 } // namespace system_detail
 struct can_api final
 {
+  /// @brief Checks whether the configuration supplies the required board binding.
   template <typename Config> static constexpr bool bound() noexcept
   {
     return requires {
@@ -62,6 +70,7 @@ struct can_api final
       Config::binding::can_prepare();
     };
   }
+  /// @copybrief microhal::can::bus::initialize
   template <typename Config> static status initialize() noexcept
   {
 #if MICROHAL_NORDIC_HAS_MCAN
@@ -137,6 +146,7 @@ struct can_api final
 #endif
     return status::unsupported;
   }
+  /// @copybrief microhal::can::bus::transmit
   template <typename Config> static status transmit(const microhal::can::message& message) noexcept
   {
 #if MICROHAL_NORDIC_HAS_MCAN
@@ -167,6 +177,7 @@ struct can_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::can::bus::receive
   template <typename Config> static status receive(microhal::can::message& message) noexcept
   {
 #if MICROHAL_NORDIC_HAS_MCAN
@@ -203,6 +214,7 @@ struct can_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::can::bus::configure_filter
   template <typename Config>
   static status configure_filter(std::uint32_t id, std::uint32_t mask, std::uint8_t fifo) noexcept
   {
@@ -251,6 +263,7 @@ struct can_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Enables the receive interrupt for the CAN peripheral.
   template <typename Config, auto Handler> static status enable_rx_interrupt() noexcept
   {
 #if MICROHAL_NORDIC_HAS_MCAN
@@ -271,6 +284,7 @@ struct can_api final
     return status::unsupported;
 #endif
   }
+  /// @brief Handles the interrupt for the CAN peripheral.
   static void handle_interrupt() noexcept
   {
 #if MICROHAL_NORDIC_HAS_MCAN
@@ -284,6 +298,7 @@ struct can_api final
       system_detail::can.receive();
 #endif
   }
+  /// @brief Handles the interrupt for the CAN peripheral.
   template <typename Config> static void handle_interrupt() noexcept
   {
     handle_interrupt();

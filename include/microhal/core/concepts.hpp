@@ -23,6 +23,7 @@ namespace microhal
 namespace detail
 {
 
+/// @brief Builds a compile-time diagnostic for an out-of-range clock.
 template <std::size_t N>
 consteval auto clock_diagnostic(const std::uint32_t requested, const std::array<char, N>& prefix,
                                 const std::uint32_t maximum) noexcept
@@ -35,10 +36,12 @@ consteval auto clock_diagnostic(const std::uint32_t requested, const std::array<
     std::array<char, capacity> text{};
     std::size_t length{};
 
+    /// @brief Returns the size of the associated data.
     [[nodiscard]] constexpr std::size_t size() const noexcept
     {
       return length;
     }
+    /// @brief Returns the underlying data pointer.
     [[nodiscard]] constexpr const char* data() const noexcept
     {
       return text.data();

@@ -1,15 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx serial transfer-mode implementations.
+ */
 #pragma once
 
 #include <type_traits>
 
 namespace microhal::backends::nordic::nrfx::detail
 {
+/// @brief Checks whether the serial transfer mode is supported.
 template <typename Config> constexpr bool serial_mode_supported() noexcept
 {
   constexpr auto mode = configured_transfer_mode<Config>();
   return mode == transfer_mode::dma || (mode == transfer_mode::polled && !serial_slave_enabled<Config>());
 }
+/// @brief Selects the interrupt configuration for the serial mode.
 template <typename Config, typename Register> void serial_mode_irq_config(Register* peripheral) noexcept
 {
 #if MICROHAL_NORDIC_NRFX_PRESENT
@@ -20,6 +25,7 @@ template <typename Config, typename Register> void serial_mode_irq_config(Regist
 #endif
 }
 
+/// @brief Waits for the configured serial operation to complete.
 template <typename Config, typename Poll, typename Cancel> status serial_wait(Poll poll, Cancel cancel) noexcept
 {
 #if MICROHAL_NORDIC_SYSTEM_CORE_CLOCK
@@ -50,9 +56,11 @@ namespace microhal
 {
 // nrfx UARTE/SPIM/TWIM and the corresponding slaves all move payloads with EasyDMA.
 // "interrupt" means bytewise non-DMA IRQ in the public contract and is not emulated.
+/// @brief Selects the serial transfer-mode implementation for the backend and peripheral.
 template <> struct serial_mode_api<nordic_nrf_tag, peripheral_kind::uart>
 {
   using api = backends::nordic::nrfx::uart_api;
+  /// @brief Initializes the configured backend resource.
   template <typename Config> static status initialize() noexcept
   {
     if constexpr (!backends::nordic::nrfx::detail::serial_mode_supported<Config>())
@@ -65,6 +73,7 @@ template <> struct serial_mode_api<nordic_nrf_tag, peripheral_kind::uart>
 #endif
     return result;
   }
+  /// @brief Writes data using the configured backend.
   template <typename Config, auto Handler> static status write(std::span<const std::uint8_t> bytes) noexcept
   {
     if constexpr (!backends::nordic::nrfx::detail::serial_mode_supported<Config>())
@@ -75,6 +84,7 @@ template <> struct serial_mode_api<nordic_nrf_tag, peripheral_kind::uart>
       return api::template start_async_tx<Config, Handler>(bytes);
     return status::unsupported;
   }
+  /// @brief Reads data using the configured backend.
   template <typename Config, auto Handler> static status read(std::span<std::uint8_t> bytes) noexcept
   {
     if constexpr (!backends::nordic::nrfx::detail::serial_mode_supported<Config>())
@@ -85,42 +95,51 @@ template <> struct serial_mode_api<nordic_nrf_tag, peripheral_kind::uart>
       return api::template start_async_rx<Config, Handler>(bytes);
     return status::unsupported;
   }
+  /// @brief Starts UART reception until the buffer fills or the line becomes idle.
   template <typename Config, auto Handler> static status start_receive_to_idle(std::span<std::uint8_t> bytes) noexcept
   {
     if constexpr (configured_transfer_mode<Config>() == transfer_mode::dma)
       return api::template start_receive_to_idle<Config, Handler>(bytes);
     return status::unsupported;
   }
+  /// @brief Starts continuous reception into a circular buffer.
   template <typename Config, auto Handler> static status start_circular_rx(std::span<std::uint8_t> bytes) noexcept
   {
     if constexpr (configured_transfer_mode<Config>() == transfer_mode::dma)
       return api::template start_circular_rx<Config, Handler>(bytes);
     return status::unsupported;
   }
+  /// @brief Attempts to abort the transmit for the UART peripheral.
   template <typename Config> static status abort_tx() noexcept
   {
     return api::template abort_tx<Config>();
   }
+  /// @brief Attempts to abort the receive for the UART peripheral.
   template <typename Config> static status abort_rx() noexcept
   {
     return api::template abort_rx<Config>();
   }
+  /// @brief Queries the current or most recently completed transmit status.
   template <typename Config> static status tx_status() noexcept
   {
     return api::template tx_status<Config>();
   }
+  /// @brief Queries the current or most recently completed receive status.
   template <typename Config> static status rx_status() noexcept
   {
     return api::template rx_status<Config>();
   }
+  /// @brief Attempts to cancel the active peripheral operation.
   template <typename Config> static status abort() noexcept
   {
     return api::template abort<Config>();
   }
+  /// @brief Queries the current or most recently completed transfer status.
   template <typename Config> static status transfer_status() noexcept
   {
     return api::template transfer_status<Config>();
   }
+  /// @brief Handles the interrupt for the UART peripheral.
   template <typename Config> static status handle_interrupt() noexcept
   {
 #if MICROHAL_NORDIC_HAS_UARTE
@@ -134,10 +153,12 @@ template <> struct serial_mode_api<nordic_nrf_tag, peripheral_kind::uart>
     return status::unsupported;
 #endif
   }
+  /// @brief Handles the DMA interrupt for the UART peripheral.
   template <typename Config> static status handle_dma_interrupt() noexcept
   {
     return handle_interrupt<Config>();
   }
+  /// @brief Handles the receive timeout interrupt for the UART peripheral.
   template <typename Config> static status handle_rx_timeout_interrupt() noexcept
   {
 #if MICROHAL_NORDIC_HAS_SERIAL_TIMEOUT
@@ -154,9 +175,11 @@ template <> struct serial_mode_api<nordic_nrf_tag, peripheral_kind::uart>
   }
 };
 
+/// @brief Selects the serial transfer-mode implementation for the backend and peripheral.
 template <> struct serial_mode_api<nordic_nrf_tag, peripheral_kind::spi>
 {
   using api = backends::nordic::nrfx::spi_api;
+  /// @brief Initializes the configured backend resource.
   template <typename Config> static status initialize() noexcept
   {
     if constexpr (!backends::nordic::nrfx::detail::serial_mode_supported<Config>())
@@ -174,6 +197,7 @@ template <> struct serial_mode_api<nordic_nrf_tag, peripheral_kind::spi>
       return result;
     }
   }
+  /// @brief Transfers data using the configured peripheral.
   template <typename Config, auto Handler>
   static status transfer(std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx) noexcept
   {
@@ -198,35 +222,43 @@ template <> struct serial_mode_api<nordic_nrf_tag, peripheral_kind::spi>
     else
       return api::template transfer_async<Config, Handler>(tx, rx);
   }
+  /// @brief Writes data using the configured backend.
   template <typename Config, auto Handler> static status write(std::span<const std::uint8_t> tx) noexcept
   {
     return transfer<Config, Handler>(tx, {});
   }
+  /// @brief Reads data using the configured backend.
   template <typename Config, auto Handler> static status read(std::span<std::uint8_t> rx) noexcept
   {
     return transfer<Config, Handler>({}, rx);
   }
+  /// @brief Attempts to cancel the active peripheral operation.
   template <typename Config> static status abort() noexcept
   {
     return api::template abort<Config>();
   }
+  /// @brief Queries the current or most recently completed transfer status.
   template <typename Config> static status transfer_status() noexcept
   {
     return api::template transfer_status<Config>();
   }
+  /// @brief Handles the interrupt for the SPI peripheral.
   template <typename Config> static status handle_interrupt() noexcept
   {
     return api::template dispatch<Config>();
   }
+  /// @brief Handles the DMA interrupt for the SPI peripheral.
   template <typename Config> static status handle_dma_interrupt() noexcept
   {
     return handle_interrupt<Config>();
   }
 };
 
+/// @brief Selects the serial transfer-mode implementation for the backend and peripheral.
 template <> struct serial_mode_api<nordic_nrf_tag, peripheral_kind::i2c>
 {
   using api = backends::nordic::nrfx::i2c_api;
+  /// @brief Initializes the configured backend resource.
   template <typename Config> static status initialize() noexcept
   {
     if constexpr (!backends::nordic::nrfx::detail::serial_mode_supported<Config>())
@@ -244,6 +276,7 @@ template <> struct serial_mode_api<nordic_nrf_tag, peripheral_kind::i2c>
       return result;
     }
   }
+  /// @brief Submits the configured transfer to the backend driver.
   template <typename Config, auto Handler>
   static status submit(std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx, std::uint16_t address) noexcept
   {
@@ -276,16 +309,19 @@ template <> struct serial_mode_api<nordic_nrf_tag, peripheral_kind::i2c>
       return result;
     }
   }
+  /// @brief Writes data using the configured backend.
   template <typename Config, auto Handler>
   static status write(std::span<const std::uint8_t> tx, std::uint16_t address = 0U) noexcept
   {
     return submit<Config, Handler>(tx, {}, address);
   }
+  /// @brief Reads data using the configured backend.
   template <typename Config, auto Handler>
   static status read(std::span<std::uint8_t> rx, std::uint16_t address = 0U) noexcept
   {
     return submit<Config, Handler>({}, rx, address);
   }
+  /// @brief Starts a write followed by a read using the configured backend.
   template <typename Config, auto Handler>
   static status write_read(std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx, std::uint16_t address) noexcept
   {
@@ -293,24 +329,29 @@ template <> struct serial_mode_api<nordic_nrf_tag, peripheral_kind::i2c>
       return status::invalid_argument;
     return submit<Config, Handler>(tx, rx, address);
   }
+  /// @brief Probes the addressed device.
   template <typename Config> static status probe(std::uint16_t address) noexcept
   {
     if constexpr (!backends::nordic::nrfx::detail::serial_mode_supported<Config>() || serial_slave_enabled<Config>())
       return status::unsupported;
     return api::template probe<Config>(address);
   }
+  /// @brief Attempts to cancel the active peripheral operation.
   template <typename Config> static status abort() noexcept
   {
     return api::template abort<Config>();
   }
+  /// @brief Queries the current or most recently completed transfer status.
   template <typename Config> static status transfer_status() noexcept
   {
     return api::template transfer_status<Config>();
   }
+  /// @brief Handles the interrupt for the I2C peripheral.
   template <typename Config> static status handle_interrupt() noexcept
   {
     return api::template dispatch<Config>();
   }
+  /// @brief Handles the DMA interrupt for the I2C peripheral.
   template <typename Config> static status handle_dma_interrupt() noexcept
   {
     return handle_interrupt<Config>();

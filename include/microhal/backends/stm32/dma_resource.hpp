@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief STM32 DMA resource binding helpers.
+ */
 #pragma once
 #include "microhal/core/status.hpp"
 #include <cstddef>
@@ -35,10 +38,12 @@ struct serial_dma_resource
   mutable std::uint32_t stopped_count{};
   mutable bool stopped_count_valid{};
 
+  /// @brief Checks whether the DMA resource has the required registers.
   explicit operator bool() const noexcept
   {
     return control && count && peripheral && memory && flags && clear;
   }
+  /// @brief Stops the DMA channel or stream and waits for it to be disabled.
   bool stop() const noexcept
   {
     if (!*this)
@@ -69,6 +74,7 @@ struct serial_dma_resource
     }
     return (*control & 1U) == 0U;
   }
+  /// @brief Configures and starts a DMA transfer.
   status start(std::uintptr_t peripheral_address, std::uintptr_t memory_address, std::size_t length, bool transmit,
                bool circular = false, bool increment = true, unsigned width = 1U) noexcept
   {
@@ -131,6 +137,7 @@ struct serial_dma_resource
     }
     return status::ok;
   }
+  /// @brief Returns the number of DMA items remaining in the current transfer.
   std::size_t remaining() const noexcept
   {
     return *this ? (stopped_count_valid ? stopped_count : (*count & 0xFFFFU)) /
@@ -139,6 +146,7 @@ struct serial_dma_resource
   }
 };
 
+/// @brief Builds a DMA resource description for a channel.
 template <typename Channel, typename Controller>
 serial_dma_resource channel_dma(Channel& channel, Controller& controller, unsigned index) noexcept
 {
@@ -155,6 +163,7 @@ serial_dma_resource channel_dma(Channel& channel, Controller& controller, unsign
   return {serial_dma_layout::channel, &channel.CCR, &channel.CNDTR, &channel.CPAR, memory, &controller.ISR,
           &controller.IFCR,           2U << shift,  4U << shift,    8U << shift};
 }
+/// @brief Returns the DMA resource associated with the stream.
 template <typename Stream>
 serial_dma_resource stream_dma(Stream& stream, volatile std::uint32_t& flags, volatile std::uint32_t& clear,
                                unsigned shift) noexcept
@@ -172,6 +181,7 @@ serial_dma_resource stream_dma(Stream& stream, volatile std::uint32_t& flags, vo
           0x10U << shift,
           0xDU << shift};
 }
+/// @brief Builds a DMA resource description for a GPDMA channel.
 template <typename Channel> serial_dma_resource gpdma(Channel& channel, serial_gpdma_node* node = nullptr) noexcept
 {
   return {serial_dma_layout::gpdma,

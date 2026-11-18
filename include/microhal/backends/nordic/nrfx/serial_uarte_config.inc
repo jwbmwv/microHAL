@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx UARTE configuration helpers.
+ */
+/// @brief Configures UARTE hardware flow control from the board binding.
 template <typename Config> status uarte_configure_hwfc(nrfx_uarte_config_t& config) noexcept
 {
   config.rts_pin = NRF_UARTE_PSEL_DISCONNECTED;
@@ -45,6 +49,7 @@ template <typename Config> status uarte_configure_hwfc(nrfx_uarte_config_t& conf
   return status::ok;
 }
 
+/// @brief Initializes the UARTE driver and claims its serial resource.
 template <typename Config, typename Handler>
 status uarte_initialize_driver(nrfx_uarte_t& instance, nrfx_uarte_config_t& config, Handler handler) noexcept
 {

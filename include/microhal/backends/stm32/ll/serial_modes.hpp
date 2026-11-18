@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief STM32 low-level serial transfer-mode implementations.
+ */
 #pragma once
 
 #include "microhal/backends/stm32/dma_resource.hpp"
@@ -9,6 +12,7 @@
 namespace microhal::backends::stm32::ll
 {
 // Board code supplies clocks, pins, IRQ routing and DMA request selection, not transfer callbacks.
+/// @brief Selects the low-level serial binding for the configuration.
 template <peripheral_kind Kind, std::uint32_t Instance> struct serial_binding
 {
 };
@@ -24,20 +28,25 @@ struct serial_guard
 {
 #if defined(__arm__) || defined(__thumb__)
   std::uint32_t mask{};
+  /// @brief Creates a guard for the current interrupt state.
   serial_guard() noexcept
   {
     __asm volatile("mrs %0, primask\ncpsid i" : "=r"(mask)::"memory");
   }
+  /// @brief Releases resources owned by this guard when it is destroyed.
   ~serial_guard()
   {
     __asm volatile("msr primask, %0" ::"r"(mask) : "memory");
   }
 #else
+  /// @brief Creates a guard for the current interrupt state.
   serial_guard() noexcept = default;
+  /// @brief Performs no operation in this backend configuration.
   ~serial_guard() {}
 #endif
 };
 
+/// @brief Returns the identity of the selected serial resource.
 template <typename Config> consteval std::uint32_t serial_identity() noexcept
 {
   if constexpr (requires { Config::instance_index; })
@@ -49,7 +58,9 @@ template <typename Config> consteval std::uint32_t serial_identity() noexcept
   else
     static_assert(dependent_false_v<Config>, "STM32 LL serial requires an instance index or register binding");
 }
+/// @brief Names the board binding used by the serial backend.
 template <peripheral_kind Kind, typename Config> using serial_board = serial_binding<Kind, serial_identity<Config>()>;
+/// @brief Selects the DMA resource for the serial transfer.
 template <peripheral_kind Kind, typename Config> serial_dma_resource serial_dma(const bool tx) noexcept
 {
   using board = serial_board<Kind, Config>;
@@ -69,6 +80,7 @@ template <peripheral_kind Kind, typename Config> serial_dma_resource serial_dma(
   }
   return {};
 }
+/// @brief Returns the serial clock selected by the configuration.
 template <peripheral_kind Kind, typename Config> std::uint32_t serial_clock() noexcept
 {
   if constexpr (requires { serial_board<Kind, Config>::source_clock_hz(); })
@@ -80,9 +92,11 @@ template <peripheral_kind Kind, typename Config> std::uint32_t serial_clock() no
   else
     return 0U;
 }
+/// @brief Reports whether the serial binding provides a time source.
 template <peripheral_kind Kind, typename Config>
 constexpr bool serial_has_time =
     requires { serial_board<Kind, Config>::now_ms(); } || requires { Config::binding::now_ms(); };
+/// @brief Returns the current time used by the serial backend.
 template <peripheral_kind Kind, typename Config> std::uint32_t serial_now() noexcept
 {
   if constexpr (requires { serial_board<Kind, Config>::now_ms(); })
@@ -92,6 +106,7 @@ template <peripheral_kind Kind, typename Config> std::uint32_t serial_now() noex
   else
     return 0U;
 }
+/// @brief Reports whether the serial configuration selects slave mode.
 template <typename Config> constexpr bool serial_slave()
 {
   if constexpr (requires { Config::is_slave; })
@@ -99,6 +114,7 @@ template <typename Config> constexpr bool serial_slave()
   else
     return false;
 }
+/// @brief Returns the serial timeout selected by the configuration.
 template <typename Config> constexpr std::uint32_t serial_timeout()
 {
   if constexpr (requires { Config::timeout_ms; })
@@ -106,6 +122,7 @@ template <typename Config> constexpr std::uint32_t serial_timeout()
   else
     return 1000U;
 }
+/// @brief Returns the serial instance selected by the configuration.
 template <peripheral_kind Kind, typename Peripheral, typename Config> Peripheral* serial_instance() noexcept
 {
   if constexpr (requires { Config::instance(); })
@@ -121,6 +138,7 @@ template <peripheral_kind Kind, typename Peripheral, typename Config> Peripheral
   else
     static_assert(dependent_false_v<Config>, "STM32 LL serial requires a board peripheral register binding");
 }
+/// @brief Completes the active serial operation.
 template <auto Handler> void serial_complete(const status value) noexcept
 {
   if constexpr (requires { Handler(value); })
@@ -145,6 +163,7 @@ struct serial_operation
   serial_dma_resource tx_dma{}, rx_dma{};
   std::uint8_t dummy{0xFFU};
 
+  /// @brief Attempts to claim the associated backend resource.
   bool claim() noexcept
   {
     serial_guard guard;
@@ -157,6 +176,7 @@ struct serial_operation
     return !active.exchange(true);
 #endif
   }
+  /// @brief Resets the associated backend state.
   void reset() noexcept
   {
     ++generation;
@@ -171,12 +191,14 @@ struct serial_operation
     rx_dma = {};
     result = status::busy;
   }
+  /// @brief Stops the DMA for the serial transfer.
   bool stop_dma() const noexcept
   {
     const bool tx_stopped = tx_dma.stop();
     const bool rx_stopped = rx_dma.stop();
     return tx_stopped && rx_stopped;
   }
+  /// @brief Completes the current operation and updates its state.
   void finish(const status value, const std::size_t count = 0U) noexcept
   {
     const auto callback = completion;
@@ -194,28 +216,35 @@ struct serial_operation
       data_callback(value, data);
   }
 };
+/// @brief Stores the state of a configured serial transfer.
 template <peripheral_kind Kind, std::uint32_t Instance> struct serial_storage
 {
   static inline serial_operation bus{}, tx{}, rx{};
 };
 
+/// @brief Implements native serial transfers for a peripheral kind.
 template <peripheral_kind Kind> struct native_serial_engine;
 
 #if defined(USART_CR1_UE)
+/// @brief Implements native serial transfers for a peripheral kind.
 template <> struct native_serial_engine<peripheral_kind::uart>
 {
+  /// @brief Returns the transmit state for the selected transfer.
   template <typename C> static auto& tx()
   {
     return serial_storage<peripheral_kind::uart, serial_identity<C>()>::tx;
   }
+  /// @brief Returns the receive state for the selected transfer.
   template <typename C> static auto& rx()
   {
     return serial_storage<peripheral_kind::uart, serial_identity<C>()>::rx;
   }
+  /// @brief Returns the device selected by the configuration.
   template <typename C> static auto* device()
   {
     return serial_instance<peripheral_kind::uart, USART_TypeDef, C>();
   }
+  /// @brief Initializes the configured backend resource.
   template <typename C> static status initialize() noexcept
   {
     serial_guard guard;
@@ -269,6 +298,7 @@ template <> struct native_serial_engine<peripheral_kind::uart>
 #endif
     return status::ok;
   }
+  /// @brief Returns the flags associated with the selected transfer.
   static volatile std::uint32_t& flags(USART_TypeDef* p) noexcept
   {
 #if defined(USART_ISR_RXNE) || defined(USART_ISR_RXNE_RXFNE)
@@ -277,6 +307,7 @@ template <> struct native_serial_engine<peripheral_kind::uart>
     return p->SR;
 #endif
   }
+  /// @brief Returns the peripheral data-register address used by DMA.
   static std::uintptr_t data_address(USART_TypeDef* p, bool transmit) noexcept
   {
 #if defined(USART_ISR_RXNE) || defined(USART_ISR_RXNE_RXFNE)
@@ -286,6 +317,7 @@ template <> struct native_serial_engine<peripheral_kind::uart>
     return reinterpret_cast<std::uintptr_t>(&p->DR);
 #endif
   }
+  /// @brief Clears the flags for the UART peripheral.
   static void clear_flags(USART_TypeDef* p, const std::uint32_t mask) noexcept
   {
 #if defined(USART_ICR_IDLECF)
@@ -298,6 +330,7 @@ template <> struct native_serial_engine<peripheral_kind::uart>
     (void)mask;
 #endif
   }
+  /// @brief Disables the selected backend resource.
   template <typename C> static void disable(const bool transmit) noexcept
   {
     auto* p = device<C>();
@@ -306,6 +339,7 @@ template <> struct native_serial_engine<peripheral_kind::uart>
     if (transmit ? !rx<C>().active : !tx<C>().active)
       p->CR3 = p->CR3 & ~USART_CR3_EIE;
   }
+  /// @brief Cancels the active transfer and updates its completion state.
   template <typename C> static status cancel(const bool transmit, const status reason) noexcept
   {
     serial_guard guard;
@@ -321,19 +355,23 @@ template <> struct native_serial_engine<peripheral_kind::uart>
     s.finish(reason);
     return status::ok;
   }
+  /// @brief Attempts to abort the transmit for the UART peripheral.
   template <typename C> static status abort_tx() noexcept
   {
     return cancel<C>(true, status::error);
   }
+  /// @brief Attempts to abort the receive for the UART peripheral.
   template <typename C> static status abort_rx() noexcept
   {
     return cancel<C>(false, status::error);
   }
+  /// @brief Attempts to cancel the active peripheral operation.
   template <typename C> static status abort() noexcept
   {
     const auto a = abort_tx<C>(), b = abort_rx<C>();
     return a == status::ok ? b : a;
   }
+  /// @brief Submits the configured transfer to the backend driver.
   template <typename C, auto H>
   static status submit(std::span<const std::uint8_t> output, std::span<std::uint8_t> input, bool to_idle = false,
                        bool circular = false) noexcept
@@ -405,6 +443,7 @@ template <> struct native_serial_engine<peripheral_kind::uart>
     p->CR3 = p->CR3 | USART_CR3_EIE;
     return status::ok;
   }
+  /// @brief Checks the deadline for the active operation.
   template <typename C> static void check_deadline(serial_operation& s, const bool transmit) noexcept
   {
     if constexpr (serial_has_time<peripheral_kind::uart, C>)
@@ -412,16 +451,19 @@ template <> struct native_serial_engine<peripheral_kind::uart>
           static_cast<std::uint32_t>(serial_now<peripheral_kind::uart, C>() - s.started) >= serial_timeout<C>())
         (void)cancel<C>(transmit, status::timeout);
   }
+  /// @brief Queries the current or most recently completed transmit status.
   template <typename C> static status tx_status() noexcept
   {
     check_deadline<C>(tx<C>(), true);
     return tx<C>().result;
   }
+  /// @brief Queries the current or most recently completed receive status.
   template <typename C> static status rx_status() noexcept
   {
     check_deadline<C>(rx<C>(), false);
     return rx<C>().result;
   }
+  /// @brief Queries the current or most recently completed transfer status.
   template <typename C> static status transfer_status() noexcept
   {
     const auto a = tx_status<C>(), b = rx_status<C>();
@@ -429,6 +471,7 @@ template <> struct native_serial_engine<peripheral_kind::uart>
       return status::busy;
     return a == status::ok ? b : a;
   }
+  /// @brief Reports newly received UART bytes through the data-completion callback.
   template <typename C> static void report(const std::size_t end) noexcept
   {
     auto& s = rx<C>();
@@ -440,6 +483,7 @@ template <> struct native_serial_engine<peripheral_kind::uart>
         s.data_completion(status::ok, data);
     }
   }
+  /// @brief Handles the DMA interrupt for the UART peripheral.
   template <typename C> static status handle_dma_interrupt() noexcept
   {
     serial_guard guard;
@@ -493,10 +537,12 @@ template <> struct native_serial_engine<peripheral_kind::uart>
     }
     return transfer_status<C>();
   }
+  /// @brief Disables transmit DMA for the selected peripheral.
   template <typename C> static void p_disable_dma_tx() noexcept
   {
     device<C>()->CR3 = device<C>()->CR3 & ~USART_CR3_DMAT;
   }
+  /// @brief Handles the interrupt for the UART peripheral.
   template <typename C> static status handle_interrupt() noexcept
   {
     serial_guard guard;
@@ -560,6 +606,7 @@ template <> struct native_serial_engine<peripheral_kind::uart>
     }
     return transfer_status<C>();
   }
+  /// @brief Writes data using the configured backend.
   template <typename C, auto H> static status write(std::span<const std::uint8_t> data, std::uint16_t = 0U) noexcept
   {
     auto value = submit<C, H>(data, {});
@@ -574,6 +621,7 @@ template <> struct native_serial_engine<peripheral_kind::uart>
       }
     return value == status::ok && blocking ? tx<C>().result.load(std::memory_order_acquire) : value;
   }
+  /// @brief Reads data using the configured backend.
   template <typename C, auto H> static status read(std::span<std::uint8_t> data, std::uint16_t = 0U) noexcept
   {
     auto value = submit<C, H>({}, data);
@@ -588,6 +636,7 @@ template <> struct native_serial_engine<peripheral_kind::uart>
       }
     return value == status::ok && blocking ? rx<C>().result.load(std::memory_order_acquire) : value;
   }
+  /// @brief Starts UART reception until the buffer fills or the line becomes idle.
   template <typename C, auto H> static status start_receive_to_idle(std::span<std::uint8_t> data) noexcept
   {
     if constexpr (configured_transfer_mode<C>() == transfer_mode::polled)
@@ -595,15 +644,18 @@ template <> struct native_serial_engine<peripheral_kind::uart>
     else
       return submit<C, H>({}, data, true);
   }
+  /// @brief Starts continuous reception into a circular buffer.
   template <typename C, auto H> static status start_circular_rx(std::span<std::uint8_t> data) noexcept
   {
     return submit<C, H>({}, data, true, true);
   }
 };
 #endif
+/// @brief Implements native bus transfers for the selected configuration.
 template <peripheral_kind Kind> struct native_bus_engine
 {
   using hardware = native_serial_engine<Kind>;
+  /// @brief Stops the hardware for the serial transfer.
   template <typename C> static bool stop_hardware(const bool reset = true) noexcept
   {
     if constexpr (std::is_same_v<decltype(hardware::template stop<C>(reset)), bool>)
@@ -614,10 +666,12 @@ template <peripheral_kind Kind> struct native_bus_engine
       return true;
     }
   }
+  /// @brief Returns the stored state associated with the configuration.
   template <typename C> static auto& state()
   {
     return serial_storage<Kind, serial_identity<C>()>::bus;
   }
+  /// @brief Initializes the configured backend resource.
   template <typename C> static status initialize() noexcept
   {
     serial_guard guard;
@@ -625,6 +679,7 @@ template <peripheral_kind Kind> struct native_bus_engine
       return status::busy;
     return hardware::template setup<C>();
   }
+  /// @brief Cancels the active transfer and updates its completion state.
   template <typename C> static status cancel(const status reason) noexcept
   {
     serial_guard guard;
@@ -640,10 +695,12 @@ template <peripheral_kind Kind> struct native_bus_engine
     s.finish(reason);
     return status::ok;
   }
+  /// @brief Attempts to cancel the active peripheral operation.
   template <typename C> static status abort() noexcept
   {
     return cancel<C>(status::error);
   }
+  /// @brief Queries the current or most recently completed transfer status.
   template <typename C> static status transfer_status() noexcept
   {
     auto& s = state<C>();
@@ -652,6 +709,7 @@ template <peripheral_kind Kind> struct native_bus_engine
         (void)cancel<C>(status::timeout);
     return s.result;
   }
+  /// @brief Completes the active transfer and updates its state.
   template <typename C> static status complete(const status value) noexcept
   {
     auto& s = state<C>();
@@ -664,6 +722,7 @@ template <peripheral_kind Kind> struct native_bus_engine
     s.finish(value);
     return value;
   }
+  /// @brief Submits the configured transfer to the backend driver.
   template <typename C, auto H>
   static status submit(std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx, std::uint16_t address = 0U,
                        bool repeated = false, bool probe = false) noexcept
@@ -719,19 +778,23 @@ template <peripheral_kind Kind> struct native_bus_engine
     }
     return value;
   }
+  /// @brief Writes data using the configured backend.
   template <typename C, auto H> static status write(std::span<const std::uint8_t> tx, std::uint16_t a = 0U) noexcept
   {
     return submit<C, H>(tx, {}, a);
   }
+  /// @brief Reads data using the configured backend.
   template <typename C, auto H> static status read(std::span<std::uint8_t> rx, std::uint16_t a = 0U) noexcept
   {
     return submit<C, H>({}, rx, a);
   }
+  /// @brief Transfers data using the configured peripheral.
   template <typename C, auto H>
   static status transfer(std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx) noexcept
   {
     return submit<C, H>(tx, rx);
   }
+  /// @brief Starts a write followed by a read using the configured backend.
   template <typename C, auto H>
   static status write_read(std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx, std::uint16_t a) noexcept
   {
@@ -739,6 +802,7 @@ template <peripheral_kind Kind> struct native_bus_engine
       return status::invalid_argument;
     return submit<C, H>(tx, rx, a, true);
   }
+  /// @brief Probes the addressed device.
   template <typename C> static status probe(std::uint16_t address) noexcept
   {
     if constexpr (serial_slave<C>())
@@ -746,6 +810,7 @@ template <peripheral_kind Kind> struct native_bus_engine
     else
       return submit<C, nullptr>({}, {}, address, false, true);
   }
+  /// @brief Handles the interrupt for the serial transfer.
   template <typename C> static status handle_interrupt() noexcept
   {
     serial_guard guard;
@@ -753,6 +818,7 @@ template <peripheral_kind Kind> struct native_bus_engine
       hardware::template service<C>();
     return transfer_status<C>();
   }
+  /// @brief Handles the DMA interrupt for the serial transfer.
   template <typename C> static status handle_dma_interrupt() noexcept
   {
     serial_guard guard;
@@ -798,12 +864,15 @@ template <peripheral_kind Kind> struct native_bus_engine
 };
 
 #if defined(SPI_CR1_SPE)
+/// @brief Implements native serial transfers for a peripheral kind.
 template <> struct native_serial_engine<peripheral_kind::spi> : native_bus_engine<peripheral_kind::spi>
 {
+  /// @brief Returns the device selected by the configuration.
   template <typename C> static auto* device()
   {
     return serial_instance<peripheral_kind::spi, SPI_TypeDef, C>();
   }
+  /// @brief Sets up the selected peripheral or transfer resource.
   template <typename C> static status setup() noexcept
   {
     auto* p = device<C>();
@@ -851,6 +920,7 @@ template <> struct native_serial_engine<peripheral_kind::spi> : native_bus_engin
 #endif
     return status::ok;
   }
+  /// @brief Returns the peripheral data-register address used by DMA.
   template <typename C> static std::uintptr_t data_address(const bool tx) noexcept
   {
     auto* p = device<C>();
@@ -862,6 +932,7 @@ template <> struct native_serial_engine<peripheral_kind::spi> : native_bus_engin
 #endif
   }
 #if !defined(SPI_CFG1_DSIZE)
+  /// @brief Checks whether the serial bus is idle.
   template <typename C> static bool wire_idle() noexcept
   {
     auto* p = device<C>();
@@ -872,6 +943,7 @@ template <> struct native_serial_engine<peripheral_kind::spi> : native_bus_engin
       return !(p->SR & SPI_SR_BSY);
   }
 #endif
+  /// @brief Stops the active peripheral operation.
   template <typename C> static bool stop(bool = true) noexcept
   {
     auto* p = device<C>();
@@ -916,14 +988,17 @@ template <> struct native_serial_engine<peripheral_kind::spi> : native_bus_engin
 #endif
     return true;
   }
+  /// @brief Checks whether the selected mode requires transmission.
   template <typename C> static bool needs_tx() noexcept
   {
     return C::duplex_mode == spi_duplex_mode::full || !state<C>().tx.empty();
   }
+  /// @brief Checks whether the selected mode requires reception.
   template <typename C> static bool needs_rx() noexcept
   {
     return C::duplex_mode == spi_duplex_mode::full || !state<C>().rx.empty();
   }
+  /// @brief Starts the configured peripheral operation.
   template <typename C> static status start() noexcept
   {
     auto& s = state<C>();
@@ -986,6 +1061,7 @@ template <> struct native_serial_engine<peripheral_kind::spi> : native_bus_engin
 #endif
     return status::ok;
   }
+  /// @brief Handles completion of a DMA transfer.
   template <typename C> static void dma_complete(bool transmit) noexcept
   {
     auto* p = device<C>();
@@ -1000,6 +1076,7 @@ template <> struct native_serial_engine<peripheral_kind::spi> : native_bus_engin
       p->CR2 = p->CR2 | SPI_CR2_TXEIE;
 #endif
   }
+  /// @brief Services the active serial transfer.
   template <typename C> static void service() noexcept
   {
     auto& s = state<C>();
@@ -1060,12 +1137,15 @@ template <> struct native_serial_engine<peripheral_kind::spi> : native_bus_engin
 #endif
 
 #if defined(I2C_CR1_PE)
+/// @brief Implements native serial transfers for a peripheral kind.
 template <> struct native_serial_engine<peripheral_kind::i2c> : native_bus_engine<peripheral_kind::i2c>
 {
+  /// @brief Returns the device selected by the configuration.
   template <typename C> static auto* device()
   {
     return serial_instance<peripheral_kind::i2c, I2C_TypeDef, C>();
   }
+  /// @brief Sets up the selected peripheral or transfer resource.
   template <typename C> static status setup() noexcept
   {
     auto* p = device<C>();
@@ -1124,6 +1204,7 @@ template <> struct native_serial_engine<peripheral_kind::i2c> : native_bus_engin
 #endif
     return status::ok;
   }
+  /// @brief Returns the peripheral data-register address used by DMA.
   template <typename C> static std::uintptr_t data_address(const bool tx) noexcept
   {
     auto* p = device<C>();
@@ -1134,6 +1215,7 @@ template <> struct native_serial_engine<peripheral_kind::i2c> : native_bus_engin
     return reinterpret_cast<std::uintptr_t>(&p->DR);
 #endif
   }
+  /// @brief Stops the active peripheral operation.
   template <typename C> static void stop(bool reset = true) noexcept
   {
     auto* p = device<C>();
@@ -1160,6 +1242,7 @@ template <> struct native_serial_engine<peripheral_kind::i2c> : native_bus_engin
     p->CR1 = p->CR1 | I2C_CR1_PE;
 #endif
   }
+  /// @brief Arms the configured DMA transfer.
   template <typename C> static status arm_dma(const bool transmit) noexcept
   {
     auto& s = state<C>();
@@ -1182,6 +1265,7 @@ template <> struct native_serial_engine<peripheral_kind::i2c> : native_bus_engin
     return status::ok;
   }
 #if defined(I2C_CR2_NBYTES)
+  /// @brief Configures the next frame of the active I2C transfer.
   template <typename C> static void frame(const bool first) noexcept
   {
     auto& s = state<C>();
@@ -1195,6 +1279,7 @@ template <> struct native_serial_engine<peripheral_kind::i2c> : native_bus_engin
              (first ? I2C_CR2_START : 0U);
   }
 #endif
+  /// @brief Starts the configured peripheral operation.
   template <typename C> static status start() noexcept
   {
     auto& s = state<C>();
@@ -1242,6 +1327,7 @@ template <> struct native_serial_engine<peripheral_kind::i2c> : native_bus_engin
 #endif
     return status::ok;
   }
+  /// @brief Handles completion of a DMA transfer.
   template <typename C> static void dma_complete(const bool transmit) noexcept
   {
 #if defined(I2C_CR2_NBYTES)
@@ -1262,6 +1348,7 @@ template <> struct native_serial_engine<peripheral_kind::i2c> : native_bus_engin
         p->CR1 = p->CR1 & ~I2C_CR1_ACK;
 #endif
   }
+  /// @brief Services the active serial transfer.
   template <typename C> static void service() noexcept
   {
     auto& s = state<C>();
@@ -1524,6 +1611,7 @@ template <> struct native_serial_engine<peripheral_kind::i2c> : native_bus_engin
 namespace microhal
 {
 #if defined(USART_CR1_UE)
+/// @brief Selects the serial transfer-mode implementation for the backend and peripheral.
 template <>
 struct serial_mode_api<stm32_ll_tag, peripheral_kind::uart>
     : backends::stm32::ll::native_serial_engine<peripheral_kind::uart>
@@ -1531,6 +1619,7 @@ struct serial_mode_api<stm32_ll_tag, peripheral_kind::uart>
 };
 #endif
 #if defined(SPI_CR1_SPE)
+/// @brief Selects the serial transfer-mode implementation for the backend and peripheral.
 template <>
 struct serial_mode_api<stm32_ll_tag, peripheral_kind::spi>
     : backends::stm32::ll::native_serial_engine<peripheral_kind::spi>
@@ -1538,6 +1627,7 @@ struct serial_mode_api<stm32_ll_tag, peripheral_kind::spi>
 };
 #endif
 #if defined(I2C_CR1_PE)
+/// @brief Selects the serial transfer-mode implementation for the backend and peripheral.
 template <>
 struct serial_mode_api<stm32_ll_tag, peripheral_kind::i2c>
     : backends::stm32::ll::native_serial_engine<peripheral_kind::i2c>

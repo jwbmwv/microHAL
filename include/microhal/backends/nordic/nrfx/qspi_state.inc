@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx QSPI state and validation helpers.
+ */
 // Included inside the nrfx backend's detail namespace.
+/// @brief Checks whether a QSPI address and transfer length fit the selected address width.
 constexpr bool qspi_range_valid(const std::uint32_t address, const std::size_t size, const std::uint8_t address_bytes,
                                 const std::size_t max_count) noexcept
 {
@@ -13,23 +17,30 @@ inline nrfx_qspi_config_t qspi_configuration{};
 inline std::atomic<bool> qspi_active{false};
 inline bool qspi_mapped{false};
 inline const void* qspi_owner{};
+/// @brief Provides an identity token for the QSPI configuration.
 template <typename Config> inline constexpr std::uint8_t qspi_owner_token{};
 struct qspi_operation
 {
   const bool acquired{!qspi_active.exchange(true)};
+  /// @brief Releases resources owned by this guard when it is destroyed.
   ~qspi_operation()
   {
     if (acquired)
       qspi_active.store(false);
   }
+  /// @brief Creates a guard that attempts to claim the QSPI operation.
   qspi_operation() = default;
+  /// @brief Disallows copying the operation guard.
   qspi_operation(const qspi_operation&) = delete;
+  /// @brief Disallows copying the operation guard.
   qspi_operation& operator=(const qspi_operation&) = delete;
 };
+/// @brief Checks whether the configuration owns the initialized QSPI peripheral.
 template <typename Config> bool qspi_owned() noexcept
 {
   return nrfx_qspi_init_check() && qspi_owner == &qspi_owner_token<Config>;
 }
+/// @brief Checks whether the board binding owns the QSPI memory-mapped window.
 template <typename Config> constexpr bool qspi_window_owned() noexcept
 {
   // The binding owns the aperture; transitions run internally with mapped bus masters quiesced.
@@ -37,6 +48,7 @@ template <typename Config> constexpr bool qspi_window_owned() noexcept
     return Config::binding::owns_xip_window;
   return false;
 }
+/// @brief Synchronizes memory and cache state after a QSPI mapping change.
 inline void qspi_sync_mapping() noexcept
 {
   __DSB();
@@ -47,6 +59,7 @@ inline void qspi_sync_mapping() noexcept
   __DSB();
   __ISB();
 }
+/// @brief Checks whether a command matches the configured memory-mapped QSPI operation.
 inline bool qspi_memory_command(const qspi_command& command, const bool write) noexcept
 {
   const auto& config = qspi_configuration;

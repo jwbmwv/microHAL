@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx USB backend implementation fragment.
+ */
 // Included inside microhal::backends::nordic::nrfx.
 namespace system_detail
 {
@@ -14,16 +17,19 @@ inline std::array<usb_rx_state, 8U> usb_rx{};
 struct usb_irq_lock
 {
   const std::uint32_t saved{__get_PRIMASK()};
+  /// @brief Saves the interrupt mask and prevents interrupts while the guard is held.
   usb_irq_lock() noexcept
   {
     __disable_irq();
   }
+  /// @brief Releases resources owned by this guard when it is destroyed.
   ~usb_irq_lock()
   {
     __set_PRIMASK(saved);
   }
 };
 inline void (*usb_policy)(nrfx_usbd_evt_t const*) noexcept {};
+/// @brief Handles a USB backend event.
 inline void usb_event(nrfx_usbd_evt_t const* event) noexcept
 {
   if (event->type == NRFX_USBD_EVT_RESET)
@@ -55,6 +61,7 @@ inline void usb_event(nrfx_usbd_evt_t const* event) noexcept
 } // namespace system_detail
 struct usb_api final
 {
+  /// @copybrief microhal::usb::device::initialize
   template <typename Config> static status initialize() noexcept
   {
 #if MICROHAL_NORDIC_HAS_USBD
@@ -86,6 +93,7 @@ struct usb_api final
 #endif
     return status::unsupported;
   }
+  /// @copybrief microhal::usb::device::connect
   template <typename Config> static status connect() noexcept
   {
 #if MICROHAL_NORDIC_HAS_USBD
@@ -133,6 +141,7 @@ struct usb_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::usb::device::disconnect
   template <typename Config> static status disconnect() noexcept
   {
 #if MICROHAL_NORDIC_HAS_USBD
@@ -154,6 +163,7 @@ struct usb_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::usb::device::endpoint_transmit
   template <typename Config>
   static status endpoint_transmit(std::uint8_t endpoint, std::span<const std::uint8_t> data) noexcept
   {
@@ -177,6 +187,7 @@ struct usb_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::usb::device::endpoint_receive
   template <typename Config>
   static std::uint32_t endpoint_receive(std::uint8_t endpoint, std::span<std::uint8_t> buffer) noexcept
   {
@@ -213,6 +224,7 @@ struct usb_api final
 #endif
     return 0U;
   }
+  /// @brief Handles the interrupt for the USB controller.
   static void handle_interrupt() noexcept
   {
 #if MICROHAL_NORDIC_HAS_USBD
@@ -220,10 +232,12 @@ struct usb_api final
       nrfx_usbd_irq_handler();
 #endif
   }
+  /// @brief Handles the interrupt for the USB controller.
   template <typename Config> static void handle_interrupt() noexcept
   {
     handle_interrupt();
   }
+  /// @copybrief microhal::usb::device::endpoint_status
   template <typename Config> static status endpoint_status(std::uint8_t endpoint) noexcept
   {
 #if MICROHAL_NORDIC_HAS_USBD
@@ -249,6 +263,7 @@ struct usb_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::usb::device::endpoint_abort
   template <typename Config> static status endpoint_abort(std::uint8_t endpoint) noexcept
   {
 #if MICROHAL_NORDIC_HAS_USBD
@@ -273,6 +288,7 @@ struct usb_api final
     return status::unsupported;
 #endif
   }
+  /// @copybrief microhal::usb::device::endpoint_stall
   template <typename Config> static status endpoint_stall(std::uint8_t endpoint, bool stalled) noexcept
   {
 #if MICROHAL_NORDIC_HAS_USBD

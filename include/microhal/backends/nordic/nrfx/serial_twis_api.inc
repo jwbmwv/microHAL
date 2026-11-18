@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+/** @file
+ * @brief Nordic nrfx I2C slave API implementation fragment.
+ */
+/// @brief Initializes the slave for the TWIS.
 template <typename Config> static status initialize_slave() noexcept
 {
 #if MICROHAL_NORDIC_HAS_TWIS
@@ -30,6 +34,7 @@ template <typename Config> static status initialize_slave() noexcept
   return status::unsupported;
 }
 
+/// @brief Submits a transfer using the configured slave peripheral.
 template <typename Config, auto Handler>
 static status slave_transfer(std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx) noexcept
 {
@@ -55,6 +60,7 @@ static status slave_transfer(std::span<const std::uint8_t> tx, std::span<std::ui
 #endif
 }
 
+/// @brief Performs the configured master transfer.
 template <typename Config, auto Handler>
 static status master_transfer(std::span<const std::uint8_t> tx, std::span<std::uint8_t> rx,
                               std::uint16_t address) noexcept
@@ -93,6 +99,7 @@ static status master_transfer(std::span<const std::uint8_t> tx, std::span<std::u
 #endif
 }
 
+/// @brief Attempts to cancel the active peripheral operation.
 template <typename Config> static status abort() noexcept
 {
   if constexpr (serial_slave_enabled<Config>())
@@ -134,6 +141,7 @@ template <typename Config> static status abort() noexcept
   return status::unsupported;
 }
 
+/// @brief Queries the current or most recently completed transfer status.
 template <typename Config> static status transfer_status() noexcept
 {
   if constexpr (serial_slave_enabled<Config>())
@@ -167,6 +175,7 @@ template <typename Config> static status transfer_status() noexcept
   return status::unsupported;
 }
 
+/// @brief Dispatches the pending backend event.
 template <typename Config> static status dispatch() noexcept
 {
   if constexpr (serial_slave_enabled<Config>())

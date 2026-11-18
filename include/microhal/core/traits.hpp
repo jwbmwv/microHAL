@@ -20,6 +20,10 @@
 namespace microhal
 {
 
+/**
+ * @brief A type-dependent false value for diagnostics in templates.
+ * @details Unlike a literal false, this value can be used in a dependent @c static_assert.
+ */
 template <typename...> inline constexpr bool dependent_false_v = false;
 
 enum class vendor_kind : std::uint8_t
@@ -453,6 +457,11 @@ enum class uart_data_bits : std::uint8_t
   nine = 9U
 };
 
+/**
+ * @brief Converts a UART data width to its capability-mask bit.
+ * @param[in] bits Requested UART data width.
+ * @return Bit zero through four for widths five through nine, or zero for an invalid width.
+ */
 [[nodiscard]] constexpr std::uint16_t uart_data_bits_mask(const uart_data_bits bits) noexcept
 {
   const auto count = static_cast<std::uint8_t>(bits);
@@ -584,6 +593,11 @@ struct can_bit_timing final
   std::uint8_t phase_segment1{0U};
   std::uint8_t phase_segment2{0U};
 
+  /**
+   * @brief Checks whether the nominal timing fields satisfy the common CAN constraints.
+   * @return True when all fields are nonzero and the jump width does not exceed either phase segment.
+   * @note A valid timing may still be unsupported by a particular backend.
+   */
   [[nodiscard]] constexpr bool is_valid() const noexcept
   {
     return (prescaler > 0U) && (synchronization_jump_width > 0U) && (propagation_segment > 0U) &&
@@ -1179,6 +1193,11 @@ struct backend_descriptor final
   backend_kind kind{};
 };
 
+/**
+ * @brief Declares the compile-time traits and peripheral APIs associated with a backend tag.
+ * @tparam BackendTag Backend tag selected by the application.
+ * @note Supported backends provide specializations of this template.
+ */
 template <typename BackendTag> struct backend_traits;
 
 } // namespace microhal
