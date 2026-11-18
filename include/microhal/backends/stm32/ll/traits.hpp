@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "microhal/core/backend_config.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -47,6 +48,7 @@ enum class dma_priority : std::uint8_t;
 #elif defined(STM32F1)
 #include "stm32f1xx_ll_bus.h"
 #include "stm32f1xx_ll_crc.h"
+#include "stm32f1xx_ll_dac.h"
 #include "stm32f1xx_ll_dma.h"
 #include "stm32f1xx_ll_gpio.h"
 #include "stm32f1xx_ll_i2c.h"
@@ -58,6 +60,7 @@ enum class dma_priority : std::uint8_t;
 #elif defined(STM32F2)
 #include "stm32f2xx_ll_bus.h"
 #include "stm32f2xx_ll_crc.h"
+#include "stm32f2xx_ll_dac.h"
 #include "stm32f2xx_ll_dma.h"
 #include "stm32f2xx_ll_gpio.h"
 #include "stm32f2xx_ll_i2c.h"
@@ -70,6 +73,7 @@ enum class dma_priority : std::uint8_t;
 #elif defined(STM32F3)
 #include "stm32f3xx_ll_bus.h"
 #include "stm32f3xx_ll_crc.h"
+#include "stm32f3xx_ll_dac.h"
 #include "stm32f3xx_ll_dma.h"
 #include "stm32f3xx_ll_gpio.h"
 #include "stm32f3xx_ll_i2c.h"
@@ -95,6 +99,7 @@ enum class dma_priority : std::uint8_t;
 #elif defined(STM32F7)
 #include "stm32f7xx_ll_bus.h"
 #include "stm32f7xx_ll_crc.h"
+#include "stm32f7xx_ll_dac.h"
 #include "stm32f7xx_ll_dma.h"
 #include "stm32f7xx_ll_gpio.h"
 #include "stm32f7xx_ll_i2c.h"
@@ -107,6 +112,7 @@ enum class dma_priority : std::uint8_t;
 #elif defined(STM32G0)
 #include "stm32g0xx_ll_bus.h"
 #include "stm32g0xx_ll_crc.h"
+#include "stm32g0xx_ll_dac.h"
 #include "stm32g0xx_ll_dma.h"
 #include "stm32g0xx_ll_gpio.h"
 #include "stm32g0xx_ll_i2c.h"
@@ -135,6 +141,7 @@ enum class dma_priority : std::uint8_t;
 #elif defined(STM32H5)
 #include "stm32h5xx_ll_bus.h"
 #include "stm32h5xx_ll_crc.h"
+#include "stm32h5xx_ll_dac.h"
 #include "stm32h5xx_ll_dma.h"
 #include "stm32h5xx_ll_gpio.h"
 #include "stm32h5xx_ll_i2c.h"
@@ -161,6 +168,7 @@ enum class dma_priority : std::uint8_t;
 #elif defined(STM32L0)
 #include "stm32l0xx_ll_bus.h"
 #include "stm32l0xx_ll_crc.h"
+#include "stm32l0xx_ll_dac.h"
 #include "stm32l0xx_ll_dma.h"
 #include "stm32l0xx_ll_gpio.h"
 #include "stm32l0xx_ll_i2c.h"
@@ -174,6 +182,7 @@ enum class dma_priority : std::uint8_t;
 #elif defined(STM32L1)
 #include "stm32l1xx_ll_bus.h"
 #include "stm32l1xx_ll_crc.h"
+#include "stm32l1xx_ll_dac.h"
 #include "stm32l1xx_ll_dma.h"
 #include "stm32l1xx_ll_gpio.h"
 #include "stm32l1xx_ll_i2c.h"
@@ -200,6 +209,7 @@ enum class dma_priority : std::uint8_t;
 #elif defined(STM32L5)
 #include "stm32l5xx_ll_bus.h"
 #include "stm32l5xx_ll_crc.h"
+#include "stm32l5xx_ll_dac.h"
 #include "stm32l5xx_ll_dma.h"
 #include "stm32l5xx_ll_gpio.h"
 #include "stm32l5xx_ll_i2c.h"
@@ -226,6 +236,7 @@ enum class dma_priority : std::uint8_t;
 #elif defined(STM32U0)
 #include "stm32u0xx_ll_bus.h"
 #include "stm32u0xx_ll_crc.h"
+#include "stm32u0xx_ll_dac.h"
 #include "stm32u0xx_ll_dma.h"
 #include "stm32u0xx_ll_gpio.h"
 #include "stm32u0xx_ll_i2c.h"
@@ -239,6 +250,7 @@ enum class dma_priority : std::uint8_t;
 #elif defined(STM32U3)
 #include "stm32u3xx_ll_bus.h"
 #include "stm32u3xx_ll_crc.h"
+#include "stm32u3xx_ll_dac.h"
 #include "stm32u3xx_ll_dma.h"
 #include "stm32u3xx_ll_gpio.h"
 #include "stm32u3xx_ll_i2c.h"
@@ -460,7 +472,7 @@ enum class dma_priority : std::uint8_t;
 #define MICROHAL_STM32_LL_FAMILY_SELECTED 0
 #endif
 
-#if defined(STM32H5) || defined(STM32H7RS) || defined(STM32N6) || defined(STM32U3)
+#if defined(STM32H5) || defined(STM32H7RS) || defined(STM32N6) || defined(STM32U3) || defined(STM32U5)
 #define MICROHAL_STM32_LL_DMA_RUNTIME 0
 #else
 #define MICROHAL_STM32_LL_DMA_RUNTIME 1
@@ -518,7 +530,11 @@ enum class dma_priority : std::uint8_t;
 #include "stm32wbxx_ll_iwdg.h"
 #endif
 
+#if MICROHAL_ENABLE_STM32_HAL
 #include "microhal/backends/stm32/hal/traits.hpp"
+#endif
+#include "microhal/backends/stm32/adc_registers.hpp"
+#include "microhal/backends/stm32/ll/serial_modes.hpp"
 #include "microhal/core/traits.hpp"
 
 namespace microhal::backends::stm32::ll
@@ -997,6 +1013,7 @@ inline constexpr std::uint32_t dma_controller_count =
 
 #if defined(GPIOA)
 // Helper to get GPIO port
+/// @brief Returns the configured GPIO port.
 template <std::uint8_t PortIndex> consteval GPIO_TypeDef* gpio_port() noexcept
 {
   constexpr std::array<GPIO_TypeDef*, 11> ports = {GPIOA,
@@ -1055,6 +1072,7 @@ template <std::uint8_t PortIndex> consteval GPIO_TypeDef* gpio_port() noexcept
 }
 
 // Map microHAL gpio_mode to LL mode
+/// @brief Converts the GPIO configuration to its low-level mode.
 consteval std::uint32_t ll_gpio_mode(const gpio_mode mode) noexcept
 {
   switch (mode)
@@ -1073,22 +1091,32 @@ consteval std::uint32_t ll_gpio_mode(const gpio_mode mode) noexcept
 }
 
 // Map microHAL gpio_pull to LL pull
+/// @brief Converts the GPIO pull setting to its low-level value.
 consteval std::uint32_t ll_gpio_pull(const gpio_pull pull) noexcept
 {
   switch (pull)
   {
   case gpio_pull::none:
+#if defined(LL_GPIO_PULL_NO)
     return LL_GPIO_PULL_NO;
+#else
+    return LL_GPIO_PULL_DOWN;
+#endif
   case gpio_pull::up:
     return LL_GPIO_PULL_UP;
   case gpio_pull::down:
     return LL_GPIO_PULL_DOWN;
   default:
+#if defined(LL_GPIO_PULL_NO)
     return LL_GPIO_PULL_NO;
+#else
+    return LL_GPIO_PULL_DOWN;
+#endif
   }
 }
 
 // Map microHAL gpio_speed to LL speed
+/// @brief Converts the GPIO speed setting to its low-level value.
 consteval std::uint32_t ll_gpio_speed(const gpio_speed speed) noexcept
 {
   switch (speed)
@@ -1100,12 +1128,17 @@ consteval std::uint32_t ll_gpio_speed(const gpio_speed speed) noexcept
   case gpio_speed::high:
     return LL_GPIO_SPEED_FREQ_HIGH;
   case gpio_speed::very_high:
+#if defined(LL_GPIO_SPEED_FREQ_VERY_HIGH)
     return LL_GPIO_SPEED_FREQ_VERY_HIGH;
+#else
+    return LL_GPIO_SPEED_FREQ_HIGH;
+#endif
   default:
     return LL_GPIO_SPEED_FREQ_LOW;
   }
 }
 
+/// @brief Returns the configured GPIO port index.
 template <typename PinConfig> consteval std::uint8_t gpio_port_index() noexcept
 {
   if constexpr (requires { PinConfig::port_index; })
@@ -1134,6 +1167,7 @@ template <typename PinConfig> consteval std::uint8_t gpio_port_index() noexcept
   }
 }
 
+/// @brief Returns the configured GPIO pin index.
 template <typename PinConfig> consteval std::uint8_t gpio_pin_index() noexcept
 {
   if constexpr (requires { PinConfig::pin_index; })
@@ -1162,6 +1196,7 @@ template <typename PinConfig> consteval std::uint8_t gpio_pin_index() noexcept
   }
 }
 
+/// @brief Returns the GPIO alternate-function selection from the configuration.
 template <typename PinConfig> consteval std::uint8_t gpio_alternate_function() noexcept
 {
   if constexpr (requires { typename PinConfig::binding; })
@@ -1180,6 +1215,7 @@ template <typename PinConfig> consteval std::uint8_t gpio_alternate_function() n
   return gpio_no_alternate;
 }
 
+/// @brief Returns the peripheral base address selected by the configuration.
 template <typename Config> consteval std::uintptr_t peripheral_base_address() noexcept
 {
   if constexpr (requires { Config::base_address; })
@@ -1208,16 +1244,19 @@ template <typename Config> consteval std::uintptr_t peripheral_base_address() no
   }
 }
 
+/// @brief Returns the peripheral instance selected by the configuration.
 template <typename PeripheralType, typename Config> constexpr auto peripheral_instance() noexcept -> PeripheralType*
 {
   return reinterpret_cast<PeripheralType*>(peripheral_base_address<Config>());
 }
 
+/// @brief Adapts a transmit buffer for a non-const vendor API.
 template <typename T> [[nodiscard]] inline T* hal_tx_buffer(const T* data) noexcept
 {
   return const_cast<T*>(data);
 }
 
+/// @brief Returns the configured SD clock divider.
 template <typename Config> consteval std::uint32_t sd_clock_divider() noexcept
 {
   if constexpr (requires { typename Config::binding; })
@@ -1235,6 +1274,7 @@ template <typename Config> consteval std::uint32_t sd_clock_divider() noexcept
   return (divider > 2U) ? (divider - 2U) : 0U;
 }
 
+/// @brief Selects the SD hardware-flow-control setting.
 template <typename Config> consteval bool sd_hardware_flow_control() noexcept
 {
   if constexpr (requires { typename Config::binding; })
@@ -1250,6 +1290,7 @@ template <typename Config> consteval bool sd_hardware_flow_control() noexcept
 }
 
 #if defined(SDIO)
+/// @brief Returns the STM32 SD host instance selected by the configuration.
 template <typename Config> constexpr auto stm32_sd_instance() noexcept -> decltype(SDIO)
 {
   if constexpr (requires { Config::base_address; })
@@ -1283,6 +1324,7 @@ template <typename Config> constexpr auto stm32_sd_instance() noexcept -> declty
   }
 }
 #elif defined(SDMMC1)
+/// @brief Returns the STM32 SD host instance selected by the configuration.
 template <typename Config> constexpr auto stm32_sd_instance() noexcept -> decltype(SDMMC1)
 {
   if constexpr (requires { Config::base_address; })
@@ -1318,6 +1360,7 @@ template <typename Config> constexpr auto stm32_sd_instance() noexcept -> declty
 }
 #endif
 
+/// @brief Selects the STM32 SD bus-width setting.
 template <typename Config> consteval std::uint32_t stm32_sd_bus_width() noexcept
 {
 #if defined(SDIO_BUS_WIDE_1B)
@@ -1348,6 +1391,7 @@ template <typename Config> consteval std::uint32_t stm32_sd_bus_width() noexcept
 }
 
 #if defined(QUADSPI)
+/// @brief Returns the STM32 QSPI instance selected by the configuration.
 template <typename Config> constexpr auto stm32_qspi_instance() noexcept -> decltype(QUADSPI)
 {
   if constexpr (requires { Config::base_address; })
@@ -1383,6 +1427,7 @@ template <typename Config> constexpr auto stm32_qspi_instance() noexcept -> decl
 }
 #endif
 
+/// @brief Returns the configured DMA instance index.
 template <typename Config> consteval std::uint8_t dma_instance_index() noexcept
 {
   if constexpr (requires { Config::instance_index; })
@@ -1411,6 +1456,7 @@ template <typename Config> consteval std::uint8_t dma_instance_index() noexcept
   }
 }
 
+/// @brief Returns the configured DMA stream index.
 template <typename Config> consteval std::uint8_t dma_stream_index() noexcept
 {
   if constexpr (requires { Config::stream; })
@@ -1439,6 +1485,7 @@ template <typename Config> consteval std::uint8_t dma_stream_index() noexcept
   }
 }
 
+/// @brief Returns the DMA channel index selected by the configuration.
 template <typename Config> consteval std::uint8_t dma_channel_index() noexcept
 {
   if constexpr (requires { Config::channel; })
@@ -1467,6 +1514,7 @@ template <typename Config> consteval std::uint8_t dma_channel_index() noexcept
   }
 }
 
+/// @brief Returns the DMA controller selected by the configuration.
 template <typename Config> consteval DMA_TypeDef* dma_controller() noexcept
 {
 #if defined(DMA2)
@@ -1482,6 +1530,7 @@ template <typename Config> consteval DMA_TypeDef* dma_controller() noexcept
 #endif
 }
 
+/// @brief Resolves the low-level DMA target.
 template <typename Config> consteval std::uint32_t dma_ll_target() noexcept
 {
 #if defined(DMA1_Stream0)
@@ -1620,6 +1669,8 @@ template <typename Config> consteval std::uint32_t dma_ll_target() noexcept
   return 0U;
 }
 
+#if MICROHAL_STM32_LL_DMA_RUNTIME
+/// @brief Selects the low-level DMA direction.
 template <typename Config> consteval std::uint32_t dma_ll_direction() noexcept
 {
   switch (static_cast<std::uint8_t>(Config::direction))
@@ -1635,6 +1686,7 @@ template <typename Config> consteval std::uint32_t dma_ll_direction() noexcept
   }
 }
 
+/// @brief Selects the low-level DMA priority.
 template <typename Config> consteval std::uint32_t dma_ll_priority() noexcept
 {
   switch (static_cast<std::uint8_t>(Config::priority))
@@ -1652,9 +1704,10 @@ template <typename Config> consteval std::uint32_t dma_ll_priority() noexcept
   }
 }
 
+/// @brief Selects the low-level DMA request.
 template <typename Config> consteval std::uint32_t dma_ll_request() noexcept
 {
-#if defined(DMA1_Stream0)
+#if defined(DMA1_Stream0) && defined(LL_DMA_CHANNEL_0)
   static_assert(dma_channel_index<Config>() < 8U, "microHAL: STM32 LL DMA channel index must be in the range [0, 7].");
   switch (dma_channel_index<Config>())
   {
@@ -1686,6 +1739,7 @@ template <typename Config> consteval std::uint32_t dma_ll_request() noexcept
 #endif
 }
 
+/// @brief Selects the DMA source increment mode.
 template <typename Config> consteval std::uint32_t dma_source_increment_mode() noexcept
 {
   if constexpr (static_cast<std::uint8_t>(Config::direction) == 0U)
@@ -1696,6 +1750,7 @@ template <typename Config> consteval std::uint32_t dma_source_increment_mode() n
   return LL_DMA_PERIPH_INCREMENT;
 }
 
+/// @brief Selects the DMA destination increment mode.
 template <typename Config> consteval std::uint32_t dma_destination_increment_mode() noexcept
 {
   if constexpr (static_cast<std::uint8_t>(Config::direction) == 1U)
@@ -1705,7 +1760,9 @@ template <typename Config> consteval std::uint32_t dma_destination_increment_mod
 
   return LL_DMA_MEMORY_INCREMENT;
 }
+#endif
 
+/// @brief Builds the low-level DMA initialization settings for a transfer.
 template <typename Config>
 static auto dma_init(std::uint32_t src_addr, std::uint32_t dst_addr,
                      std::uint32_t length) noexcept -> LL_DMA_InitTypeDef
@@ -1750,13 +1807,18 @@ static auto dma_init(std::uint32_t src_addr, std::uint32_t dst_addr,
   init.Request = dma_ll_request<Config>();
 #elif defined(STM32C0) || defined(STM32F0) || defined(STM32G0) || defined(STM32G4) || defined(STM32L0) ||              \
     defined(STM32L4) || defined(STM32L5) || defined(STM32U0) || defined(STM32WB)
-  init.PeriphRequest = dma_ll_request<Config>();
+  []<typename Init>(Init& value)
+  {
+    if constexpr (requires { value.PeriphRequest; })
+      value.PeriphRequest = dma_ll_request<Config>();
+  }(init);
 #endif
 
   return init;
 #endif
 }
 
+/// @brief Enables the selected DMA channel or stream.
 template <typename Config> static void dma_enable() noexcept
 {
 #if defined(DMA1_Stream0)
@@ -1766,6 +1828,7 @@ template <typename Config> static void dma_enable() noexcept
 #endif
 }
 
+/// @brief Disables the selected DMA channel or stream.
 template <typename Config> static void dma_disable() noexcept
 {
 #if defined(DMA1_Stream0)
@@ -1778,23 +1841,31 @@ template <typename Config> static void dma_disable() noexcept
 
 struct gpio_api final
 {
+  /// @brief Configures the selected backend resource.
   template <typename PinConfig> static void configure() noexcept
   {
 #if defined(GPIOA)
     LL_GPIO_InitTypeDef init{};
     init.Pin = (1U << gpio_pin_index<PinConfig>());
     init.Mode = ll_gpio_mode(PinConfig::mode);
+#if defined(STM32F1)
+    if constexpr (PinConfig::mode == gpio_mode::input && PinConfig::pull == gpio_pull::none)
+      init.Mode = LL_GPIO_MODE_FLOATING;
+#endif
     init.Pull = ll_gpio_pull(PinConfig::pull);
     init.Speed = ll_gpio_speed(PinConfig::speed);
     init.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
     if constexpr (PinConfig::mode == gpio_mode::alternate)
     {
+#if !defined(STM32F1)
       init.Alternate = gpio_alternate_function<PinConfig>();
+#endif
     }
     LL_GPIO_Init(gpio_port<gpio_port_index<PinConfig>()>(), &init);
 #endif
   }
 
+  /// @brief Writes data using the configured backend.
   template <typename PinConfig> static void write(const bool level) noexcept
   {
 #if defined(GPIOA)
@@ -1811,6 +1882,7 @@ struct gpio_api final
 #endif
   }
 
+  /// @copybrief microhal::gpio::pin::read
   template <typename PinConfig> static bool read() noexcept
   {
 #if defined(GPIOA)
@@ -1820,6 +1892,7 @@ struct gpio_api final
 #endif
   }
 
+  /// @copybrief microhal::gpio::pin::toggle
   template <typename PinConfig> static status toggle() noexcept
   {
 #if defined(GPIOA)
@@ -1831,6 +1904,7 @@ struct gpio_api final
 #endif
   }
 
+  /// @brief Returns false because GPIO interrupts are not implemented.
   template <typename PinConfig, auto Handler> static bool enable_interrupt() noexcept
   {
     (void)Handler;
@@ -1845,275 +1919,115 @@ struct gpio_api final
 
 struct i2c_api final
 {
-  template <typename Config> static bool initialize() noexcept
+  /// @copybrief microhal::i2c::master::initialize
+  template <typename Config> static status initialize() noexcept
   {
-#if MICROHAL_STM32_LL_HAS_I2C
-#if MICROHAL_STM32_HAL_HAS_I2C
-    if (!backends::stm32::hal::i2c_api::template initialize<Config>())
-    {
-      return false;
-    }
-#endif
-
-    LL_I2C_InitTypeDef init{};
-    init.PeripheralMode = LL_I2C_MODE_I2C;
-
-#if defined(LL_I2C_ANALOGFILTER_ENABLE)
-    init.AnalogFilter = LL_I2C_ANALOGFILTER_ENABLE;
-#endif
-#if defined(I2C_FLTR_DNF)
-    init.DigitalFilter = 0U;
-#endif
-
-    init.OwnAddress1 = 0U;
-    init.TypeAcknowledge = LL_I2C_ACK;
-    init.OwnAddrSize = LL_I2C_OWNADDRESS1_7BIT;
-
-    I2C_TypeDef* instance = peripheral_instance<I2C_TypeDef, Config>();
-    if (LL_I2C_Init(instance, &init) == SUCCESS) [[likely]]
-    {
-      LL_I2C_Enable(instance);
-      return true;
-    }
-    return false;
-#else
-    return false;
-#endif
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::i2c>::template initialize<Config>();
   }
 
+  /// @copybrief microhal::i2c::master::write_blocking
   template <typename Config>
-  static bool write_blocking(const std::uint8_t addr, const std::uint8_t* data, const std::size_t length) noexcept
+  static status write_blocking(const std::uint8_t addr, const std::uint8_t* data, const std::size_t length) noexcept
   {
-#if MICROHAL_STM32_LL_HAS_I2C
-    I2C_TypeDef* instance = peripheral_instance<I2C_TypeDef, Config>();
-#if defined(LL_I2C_MODE_AUTOEND) && defined(LL_I2C_GENERATE_START_WRITE) && defined(LL_I2C_ADDRSLAVE_7BIT)
-    LL_I2C_HandleTransfer(instance, addr, LL_I2C_ADDRSLAVE_7BIT, static_cast<std::uint32_t>(length),
-                          LL_I2C_MODE_AUTOEND, LL_I2C_GENERATE_START_WRITE);
-
-    for (std::size_t i = 0U; i < length; ++i)
-    {
-      while (!LL_I2C_IsActiveFlag_TXIS(instance))
-      {
-      }
-      LL_I2C_TransmitData8(instance, data[i]);
-    }
-
-    while (!LL_I2C_IsActiveFlag_STOP(instance))
-    {
-    }
-    LL_I2C_ClearFlag_STOP(instance);
-    return true;
-#else
-    LL_I2C_AcknowledgeNextData(instance, LL_I2C_ACK);
-    LL_I2C_GenerateStartCondition(instance);
-    while (!LL_I2C_IsActiveFlag_SB(instance))
-    {
-    }
-
-    LL_I2C_TransmitData8(instance, static_cast<std::uint8_t>(addr << 1U));
-    while (!LL_I2C_IsActiveFlag_ADDR(instance))
-    {
-    }
-    LL_I2C_ClearFlag_ADDR(instance);
-
-    for (std::size_t i = 0U; i < length; ++i)
-    {
-      while (!LL_I2C_IsActiveFlag_TXE(instance))
-      {
-      }
-      LL_I2C_TransmitData8(instance, data[i]);
-    }
-
-    while (!LL_I2C_IsActiveFlag_BTF(instance))
-    {
-    }
-    LL_I2C_GenerateStopCondition(instance);
-    return true;
-#endif
-#else
-    (void)addr;
-    (void)data;
-    (void)length;
-    return false;
-#endif
+    return write_blocking<Config>(std::span<const std::uint8_t>{data, length}, addr);
   }
 
+  /// @copybrief microhal::i2c::master::write_blocking
   template <typename Config>
-  static bool write_blocking(const std::span<const std::uint8_t> payload, const std::uint16_t address) noexcept
+  static status write_blocking(const std::span<const std::uint8_t> payload, const std::uint16_t address) noexcept
   {
-    return write_blocking<Config>(static_cast<std::uint8_t>(address), payload.data(), payload.size());
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::i2c>::template write<Config, nullptr>(payload, address);
   }
 
+  /// @copybrief microhal::i2c::master::read_blocking
   template <typename Config>
-  static bool read_blocking(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
+  static status read_blocking(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
   {
-#if MICROHAL_STM32_LL_HAS_I2C
-    I2C_TypeDef* instance = peripheral_instance<I2C_TypeDef, Config>();
-#if defined(LL_I2C_MODE_AUTOEND) && defined(LL_I2C_GENERATE_START_READ) && defined(LL_I2C_ADDRSLAVE_7BIT)
-    LL_I2C_HandleTransfer(instance, static_cast<std::uint8_t>(address), LL_I2C_ADDRSLAVE_7BIT,
-                          static_cast<std::uint32_t>(payload.size()), LL_I2C_MODE_AUTOEND, LL_I2C_GENERATE_START_READ);
-
-    for (std::size_t i = 0U; i < payload.size(); ++i)
-    {
-      while (!LL_I2C_IsActiveFlag_RXNE(instance))
-      {
-      }
-      payload[i] = LL_I2C_ReceiveData8(instance);
-    }
-
-    while (!LL_I2C_IsActiveFlag_STOP(instance))
-    {
-    }
-    LL_I2C_ClearFlag_STOP(instance);
-    return true;
-#else
-    LL_I2C_AcknowledgeNextData(instance, LL_I2C_ACK);
-    LL_I2C_GenerateStartCondition(instance);
-    while (!LL_I2C_IsActiveFlag_SB(instance))
-    {
-    }
-
-    LL_I2C_TransmitData8(instance, static_cast<std::uint8_t>((address << 1U) | 0x01U));
-    while (!LL_I2C_IsActiveFlag_ADDR(instance))
-    {
-    }
-    LL_I2C_ClearFlag_ADDR(instance);
-
-    for (std::size_t i = 0U; i < payload.size(); ++i)
-    {
-      while (!LL_I2C_IsActiveFlag_RXNE(instance))
-      {
-      }
-      payload[i] = LL_I2C_ReceiveData8(instance);
-    }
-
-    LL_I2C_GenerateStopCondition(instance);
-    return true;
-#endif
-#else
-    (void)payload;
-    (void)address;
-    return false;
-#endif
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::i2c>::template read<Config, nullptr>(payload, address);
   }
 
+  /// @copybrief microhal::i2c::master::probe
   template <typename Config> static status probe(const std::uint16_t address) noexcept
   {
-    return backends::stm32::hal::i2c_api::template probe<Config>(address);
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::i2c>::template probe<Config>(address);
   }
 
+  /// @brief Writes data and then reads data using the blocking transfer path.
   template <typename Config>
   static status write_read_blocking(const std::span<const std::uint8_t> tx_payload,
                                     const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
   {
-    return backends::stm32::hal::i2c_api::template write_read_blocking<Config>(tx_payload, rx_payload, address);
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::i2c>::template write_read<Config, nullptr>(
+        tx_payload, rx_payload, address);
   }
 
+  /// @brief Starts an asynchronous write followed by a read.
   template <typename Config, auto Handler>
   static status write_read_async(const std::span<const std::uint8_t> tx_payload,
                                  const std::span<std::uint8_t> rx_payload, const std::uint16_t address) noexcept
   {
-    return backends::stm32::hal::i2c_api::template write_read_async<Config, Handler>(tx_payload, rx_payload, address);
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::i2c>::template write_read<Config, Handler>(
+        tx_payload, rx_payload, address);
   }
 
+  /// @brief Starts the transfer for the I2C peripheral.
   template <typename Config, auto Handler>
-  static bool start_transfer(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
+  static status start_transfer(const std::span<std::uint8_t> payload, const std::uint16_t address) noexcept
   {
-    (void)Handler;
-    return write_blocking<Config>(std::span<const std::uint8_t>{payload.data(), payload.size()}, address);
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::i2c>::template write<Config, Handler>(payload, address);
   }
 };
 
 struct spi_api final
 {
-  template <typename Config> static bool initialize() noexcept
+  /// @copybrief microhal::spi::master::initialize
+  template <typename Config> static status initialize() noexcept
   {
-#if MICROHAL_STM32_LL_HAS_SPI
-#if MICROHAL_STM32_HAL_HAS_SPI
-    if (!backends::stm32::hal::spi_api::template initialize<Config>())
-    {
-      return false;
-    }
-#endif
-
-    LL_SPI_InitTypeDef init{};
-    init.TransferDirection = LL_SPI_FULL_DUPLEX;
-    init.Mode = LL_SPI_MODE_MASTER;
-    init.DataWidth = LL_SPI_DATAWIDTH_8BIT;
-    init.ClockPolarity = LL_SPI_POLARITY_LOW;
-    init.ClockPhase = LL_SPI_PHASE_1EDGE;
-    init.NSS = LL_SPI_NSS_SOFT;
-    init.BaudRate = LL_SPI_BAUDRATEPRESCALER_DIV16;
-    init.BitOrder = LL_SPI_MSB_FIRST;
-    init.CRCCalculation = LL_SPI_CRCCALCULATION_DISABLE;
-
-    SPI_TypeDef* instance = peripheral_instance<SPI_TypeDef, Config>();
-    if (LL_SPI_Init(instance, &init) == SUCCESS) [[likely]]
-    {
-      LL_SPI_Enable(instance);
-      return true;
-    }
-    return false;
-#else
-    return false;
-#endif
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::spi>::template initialize<Config>();
   }
 
+  /// @brief Transfers data using the configured peripheral.
   template <typename Config>
-  static bool transfer(const std::uint8_t* tx_data, std::uint8_t* rx_data, const std::size_t length) noexcept
+  static status transfer(const std::uint8_t* tx_data, std::uint8_t* rx_data, const std::size_t length) noexcept
   {
-#if MICROHAL_STM32_LL_HAS_SPI
-    SPI_TypeDef* instance = peripheral_instance<SPI_TypeDef, Config>();
-    for (std::size_t i = 0U; i < length; ++i)
-    {
-      while (!LL_SPI_IsActiveFlag_TXE(instance))
-      {
-      }
-      LL_SPI_TransmitData8(instance, tx_data[i]);
-
-      while (!LL_SPI_IsActiveFlag_RXNE(instance))
-      {
-      }
-      rx_data[i] = LL_SPI_ReceiveData8(instance);
-    }
-    return true;
-#else
-    (void)tx_data;
-    (void)rx_data;
-    (void)length;
-    return false;
-#endif
+    return transfer<Config>(std::span<const std::uint8_t>{tx_data, length}, std::span<std::uint8_t>{rx_data, length});
   }
 
+  /// @brief Transfers data using the configured peripheral.
   template <typename Config>
-  static bool transfer(const std::span<const std::uint8_t> tx_payload,
-                       const std::span<std::uint8_t> rx_payload) noexcept
+  static status transfer(const std::span<const std::uint8_t> tx_payload,
+                         const std::span<std::uint8_t> rx_payload) noexcept
   {
-    const std::size_t length = (tx_payload.size() < rx_payload.size()) ? tx_payload.size() : rx_payload.size();
-    return transfer<Config>(tx_payload.data(), rx_payload.data(), length);
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::spi>::template transfer<Config, nullptr>(tx_payload,
+                                                                                                   rx_payload);
   }
 
+  /// @copybrief microhal::spi::master::write_blocking
   template <typename Config> static status write_blocking(const std::span<const std::uint8_t> payload) noexcept
   {
-    return backends::stm32::hal::spi_api::template write_blocking<Config>(payload);
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::spi>::template write<Config, nullptr>(payload);
   }
 
+  /// @copybrief microhal::spi::master::read_blocking
   template <typename Config> static status read_blocking(const std::span<std::uint8_t> payload) noexcept
   {
-    return backends::stm32::hal::spi_api::template read_blocking<Config>(payload);
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::spi>::template read<Config, nullptr>(payload);
   }
 
+  /// @brief Starts an asynchronous transfer using the configured peripheral.
   template <typename Config, auto Handler>
   static status transfer_async(const std::span<const std::uint8_t> tx_payload,
                                const std::span<std::uint8_t> rx_payload) noexcept
   {
-    return backends::stm32::hal::spi_api::template transfer_async<Config, Handler>(tx_payload, rx_payload);
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::spi>::template transfer<Config, Handler>(tx_payload,
+                                                                                                   rx_payload);
   }
 };
 
 struct qspi_api final
 {
 #if MICROHAL_STM32_LL_HAS_QSPI
+  /// @brief Returns the backend handle for the selected configuration.
   template <typename Config> static auto& handle() noexcept
   {
     static QSPI_HandleTypeDef handle_storage{};
@@ -2121,130 +2035,97 @@ struct qspi_api final
   }
 #endif
 
+  /// @brief Initializes the configured backend resource.
   template <typename Config> static bool initialize() noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::qspi_api::template initialize<Config>();
+#else
+    return false;
+#endif
   }
 
+  /// @copybrief microhal::qspi::controller::command_write
   template <typename Config>
   static status command_write(const qspi_command& request, const std::span<const std::uint8_t> payload) noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::qspi_api::template command_write<Config>(request, payload);
+#else
+    (void)request;
+    (void)payload;
+    return status::unsupported;
+#endif
   }
 
+  /// @copybrief microhal::qspi::controller::command_read
   template <typename Config>
   static status command_read(const qspi_command& request, const std::span<std::uint8_t> payload) noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::qspi_api::template command_read<Config>(request, payload);
+#else
+    (void)request;
+    (void)payload;
+    return status::unsupported;
+#endif
   }
 
+  /// @brief Enters the configured QSPI memory-mapped mode.
   template <typename Config> static status enter_memory_mapped(const qspi_command& request) noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::qspi_api::template enter_memory_mapped<Config>(request);
+#else
+    (void)request;
+    return status::unsupported;
+#endif
   }
 
+  /// @copybrief microhal::qspi::controller::exit_memory_mapped
   template <typename Config> static status exit_memory_mapped() noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::qspi_api::template exit_memory_mapped<Config>();
+#else
+    return status::unsupported;
+#endif
   }
 };
 
 struct uart_api final
 {
-  template <typename Config> static bool initialize() noexcept
+  /// @copybrief microhal::uart::port::initialize
+  template <typename Config> static status initialize() noexcept
   {
-#if MICROHAL_STM32_LL_HAS_UART
-    LL_USART_InitTypeDef init{};
-#if defined(LL_USART_PRESCALER_DIV1)
-    init.PrescalerValue = LL_USART_PRESCALER_DIV1;
-#endif
-    init.BaudRate = Config::baud_rate;
-    init.DataWidth = LL_USART_DATAWIDTH_8B;
-    init.StopBits = LL_USART_STOPBITS_1;
-    init.Parity = LL_USART_PARITY_NONE;
-    init.TransferDirection = LL_USART_DIRECTION_TX_RX;
-    init.HardwareFlowControl = LL_USART_HWCONTROL_NONE;
-    init.OverSampling = LL_USART_OVERSAMPLING_16;
-
-    USART_TypeDef* instance = peripheral_instance<USART_TypeDef, Config>();
-    if (LL_USART_Init(instance, &init) == SUCCESS) [[likely]]
-    {
-      LL_USART_Enable(instance);
-      return true;
-    }
-    return false;
-#else
-    return false;
-#endif
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::uart>::template initialize<Config>();
   }
 
-  template <typename Config> static bool write_blocking(std::span<const std::uint8_t> payload) noexcept
+  /// @copybrief microhal::uart::port::write_blocking
+  template <typename Config> static status write_blocking(std::span<const std::uint8_t> payload) noexcept
   {
-#if MICROHAL_STM32_LL_HAS_UART
-    USART_TypeDef* instance = peripheral_instance<USART_TypeDef, Config>();
-    for (const std::uint8_t byte : payload)
-    {
-      while (!LL_USART_IsActiveFlag_TXE(instance))
-      {
-      }
-      LL_USART_TransmitData8(instance, byte);
-    }
-    while (!LL_USART_IsActiveFlag_TC(instance))
-    {
-    }
-    return true;
-#else
-    (void)payload;
-    return false;
-#endif
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::uart>::template write<Config, nullptr>(payload);
   }
 
-  template <typename Config> static bool read_blocking(std::span<std::uint8_t> payload) noexcept
+  /// @copybrief microhal::uart::port::read_blocking
+  template <typename Config> static status read_blocking(std::span<std::uint8_t> payload) noexcept
   {
-#if MICROHAL_STM32_LL_HAS_UART
-    USART_TypeDef* instance = peripheral_instance<USART_TypeDef, Config>();
-    for (std::uint8_t& byte : payload)
-    {
-      while (!LL_USART_IsActiveFlag_RXNE(instance))
-      {
-      }
-      byte = LL_USART_ReceiveData8(instance);
-    }
-    return true;
-#else
-    (void)payload;
-    return false;
-#endif
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::uart>::template read<Config, nullptr>(payload);
   }
 
-  template <typename Config, auto Handler> static bool start_async_rx(std::span<std::uint8_t> payload) noexcept
+  /// @brief Starts an asynchronous receive operation.
+  template <typename Config, auto Handler> static status start_async_rx(std::span<std::uint8_t> payload) noexcept
   {
-#if MICROHAL_STM32_LL_HAS_UART
-    USART_TypeDef* instance = peripheral_instance<USART_TypeDef, Config>();
-    LL_USART_EnableIT_RXNE(instance);
-    return true;
-#else
-    (void)payload;
-    (void)Handler;
-    return false;
-#endif
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::uart>::template read<Config, Handler>(payload);
   }
 
-  template <typename Config, auto Handler> static bool start_async_tx(std::span<const std::uint8_t> payload) noexcept
+  /// @brief Starts an asynchronous transmit operation.
+  template <typename Config, auto Handler> static status start_async_tx(std::span<const std::uint8_t> payload) noexcept
   {
-#if MICROHAL_STM32_LL_HAS_UART
-    USART_TypeDef* instance = peripheral_instance<USART_TypeDef, Config>();
-    LL_USART_EnableIT_TXE(instance);
-    (void)payload;
-    (void)Handler;
-    return true;
-#else
-    (void)payload;
-    (void)Handler;
-    return false;
-#endif
+    return serial_mode_api<stm32_ll_tag, peripheral_kind::uart>::template write<Config, Handler>(payload);
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename UartConfig, typename AutobaudConfig> static bool arm_autobaud() noexcept
   {
     (void)sizeof(UartConfig);
@@ -2252,6 +2133,7 @@ struct uart_api final
     return false;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename UartConfig> static bool apply_autobaud(const std::uint32_t baud_rate) noexcept
   {
     (void)sizeof(UartConfig);
@@ -2262,13 +2144,19 @@ struct uart_api final
 
 struct rtc_api final
 {
+  /// @copybrief microhal::rtc::controller::initialize
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(RTC)
     LL_RTC_InitTypeDef init{};
+#if defined(STM32F1)
+    init.AsynchPrescaler = 32767U;
+    init.OutPutSource = LL_RTC_CALIB_OUTPUT_NONE;
+#else
     init.HourFormat = LL_RTC_HOURFORMAT_24HOUR;
     init.AsynchPrescaler = 127U;
     init.SynchPrescaler = 255U;
+#endif
 
     if (LL_RTC_Init(RTC, &init) == SUCCESS) [[likely]]
     {
@@ -2280,6 +2168,7 @@ struct rtc_api final
 #endif
   }
 
+  /// @brief Sets the time for the RTC.
   template <typename Config>
   static bool set_time(const std::uint8_t hours, const std::uint8_t minutes, const std::uint8_t seconds) noexcept
   {
@@ -2288,7 +2177,9 @@ struct rtc_api final
     time.Hours = hours;
     time.Minutes = minutes;
     time.Seconds = seconds;
+#if !defined(STM32F1)
     time.TimeFormat = LL_RTC_TIME_FORMAT_AM_OR_24;
+#endif
 
     if (LL_RTC_TIME_Init(RTC, LL_RTC_FORMAT_BIN, &time) == SUCCESS) [[likely]]
     {
@@ -2303,13 +2194,21 @@ struct rtc_api final
 #endif
   }
 
+  /// @brief Returns the time for the RTC.
   template <typename Config>
   static bool get_time(std::uint8_t& hours, std::uint8_t& minutes, std::uint8_t& seconds) noexcept
   {
 #if defined(RTC)
+#if defined(STM32F1)
+    const auto counter = LL_RTC_TIME_Get(RTC);
+    hours = static_cast<std::uint8_t>((counter / 3600U) % 24U);
+    minutes = static_cast<std::uint8_t>((counter / 60U) % 60U);
+    seconds = static_cast<std::uint8_t>(counter % 60U);
+#else
     hours = LL_RTC_TIME_GetHour(RTC);
     minutes = LL_RTC_TIME_GetMinute(RTC);
     seconds = LL_RTC_TIME_GetSecond(RTC);
+#endif
     return true;
 #else
     (void)hours;
@@ -2319,6 +2218,7 @@ struct rtc_api final
 #endif
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config, auto Handler, typename AlarmType>
   static bool enable_alarm(const AlarmType& alarm_time) noexcept
   {
@@ -2331,11 +2231,18 @@ struct rtc_api final
 
 struct flash_api final
 {
+  /// @copybrief microhal::flash::controller::erase_region
   template <typename Config> static result<flash_erase_region> erase_region(const std::uint32_t address) noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::flash_api::template erase_region<Config>(address);
+#else
+    (void)address;
+    return status::unsupported;
+#endif
   }
 
+  /// @brief Returns false because flash erase is not implemented.
   template <typename Config> static bool erase(const std::uint32_t address, const std::uint32_t bytes) noexcept
   {
 #if defined(FLASH)
@@ -2351,6 +2258,7 @@ struct flash_api final
 #endif
   }
 
+  /// @brief Returns false because flash programming is not implemented.
   template <typename Config>
   static bool program(const std::uint32_t address, const std::span<const std::uint8_t> data) noexcept
   {
@@ -2366,6 +2274,7 @@ struct flash_api final
 #endif
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool read(const std::uint32_t address, const std::span<std::uint8_t> data) noexcept
   {
     (void)sizeof(Config);
@@ -2377,6 +2286,7 @@ struct flash_api final
 
 struct timer_api final
 {
+  /// @brief Initializes the configured backend resource.
   template <typename Config> static bool initialize() noexcept
   {
 #if MICROHAL_STM32_LL_HAS_TIM
@@ -2398,6 +2308,7 @@ struct timer_api final
 #endif
   }
 
+  /// @copybrief microhal::timers::timer::start
   template <typename Config> static status start() noexcept
   {
 #if MICROHAL_STM32_LL_HAS_TIM
@@ -2408,6 +2319,7 @@ struct timer_api final
 #endif
   }
 
+  /// @copybrief microhal::timers::timer::stop
   template <typename Config> static status stop() noexcept
   {
 #if MICROHAL_STM32_LL_HAS_TIM
@@ -2418,6 +2330,7 @@ struct timer_api final
 #endif
   }
 
+  /// @copybrief microhal::timers::timer::set_period
   template <typename Config> static status set_period(const std::uint32_t period) noexcept
   {
 #if MICROHAL_STM32_LL_HAS_TIM
@@ -2433,6 +2346,7 @@ struct timer_api final
 #endif
   }
 
+  /// @brief Returns the counter for the timer.
   template <typename Config> static std::uint32_t get_counter() noexcept
   {
 #if MICROHAL_STM32_LL_HAS_TIM
@@ -2443,11 +2357,13 @@ struct timer_api final
 #endif
   }
 
+  /// @copybrief microhal::timers::timer::counter
   template <typename Config> static std::uint32_t counter() noexcept
   {
     return get_counter<Config>();
   }
 
+  /// @brief Resets the counter for the timer.
   template <typename Config> static status reset_counter() noexcept
   {
 #if MICROHAL_STM32_LL_HAS_TIM
@@ -2458,6 +2374,7 @@ struct timer_api final
 #endif
   }
 
+  /// @copybrief microhal::timers::timer::period
   template <typename Config> static result<std::uint32_t> period() noexcept
   {
 #if MICROHAL_STM32_LL_HAS_TIM
@@ -2467,6 +2384,7 @@ struct timer_api final
 #endif
   }
 
+  /// @copybrief microhal::timers::timer::capture_value
   template <typename Config, typename ChannelConfig> static result<std::uint32_t> capture_value() noexcept
   {
 #if MICROHAL_STM32_LL_HAS_TIM
@@ -2499,157 +2417,11 @@ struct timer_api final
   }
 };
 
-struct adc_api final
-{
-  template <typename Config> static bool initialize() noexcept
-  {
-#if MICROHAL_STM32_LL_HAS_ADC
-    LL_ADC_InitTypeDef init{};
-    if constexpr (Config::resolution == microhal::adc_resolution::bits_12)
-    {
-      init.Resolution = LL_ADC_RESOLUTION_12B;
-    }
-#if defined(LL_ADC_RESOLUTION_10B)
-    else if constexpr (Config::resolution == microhal::adc_resolution::bits_10)
-    {
-      init.Resolution = LL_ADC_RESOLUTION_10B;
-    }
-#endif
-#if defined(LL_ADC_RESOLUTION_8B)
-    else if constexpr (Config::resolution == microhal::adc_resolution::bits_8)
-    {
-      init.Resolution = LL_ADC_RESOLUTION_8B;
-    }
-#endif
-#if defined(LL_ADC_RESOLUTION_6B)
-    else if constexpr (Config::resolution == microhal::adc_resolution::bits_6)
-    {
-      init.Resolution = LL_ADC_RESOLUTION_6B;
-    }
-#endif
-    else
-    {
-      static_assert(dependent_false_v<Config>, "microHAL: requested ADC resolution is not supported by this STM32.");
-    }
-    init.DataAlignment = LL_ADC_DATA_ALIGN_RIGHT;
-#if defined(LL_ADC_LP_MODE_NONE)
-    init.LowPowerMode = LL_ADC_LP_MODE_NONE;
-#endif
-
-    ADC_TypeDef* instance = peripheral_instance<ADC_TypeDef, Config>();
-    if (LL_ADC_Init(instance, &init) == SUCCESS) [[likely]]
-    {
-      LL_ADC_Enable(instance);
-      return true;
-    }
-    return false;
-#else
-    return false;
-#endif
-  }
-
-  template <typename Config> static result<std::uint16_t> read_blocking(const std::uint8_t channel) noexcept
-  {
-#if MICROHAL_STM32_LL_HAS_ADC
-    ADC_TypeDef* instance = peripheral_instance<ADC_TypeDef, Config>();
-    LL_ADC_REG_SetSequencerRanks(instance, LL_ADC_REG_RANK_1, channel);
-#if defined(STM32F2) || defined(STM32F4) || defined(STM32F7)
-    LL_ADC_REG_StartConversionSWStart(instance);
-#else
-    LL_ADC_REG_StartConversion(instance);
-#endif
-#if defined(STM32F2) || defined(STM32F4) || defined(STM32F7)
-    while (!LL_ADC_IsActiveFlag_EOCS(instance))
-    {
-    }
-#else
-    while (!LL_ADC_IsActiveFlag_EOC(instance))
-    {
-    }
-#endif
-    return static_cast<std::uint16_t>(LL_ADC_REG_ReadConversionData12(instance));
-#else
-    (void)channel;
-    return status::unsupported;
-#endif
-  }
-
-  template <typename Config, auto Handler> static bool start_interrupt(const std::uint8_t channel) noexcept
-  {
-#if MICROHAL_STM32_LL_HAS_ADC
-    ADC_TypeDef* instance = peripheral_instance<ADC_TypeDef, Config>();
-    LL_ADC_REG_SetSequencerRanks(instance, LL_ADC_REG_RANK_1, channel);
-#if defined(STM32F2) || defined(STM32F4) || defined(STM32F7)
-    LL_ADC_EnableIT_EOCS(instance);
-    LL_ADC_REG_StartConversionSWStart(instance);
-#else
-    LL_ADC_EnableIT_EOC(instance);
-    LL_ADC_REG_StartConversion(instance);
-#endif
-    return true;
-#else
-    (void)channel;
-    (void)Handler;
-    return false;
-#endif
-  }
-
-  template <typename Config, auto Handler>
-  static bool start_dma(const std::uint8_t channel, std::span<std::uint16_t> buffer) noexcept
-  {
-#if MICROHAL_STM32_LL_HAS_ADC
-    ADC_TypeDef* instance = peripheral_instance<ADC_TypeDef, Config>();
-    LL_ADC_REG_SetSequencerRanks(instance, LL_ADC_REG_RANK_1, channel);
-    LL_ADC_REG_SetDMATransfer(instance, LL_ADC_REG_DMA_TRANSFER_LIMITED);
-#if defined(STM32F2) || defined(STM32F4) || defined(STM32F7)
-    LL_ADC_REG_StartConversionSWStart(instance);
-#else
-    LL_ADC_REG_StartConversion(instance);
-#endif
-    return true;
-#else
-    (void)channel;
-    (void)buffer;
-    (void)Handler;
-    return false;
-#endif
-  }
-
-  template <typename Config> static bool start_continuous(const std::span<const std::uint8_t> channels) noexcept
-  {
-    (void)channels;
-#if MICROHAL_STM32_LL_HAS_ADC
-    ADC_TypeDef* instance = peripheral_instance<ADC_TypeDef, Config>();
-#if defined(STM32F2) || defined(STM32F4) || defined(STM32F7)
-    LL_ADC_REG_StartConversionSWStart(instance);
-#else
-    LL_ADC_REG_StartConversion(instance);
-#endif
-    return true;
-#else
-    return false;
-#endif
-  }
-
-  template <typename Config, auto Handler> static bool start_async(const std::uint8_t channel) noexcept
-  {
-    return start_interrupt<Config, Handler>(channel);
-  }
-
-  template <typename Config, auto Handler>
-  static bool start_dma_scan(const std::span<const std::uint8_t> channels,
-                             const std::span<std::uint16_t> results) noexcept
-  {
-    if (channels.empty())
-    {
-      return false;
-    }
-    return start_dma<Config, Handler>(channels.front(), std::span<std::uint16_t>{results.data(), results.size()});
-  }
-};
+#include "microhal/backends/stm32/adc_api.inc"
 
 struct dac_api final
 {
+  /// @copybrief microhal::dac::converter::initialize
   template <typename Config> static bool initialize() noexcept
   {
 #if MICROHAL_STM32_LL_HAS_DAC
@@ -2669,10 +2441,17 @@ struct dac_api final
 #endif
   }
 
+  /// @brief Writes data using the configured backend.
   template <typename Config> static void write(const std::uint16_t value, const std::uint8_t channel) noexcept
   {
 #if MICROHAL_STM32_LL_HAS_DAC
+#if defined(LL_DAC_CHANNEL_2)
     const std::uint32_t ch = (channel == 1U) ? LL_DAC_CHANNEL_1 : LL_DAC_CHANNEL_2;
+#else
+    if (channel != 1U)
+      return;
+    const std::uint32_t ch = LL_DAC_CHANNEL_1;
+#endif
     LL_DAC_ConvertData12RightAligned(DAC1, ch, value);
     LL_DAC_TrigSWConversion(DAC1, ch);
 #else
@@ -2681,9 +2460,10 @@ struct dac_api final
 #endif
   }
 
+  /// @copybrief microhal::dac::converter::write_dual
   template <typename Config> static void write_dual(const std::uint16_t value1, const std::uint16_t value2) noexcept
   {
-#if MICROHAL_STM32_LL_HAS_DAC
+#if MICROHAL_STM32_LL_HAS_DAC && defined(LL_DAC_CHANNEL_2)
     LL_DAC_ConvertDualData12RightAligned(DAC1, value1, value2);
     LL_DAC_TrigSWConversion(DAC1, LL_DAC_CHANNEL_1);
 #else
@@ -2692,11 +2472,18 @@ struct dac_api final
 #endif
   }
 
+  /// @brief Starts the configured DMA transfer.
   template <typename Config, auto Handler>
   static bool start_dma(const std::span<const std::uint16_t> data, const std::uint8_t channel) noexcept
   {
 #if MICROHAL_STM32_LL_HAS_DAC
+#if defined(LL_DAC_CHANNEL_2)
     const std::uint32_t ch = (channel == 1U) ? LL_DAC_CHANNEL_1 : LL_DAC_CHANNEL_2;
+#else
+    if (channel != 1U)
+      return false;
+    const std::uint32_t ch = LL_DAC_CHANNEL_1;
+#endif
     LL_DAC_EnableDMAReq(DAC1, ch);
     return true;
 #else
@@ -2707,12 +2494,14 @@ struct dac_api final
 #endif
   }
 
+  /// @copybrief microhal::dac::converter::write_blocking
   template <typename Config> static bool write_blocking(const std::uint16_t value) noexcept
   {
     write<Config>(value, Config::channel);
     return true;
   }
 
+  /// @copybrief microhal::dac::converter::start_dma_waveform
   template <typename Config, auto Handler>
   static bool start_dma_waveform(const std::span<const std::uint16_t> samples) noexcept
   {
@@ -2722,21 +2511,39 @@ struct dac_api final
 
 struct can_api final
 {
+  /// @copybrief microhal::can::bus::initialize
   template <typename Config> static bool initialize() noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::can_api::template initialize<Config>();
+#else
+    return false;
+#endif
   }
 
+  /// @copybrief microhal::can::bus::transmit
   template <typename Config> static bool transmit(const microhal::can::message& msg) noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::can_api::template transmit<Config>(msg);
+#else
+    (void)msg;
+    return false;
+#endif
   }
 
+  /// @copybrief microhal::can::bus::receive
   template <typename Config> static bool receive(microhal::can::message& msg) noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::can_api::template receive<Config>(msg);
+#else
+    (void)msg;
+    return false;
+#endif
   }
 
+  /// @copybrief microhal::can::bus::transmit
   template <typename Config> static bool transmit(const std::uint8_t* data, std::size_t length) noexcept
   {
     microhal::can::message msg{};
@@ -2748,6 +2555,7 @@ struct can_api final
     return transmit<Config>(msg);
   }
 
+  /// @copybrief microhal::can::bus::receive
   template <typename Config> static bool receive(std::uint8_t* data, std::size_t& length) noexcept
   {
     microhal::can::message msg{};
@@ -2763,77 +2571,125 @@ struct can_api final
     return true;
   }
 
+  /// @copybrief microhal::can::bus::configure_filter
   template <typename Config>
   static bool configure_filter(const std::uint32_t id, const std::uint32_t mask, const std::uint8_t fifo) noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::can_api::template configure_filter<Config>(id, mask, fifo);
+#else
+    (void)id;
+    (void)mask;
+    (void)fifo;
+    return false;
+#endif
   }
 
+  /// @brief Enables the receive interrupt for the CAN peripheral.
   template <typename Config, auto Handler> static bool enable_rx_interrupt() noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::can_api::template enable_rx_interrupt<Config, Handler>();
+#else
+    return false;
+#endif
   }
 };
 
 struct usb_api final
 {
+  /// @copybrief microhal::usb::device::initialize
   template <typename Config> static bool initialize() noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::usb_api::template initialize<Config>();
+#else
+    return false;
+#endif
   }
 
+  /// @copybrief microhal::usb::device::connect
   template <typename Config> static bool connect() noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::usb_api::template connect<Config>();
+#else
+    return false;
+#endif
   }
 
+  /// @copybrief microhal::usb::device::disconnect
   template <typename Config> static bool disconnect() noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::usb_api::template disconnect<Config>();
+#else
+    return false;
+#endif
   }
 
+  /// @copybrief microhal::usb::device::endpoint_transmit
   template <typename Config>
   static bool endpoint_transmit(const std::uint8_t endpoint, const std::span<const std::uint8_t> data) noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::usb_api::template endpoint_transmit<Config>(endpoint, data);
+#else
+    (void)endpoint;
+    (void)data;
+    return false;
+#endif
   }
 
+  /// @copybrief microhal::usb::device::endpoint_receive
   template <typename Config>
   static std::uint32_t endpoint_receive(const std::uint8_t endpoint, const std::span<std::uint8_t> buffer) noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::usb_api::template endpoint_receive<Config>(endpoint, buffer);
+#else
+    (void)endpoint;
+    (void)buffer;
+    return 0U;
+#endif
   }
 };
 
 struct ethernet_api final
 {
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool initialize() noexcept
   {
     return false;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool start() noexcept
   {
     return false;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool stop() noexcept
   {
     return false;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool transmit_frame(const std::span<const std::uint8_t> frame) noexcept
   {
     (void)frame;
     return false;
   }
 
+  /// @brief Returns zero because Ethernet frame reception is not implemented.
   template <typename Config> static std::uint32_t receive_frame(const std::span<std::uint8_t> buffer) noexcept
   {
     (void)buffer;
     return 0U;
   }
 
+  /// @brief Returns false because this backend does not implement the operation.
   template <typename Config> static bool set_mac_address(const std::array<std::uint8_t, 6>& address) noexcept
   {
     (void)address;
@@ -2844,12 +2700,14 @@ struct ethernet_api final
 struct sd_api final
 {
 #if MICROHAL_STM32_LL_HAS_SD
+  /// @brief Returns the backend handle for the selected configuration.
   template <typename Config> static auto& handle() noexcept
   {
     static SD_HandleTypeDef handle_storage{};
     return handle_storage;
   }
 
+  /// @brief Returns the backend's SD card information.
   template <typename Config> static auto& card_info() noexcept
   {
     static HAL_SD_CardInfoTypeDef card_info_storage{};
@@ -2857,6 +2715,7 @@ struct sd_api final
   }
 #endif
 
+  /// @copybrief microhal::sd::card::initialize
   template <typename Config> static bool initialize() noexcept
   {
 #if MICROHAL_STM32_LL_HAS_SD
@@ -2872,7 +2731,9 @@ struct sd_api final
         sd_hardware_flow_control<Config>() ? SDIO_HARDWARE_FLOW_CONTROL_ENABLE : SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
 #else
     handle_storage.Init.ClockEdge = SDMMC_CLOCK_EDGE_RISING;
+#if defined(SDMMC_CLOCK_BYPASS_DISABLE)
     handle_storage.Init.ClockBypass = SDMMC_CLOCK_BYPASS_DISABLE;
+#endif
     handle_storage.Init.ClockPowerSave = SDMMC_CLOCK_POWER_SAVE_DISABLE;
     handle_storage.Init.HardwareFlowControl =
         sd_hardware_flow_control<Config>() ? SDMMC_HARDWARE_FLOW_CONTROL_ENABLE : SDMMC_HARDWARE_FLOW_CONTROL_DISABLE;
@@ -2896,6 +2757,7 @@ struct sd_api final
 #endif
   }
 
+  /// @copybrief microhal::sd::card::read_blocks
   template <typename Config>
   static bool read_blocks(const std::uint32_t start_block, const std::span<std::uint8_t> buffer) noexcept
   {
@@ -2917,6 +2779,7 @@ struct sd_api final
 #endif
   }
 
+  /// @copybrief microhal::sd::card::write_blocks
   template <typename Config>
   static bool write_blocks(const std::uint32_t start_block, const std::span<const std::uint8_t> buffer) noexcept
   {
@@ -2938,6 +2801,7 @@ struct sd_api final
 #endif
   }
 
+  /// @copybrief microhal::sd::card::erase_blocks
   template <typename Config>
   static bool erase_blocks(const std::uint32_t start_block, const std::uint32_t block_count) noexcept
   {
@@ -2957,6 +2821,7 @@ struct sd_api final
 #endif
   }
 
+  /// @copybrief microhal::sd::card::capacity_blocks
   template <typename Config> static std::uint32_t capacity_blocks() noexcept
   {
 #if MICROHAL_STM32_LL_HAS_SD
@@ -2977,12 +2842,14 @@ struct sd_api final
 
 struct dma_api final
 {
+  /// @brief Returns the stored state of the transfer.
   template <typename Config> static dma_transfer_state& transfer_state() noexcept
   {
     static dma_transfer_state state{dma_transfer_state::idle};
     return state;
   }
 
+  /// @brief Reports whether the selected resource is enabled.
   template <typename Config> static bool is_enabled() noexcept
   {
 #if defined(DMA1_Stream0)
@@ -2994,6 +2861,7 @@ struct dma_api final
 #endif
   }
 
+  /// @copybrief microhal::dma::controller::initialize
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(DMA1) && MICROHAL_STM32_HAL_STREAM_DMA_RUNTIME
@@ -3014,6 +2882,7 @@ struct dma_api final
 #endif
   }
 
+  /// @copybrief microhal::dma::controller::start_transfer
   template <typename Config, auto Handler>
   static bool start_transfer(const std::uint32_t src_addr, const std::uint32_t dst_addr,
                              const std::uint32_t length) noexcept
@@ -3058,6 +2927,7 @@ struct dma_api final
 #endif
   }
 
+  /// @copybrief microhal::dma::controller::abort
   template <typename Config> static bool abort() noexcept
   {
 #if defined(DMA1) && MICROHAL_STM32_HAL_STREAM_DMA_RUNTIME
@@ -3071,6 +2941,7 @@ struct dma_api final
 #endif
   }
 
+  /// @copybrief microhal::dma::controller::transfer_status
   template <typename Config> static result<dma_transfer_state> transfer_status() noexcept
   {
 #if defined(DMA1) && MICROHAL_STM32_HAL_STREAM_DMA_RUNTIME
@@ -3090,6 +2961,7 @@ struct dma_api final
 
 struct pwm_api final
 {
+  /// @copybrief microhal::pwm::output::initialize
   template <typename Config> static bool initialize() noexcept
   {
 #if MICROHAL_STM32_LL_HAS_TIM
@@ -3121,6 +2993,7 @@ struct pwm_api final
 #endif
   }
 
+  /// @copybrief microhal::pwm::output::set_duty_cycle
   template <typename Config> static void set_duty_cycle(const std::uint16_t duty_permille) noexcept
   {
 #if MICROHAL_STM32_LL_HAS_TIM
@@ -3133,6 +3006,7 @@ struct pwm_api final
 #endif
   }
 
+  /// @copybrief microhal::pwm::output::start
   template <typename Config> static bool start() noexcept
   {
 #if MICROHAL_STM32_LL_HAS_TIM
@@ -3145,6 +3019,7 @@ struct pwm_api final
 #endif
   }
 
+  /// @copybrief microhal::pwm::output::stop
   template <typename Config> static bool stop() noexcept
   {
 #if MICROHAL_STM32_LL_HAS_TIM
@@ -3160,6 +3035,7 @@ struct pwm_api final
 
 struct watchdog_api final
 {
+  /// @copybrief microhal::watchdog::timer::initialize
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(IWDG) && defined(LL_IWDG_PRESCALER_32)
@@ -3176,6 +3052,7 @@ struct watchdog_api final
 #endif
   }
 
+  /// @copybrief microhal::watchdog::timer::start
   template <typename Config> static bool start() noexcept
   {
 #if defined(IWDG) && defined(LL_IWDG_PRESCALER_32)
@@ -3186,6 +3063,7 @@ struct watchdog_api final
 #endif
   }
 
+  /// @copybrief microhal::watchdog::timer::refresh
   template <typename Config> static bool refresh() noexcept
   {
 #if defined(IWDG) && defined(LL_IWDG_PRESCALER_32)
@@ -3199,9 +3077,10 @@ struct watchdog_api final
 
 struct i2s_api final
 {
+  /// @copybrief microhal::i2s::interface::initialize
   template <typename Config> static bool initialize() noexcept
   {
-#if MICROHAL_STM32_LL_HAS_SPI && defined(SPI_I2SCFGR_I2SMOD)
+#if MICROHAL_ENABLE_STM32_HAL && MICROHAL_STM32_LL_HAS_SPI && defined(LL_I2S_MODE_MASTER_TX)
     if (!backends::stm32::hal::i2s_api::template initialize<Config>())
     {
       return false;
@@ -3227,13 +3106,18 @@ struct i2s_api final
 #endif
   }
 
+  /// @copybrief microhal::i2s::interface::transmit_blocking
   template <typename Config> static bool transmit_blocking(const std::span<const std::uint16_t> samples) noexcept
   {
-#if MICROHAL_STM32_LL_HAS_SPI && defined(SPI_I2SCFGR_I2SMOD)
+#if MICROHAL_ENABLE_STM32_HAL && MICROHAL_STM32_LL_HAS_SPI && defined(LL_I2S_MODE_MASTER_TX)
     SPI_TypeDef* instance = peripheral_instance<SPI_TypeDef, Config>();
     for (const std::uint16_t sample : samples)
     {
+#if defined(SPI_SR_TXP)
+      while (!LL_SPI_IsActiveFlag_TXP(instance))
+#else
       while (!LL_I2S_IsActiveFlag_TXE(instance))
+#endif
       {
       }
       LL_I2S_TransmitData16(instance, sample);
@@ -3245,13 +3129,18 @@ struct i2s_api final
 #endif
   }
 
+  /// @copybrief microhal::i2s::interface::receive_blocking
   template <typename Config> static bool receive_blocking(const std::span<std::uint16_t> samples) noexcept
   {
-#if MICROHAL_STM32_LL_HAS_SPI && defined(SPI_I2SCFGR_I2SMOD)
+#if MICROHAL_ENABLE_STM32_HAL && MICROHAL_STM32_LL_HAS_SPI && defined(LL_I2S_MODE_MASTER_TX)
     SPI_TypeDef* instance = peripheral_instance<SPI_TypeDef, Config>();
     for (std::uint16_t& sample : samples)
     {
+#if defined(SPI_SR_RXP)
+      while (!LL_SPI_IsActiveFlag_RXP(instance))
+#else
       while (!LL_I2S_IsActiveFlag_RXNE(instance))
+#endif
       {
       }
       sample = LL_I2S_ReceiveData16(instance);
@@ -3263,15 +3152,22 @@ struct i2s_api final
 #endif
   }
 
+  /// @copybrief microhal::i2s::interface::start_dma_tx
   template <typename Config, auto Handler>
   static bool start_dma_tx(const std::span<const std::uint16_t> samples) noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     return backends::stm32::hal::i2s_api::template start_dma_tx<Config, Handler>(samples);
+#else
+    (void)samples;
+    return false;
+#endif
   }
 };
 
 struct rcc_api final
 {
+  /// @copybrief microhal::rcc::clock_controller::configure
   template <typename Config> static bool configure() noexcept
   {
 #if defined(RCC) && defined(LL_RCC_PLLSOURCE_HSE) && defined(LL_RCC_PLLM_DIV_8) && defined(LL_RCC_PLLP_DIV_2) &&       \
@@ -3303,6 +3199,7 @@ struct rcc_api final
 #endif
   }
 
+  /// @brief Returns the system-clock frequency in hertz.
   template <typename Config> static std::uint32_t get_system_clock_hz() noexcept
   {
 #if defined(RCC)
@@ -3314,6 +3211,7 @@ struct rcc_api final
 #endif
   }
 
+  /// @copybrief microhal::rcc::clock_controller::enable_peripheral_clock
   template <typename Config>
   static status enable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
   {
@@ -3333,6 +3231,7 @@ struct rcc_api final
 #endif
   }
 
+  /// @copybrief microhal::rcc::clock_controller::disable_peripheral_clock
   template <typename Config>
   static status disable_peripheral_clock(const peripheral_kind peripheral, const std::uint8_t instance) noexcept
   {
@@ -3355,6 +3254,7 @@ struct rcc_api final
 
 struct crc_api final
 {
+  /// @copybrief microhal::crc::accelerator::initialize
   template <typename Config> static bool initialize() noexcept
   {
 #if defined(CRC)
@@ -3374,6 +3274,7 @@ struct crc_api final
 #endif
   }
 
+  /// @brief Calculates the configured checksum.
   template <typename Config> static std::uint32_t calculate(const std::span<const std::uint8_t> data) noexcept
   {
 #if defined(CRC)
@@ -3394,6 +3295,7 @@ struct crc_api final
 #endif
   }
 
+  /// @copybrief microhal::crc::accelerator::reset
   template <typename Config> static void reset() noexcept
   {
 #if defined(CRC)
@@ -3401,6 +3303,7 @@ struct crc_api final
 #endif
   }
 
+  /// @copybrief microhal::crc::accelerator::get_random
   template <typename Config> static std::uint32_t get_random() noexcept
   {
 #if defined(RNG)
@@ -3430,6 +3333,7 @@ struct crc_api final
 namespace microhal
 {
 
+/// @brief Describes the backend's peripheral APIs and compile-time capabilities.
 template <> struct backend_traits<stm32_ll_tag> final
 {
   using backend_tag = stm32_ll_tag;
@@ -3462,6 +3366,7 @@ template <> struct backend_traits<stm32_ll_tag> final
   static constexpr std::uint32_t gpio_pins_per_port{16U};
   static constexpr std::uint32_t gpio_alternate_function_count{16U};
 
+  /// @brief Reports the backend's GPIO capabilities.
   static consteval struct gpio_capability gpio_capability() noexcept
   {
     return {.supported = true,
@@ -3475,6 +3380,7 @@ template <> struct backend_traits<stm32_ll_tag> final
             .output_toggle = true};
   }
 
+  /// @brief Reports the backend's I2C capabilities.
   static consteval struct i2c_capability i2c_capability() noexcept
   {
     return {.supported =
@@ -3485,15 +3391,23 @@ template <> struct backend_traits<stm32_ll_tag> final
             .dma = true,
             .instance_count = (MICROHAL_STM32_LL_FAMILY_SELECTED != 0) ? backends::stm32::ll::i2c_instance_count : 4U,
             .max_frequency_hz = 1'000'000U,
-#if MICROHAL_STM32_HAL_HAS_I2C && defined(I2C_FIRST_FRAME) && defined(I2C_LAST_FRAME)
+#if defined(I2C_CR2_NBYTES) || defined(I2C_SR1_ADD10)
+            .ten_bit_addressing = true,
+#endif
+#if MICROHAL_STM32_LL_HAS_I2C
             .repeated_start = true,
 #else
             .repeated_start = false,
 #endif
-            .address_probe = (MICROHAL_STM32_HAL_HAS_I2C != 0),
-            .transfer_modes = backends::stm32::hal::serial_transfer_modes<peripheral_kind::i2c>()};
+            .address_probe = (MICROHAL_STM32_LL_HAS_I2C != 0),
+            .clock_stretching = true,
+            .smbus_pec = (MICROHAL_STM32_LL_HAS_I2C != 0),
+            .transfer_modes = {.polled = MICROHAL_STM32_LL_HAS_I2C != 0,
+                               .interrupt = MICROHAL_STM32_LL_HAS_I2C != 0,
+                               .dma = MICROHAL_STM32_LL_HAS_I2C != 0}};
   }
 
+  /// @brief Reports the backend's SPI capabilities.
   static consteval struct spi_capability spi_capability() noexcept
   {
     return {.supported =
@@ -3506,14 +3420,17 @@ template <> struct backend_traits<stm32_ll_tag> final
             .max_frequency_hz = 100'000'000U,
             .transmit_only = true,
             .receive_only = true,
-#if MICROHAL_STM32_HAL_HAS_SPI && defined(USE_HAL_SPI_REGISTER_CALLBACKS) && (USE_HAL_SPI_REGISTER_CALLBACKS == 1)
+#if MICROHAL_STM32_LL_HAS_SPI
             .async_transfer = true,
 #else
             .async_transfer = false,
 #endif
-            .transfer_modes = backends::stm32::hal::serial_transfer_modes<peripheral_kind::spi>()};
+            .transfer_modes = {.polled = MICROHAL_STM32_LL_HAS_SPI != 0,
+                               .interrupt = MICROHAL_STM32_LL_HAS_SPI != 0,
+                               .dma = MICROHAL_STM32_LL_HAS_SPI != 0}};
   }
 
+  /// @brief Reports the backend's QSPI capabilities.
   static consteval struct qspi_capability qspi_capability() noexcept
   {
     return {.supported = (MICROHAL_STM32_LL_HAS_QSPI != 0),
@@ -3530,6 +3447,7 @@ template <> struct backend_traits<stm32_ll_tag> final
             .max_address_bytes = 4U};
   }
 
+  /// @brief Reports the backend's UART capabilities.
   static consteval struct uart_capability uart_capability() noexcept
   {
     if constexpr (MICROHAL_STM32_LL_FAMILY_SELECTED != 0)
@@ -3541,11 +3459,22 @@ template <> struct backend_traits<stm32_ll_tag> final
               .dma = true,
               .instance_count = backends::stm32::ll::uart_instance_count,
               .max_frequency_hz = 12'500'000U,
+#if defined(USART_CR1_FIFOEN)
               .fifo = true,
+#else
+              .fifo = false,
+#endif
               .lpuart = backends::stm32::ll::family_has_lpuart,
-              .autobaud = true,
+              .autobaud = false,
+#if defined(USART_CR1_FIFOEN)
               .fifo_depth = 16U,
-              .transfer_modes = backends::stm32::hal::serial_transfer_modes<peripheral_kind::uart>()};
+#endif
+              .parity = true,
+              .two_stop_bits = true,
+              .data_bits_mask = uart_data_bits_mask(uart_data_bits::eight),
+              .transfer_modes = {.polled = MICROHAL_STM32_LL_HAS_UART != 0,
+                                 .interrupt = MICROHAL_STM32_LL_HAS_UART != 0,
+                                 .dma = MICROHAL_STM32_LL_HAS_UART != 0}};
     }
 
     return {.supported = true,
@@ -3558,9 +3487,11 @@ template <> struct backend_traits<stm32_ll_tag> final
             .fifo = true,
             .lpuart = true,
             .autobaud = true,
-            .fifo_depth = 16U};
+            .fifo_depth = 16U,
+            .data_bits_mask = uart_data_bits_mask(uart_data_bits::eight)};
   }
 
+  /// @brief Reports the backend's RTC capabilities.
   static consteval struct rtc_capability rtc_capability() noexcept
   {
     return {.supported = true,
@@ -3573,6 +3504,7 @@ template <> struct backend_traits<stm32_ll_tag> final
             .periodic = true};
   }
 
+  /// @brief Reports the backend's flash capabilities.
   static consteval struct flash_capability flash_capability() noexcept
   {
     return {.supported = true,
@@ -3587,6 +3519,7 @@ template <> struct backend_traits<stm32_ll_tag> final
             .erase_region_query = true};
   }
 
+  /// @brief Reports the backend's timer capabilities.
   static consteval struct timer_capability timer_capability() noexcept
   {
     return {.supported =
@@ -3605,6 +3538,7 @@ template <> struct backend_traits<stm32_ll_tag> final
             .counter_reset = true};
   }
 
+  /// @brief Reports the backend's ADC capabilities.
   static consteval struct adc_capability adc_capability() noexcept
   {
     return {.supported =
@@ -3623,6 +3557,7 @@ template <> struct backend_traits<stm32_ll_tag> final
             .voltage_conversion = true};
   }
 
+  /// @brief Reports the backend's DAC capabilities.
   static consteval struct dac_capability dac_capability() noexcept
   {
     return {.supported =
@@ -3641,24 +3576,31 @@ template <> struct backend_traits<stm32_ll_tag> final
             .sequence_write = true};
   }
 
+  /// @brief Reports the backend's CAN capabilities.
   static consteval struct can_capability can_capability() noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     if constexpr (MICROHAL_STM32_LL_FAMILY_SELECTED != 0)
     {
       return backend_traits<stm32_hal_tag>::can_capability();
     }
+#endif
     return {};
   }
 
+  /// @brief Reports the backend's USB capabilities.
   static consteval struct usb_capability usb_capability() noexcept
   {
+#if MICROHAL_ENABLE_STM32_HAL
     if constexpr (MICROHAL_STM32_LL_FAMILY_SELECTED != 0)
     {
       return backend_traits<stm32_hal_tag>::usb_capability();
     }
+#endif
     return {};
   }
 
+  /// @brief Reports the backend's Ethernet capabilities.
   static consteval struct ethernet_capability ethernet_capability() noexcept
   {
     return {.supported = false,
@@ -3675,6 +3617,7 @@ template <> struct backend_traits<stm32_ll_tag> final
             .mtu_bytes = 0U};
   }
 
+  /// @brief Reports the backend's SD capabilities.
   static consteval struct sd_capability sd_capability() noexcept
   {
     if constexpr (MICROHAL_STM32_LL_FAMILY_SELECTED != 0)
@@ -3709,6 +3652,7 @@ template <> struct backend_traits<stm32_ll_tag> final
     return {};
   }
 
+  /// @brief Reports the backend's DMA capabilities.
   static consteval struct dma_capability dma_capability() noexcept
   {
     if constexpr (MICROHAL_STM32_LL_FAMILY_SELECTED != 0)
@@ -3758,6 +3702,7 @@ template <> struct backend_traits<stm32_ll_tag> final
             .address_width_bits = 32U};
   }
 
+  /// @brief Reports the backend's PWM capabilities.
   static consteval struct pwm_capability pwm_capability() noexcept
   {
     return {.supported = true,
@@ -3774,6 +3719,7 @@ template <> struct backend_traits<stm32_ll_tag> final
             .runtime_start_stop = true};
   }
 
+  /// @brief Reports the backend's watchdog capabilities.
   static consteval struct watchdog_capability watchdog_capability() noexcept
   {
     return {.supported = true,
@@ -3791,11 +3737,12 @@ template <> struct backend_traits<stm32_ll_tag> final
             .reset_on_timeout = true};
   }
 
+  /// @brief Reports the backend's I2S capabilities.
   static consteval struct i2s_capability i2s_capability() noexcept
   {
     if constexpr (MICROHAL_STM32_LL_FAMILY_SELECTED != 0)
     {
-#if defined(SPI_I2SCFGR_I2SMOD)
+#if MICROHAL_ENABLE_STM32_HAL && defined(SPI_I2SCFGR_I2SMOD)
       return {.supported = true,
               .blocking = true,
               .non_blocking = backends::stm32::hal::serial_transfer_modes<peripheral_kind::i2s>().interrupt,
@@ -3842,6 +3789,7 @@ template <> struct backend_traits<stm32_ll_tag> final
             .sample_bits = 16U};
   }
 
+  /// @brief Reports the backend's RCC capabilities.
   static consteval struct rcc_capability rcc_capability() noexcept
   {
     return {.supported = true,
@@ -3860,6 +3808,7 @@ template <> struct backend_traits<stm32_ll_tag> final
             .system_clock_readback = true};
   }
 
+  /// @brief Reports the backend's CRC capabilities.
   static consteval struct crc_capability crc_capability() noexcept
   {
     if constexpr (MICROHAL_STM32_LL_FAMILY_SELECTED != 0)
@@ -3894,11 +3843,13 @@ template <> struct backend_traits<stm32_ll_tag> final
             .checksum_width_bits = 32U};
   }
 
+  /// @brief Checks whether the GPIO pin is valid for the backend.
   template <typename PinConfig> static consteval bool is_valid_gpio_pin() noexcept
   {
     return (PinConfig::port_index < gpio_port_count) && (PinConfig::pin_index < gpio_pins_per_port);
   }
 
+  /// @brief Checks whether the alternate function is valid for the backend.
   template <typename PinConfig> static consteval bool is_valid_alternate_function() noexcept
   {
     return (PinConfig::alternate_function == gpio_no_alternate) ||

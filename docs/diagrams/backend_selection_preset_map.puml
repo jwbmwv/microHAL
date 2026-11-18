@@ -7,21 +7,25 @@ rectangle "Host default build" as P0
 rectangle "contractual-examples-ci\nprovider STM32" as P1
 rectangle "zephyr-backend-ci\nprovider ZEPHYR" as P2
 rectangle "nordic-backend-ci\nprovider NORDIC" as P3
+rectangle "nuttx-backend-ci\nprovider NUTTX" as P4
 
 rectangle "No explicit backend list\nall backends compile" as M0
 rectangle "MICROHAL_BACKENDS_EXPLICIT\nENABLE_STM32_HAL ENABLE_STM32_LL ENABLE_MOCK" as M1
 rectangle "MICROHAL_BACKENDS_EXPLICIT\nENABLE_ZEPHYR ENABLE_MOCK" as M2
 rectangle "MICROHAL_BACKENDS_EXPLICIT\nENABLE_NORDIC_NRFX ENABLE_MOCK" as M3
+rectangle "MICROHAL_BACKENDS_EXPLICIT\nENABLE_NUTTX ENABLE_MOCK" as M4
 
 rectangle "backend_registry size\nMICROHAL_EXPECTED_BACKEND_COUNT" as R0
 rectangle "provider-scoped registry" as R1
 rectangle "provider-scoped registry" as R2
 rectangle "provider-scoped registry" as R3
+rectangle "provider-scoped registry" as R4
 
 rectangle "Full host matrix tests\ncompile_time_smoke\nextended_peripherals\nedge_cases\nmulti_backend\nmock_runtime" as T0
 rectangle "STM32 vendor validation targets" as T1
 rectangle "Zephyr vendor validation targets" as T2
 rectangle "Nordic vendor validation targets\nbackend_selection\nbackend_api_contract\npreset_capability_expectations\ncapability_claim_policy" as T3
+rectangle "NuttX vendor validation targets" as T4
 
 P0 --> M0
 M0 --> R0
@@ -38,5 +42,9 @@ R2 --> T2
 P3 --> M3
 M3 --> R3
 R3 --> T3
+
+P4 --> M4
+M4 --> R4
+R4 --> T4
 
 @enduml

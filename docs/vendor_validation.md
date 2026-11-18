@@ -64,27 +64,44 @@ Run the matrix locally:
 bash ./scripts/validate_nordic_vendor_matrix.sh
 ```
 
+The default support root is `vendor-support/nrf-bm`. Auto-discovery accepts a
+direct SDK root, or its `v2.0.1` / `v2.0.0` subdirectory; set
+`MICROHAL_NORDIC_SUPPORT_ROOT` to pin another location. The `all` selection attempts
+every target before reporting failures. `nrf54` and `nrf54h20` select the H20
+application-core entry.
+
+CI can run the four-target matrix when `MICROHAL_NORDIC_SUPPORT_ROOT` is configured
+as a repository variable and the SDK is available at that path on the runner.
+The existing include-only validation remains available when only
+`MICROHAL_NORDIC_INCLUDE_DIRS` is configured. Neither job downloads the Nordic SDK.
+Set `MICROHAL_NORDIC_RUNNER` to an Ubuntu-compatible self-hosted runner label when
+the SDK is preinstalled there; otherwise the native job uses `ubuntu-latest`.
+The support-root path must exist on the selected runner.
+
 The runner requires `arm-none-eabi-gcc`/`arm-none-eabi-g++` with newlib and its C++ headers/libraries.
 Set `MICROHAL_NORDIC_SUPPORT_ROOT` for a non-default SDK path and
 `MICROHAL_NORDIC_MATRIX_BUILD_ROOT` for a separate build directory. It cross-compiles/links the
 selection, API-contract, and preset-expectation targets, then runs only the host capability-policy
 script. Existing build directories are reused rather than deleted.
 
-On nRF52840, nRF5340 application core, and nRF54L15 application core,
+On nRF52840, nRF5340 application core, nRF54L15 application core, and nRF54H20 application core,
 `microhal_backend_api_contract` additionally depends on the object target
 `microhal_nordic_driver_instantiation`. This instantiates actual enabled peripheral template bodies,
 public facade calls, capability assertions, and interrupt dispatchers, rather than only testing
 `requires` expressions. It enables the implemented nrfx drivers and API 4.1 (including RTC on
 nRF52/53). When the support root is auto-discovered it also compiles the corresponding nrfx C driver
-sources. Explicit include-only configurations compile the C++ instantiations but must validate/link
+sources and GPPI dependencies where applicable. H20 uses its native HAL paths rather than
+the generic CLOCK/MRAMC C drivers, whose single-controller aliases do not match that SoC.
+Explicit include-only configurations compile the C++ instantiations but must validate/link
 their driver sources separately.
 
 The object target uses test-only glue from `tests/nordic/`; applications need their own real nrfx
 integration. These checks do not link a complete firmware image, start clocks, execute peripheral
-operations, or validate electrical behavior. nRF54H20 retains only the earlier header/API-contract
-checks; it does not gain the expanded native-driver coverage. The host suite separately runs
-`microhal_nordic_logic` for status mapping, transfer lifecycle, PWM timing, channel masks, transfer
-count/address boundaries, and unsupported-without-SDK behavior.
+operations, or validate electrical behavior. The host suite additionally exercises deterministic
+serial/acquisition/system driver fixtures and public frontends: cancellation/ownership, DMA
+streaming, differential conversion, capture/PWM, RTC/GRTC calendar wrap, CAN, memory DMA,
+entropy failures and USB RX staging. Optional crypto-provider variants require their vendor
+headers/libraries and security-domain integration; the default matrix does not certify those ports.
 
 ### NuttX validation
 
@@ -151,9 +168,10 @@ cmake -S . -B build/stm32f4-vendor \
 
 Use explicit `MICROHAL_VENDOR_VALIDATION_STM32_INCLUDE_DIRS` instead when the headers come from a nonstandard SDK checkout or a CI-provided bundle.
 
-## Representative Matrix
+## STM32 Family Matrix
 
-The repository validates three deliberately different STM32 HAL/LL header shapes in CI:
+CI instantiates the drivers for all 21 STM32 families accepted by CMake. The
+default local command retains a quick, representative subset:
 
 - `STM32C0` / `STM32C011xx` on Cortex-M0+
 - `STM32F4` / `STM32F407xx` on Cortex-M4
@@ -165,6 +183,33 @@ Run the local matrix after populating `vendor-support`:
 bash ./scripts/validate_stm32_vendor_matrix.sh
 ```
 
-The runner builds only `microhal_compile_time_smoke` as a static library. It validates microHAL against real Cube headers and public wrapper instantiation, but deliberately does not link Cube driver objects or run hardware. Each family supplies its Cortex CPU flag and sets `CMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY`, so the bare-metal compiler is never asked to link a host-style probe executable.
+Use `full` to attempt every family accepted by the STM32 CMake configuration,
+or pass a specific family such as `STM32F7`. The full sweep reports all failing
+families rather than stopping at the first one:
 
-The matrix is representative rather than a claim that every mirrored STM32 family is already compatible. In particular, STM32F1 currently needs an explicit legacy HAL/LL compatibility pass before it can join the passing matrix.
+```bash
+bash ./scripts/validate_stm32_vendor_matrix.sh full
+```
+
+The runner builds `microhal_compile_time_smoke` and its driver-instantiation
+dependencies, including ADC, HAL serial extensions, and native LL serial.
+`microhal_stm32_ll_only_instantiation` selects only the LL backend for serial and
+ADC without `USE_HAL_DRIVER` to catch accidental HAL dependencies. Generated HAL validation
+configurations enable the exercised modules and callback registration; SDK
+include directories are system includes so microHAL's warnings remain errors
+without promoting third-party SDK warnings.
+
+These checks deliberately do not link Cube driver objects or run hardware.
+Each family supplies its Cortex CPU flag and sets
+`CMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY`, so the bare-metal compiler is
+never asked to link a host-style probe executable.
+
+Each entry covers one concrete device, not every part or peripheral variant in
+that family. The full matrix includes the legacy STM32F1 register layout and the
+newer GPDMA families. Passing header instantiation does not certify board-level
+electrical behavior, interrupt timing, or DMA/cache coherency.
+
+The host suite separately exercises HAL callback ownership and native acquisition/
+transfer state machines, with legacy/modern ADC, I2C, and SPI register fixtures.
+Those fixtures cover completion, cancellation, error recovery, and streaming
+notifications, but do not replace physical-board validation.

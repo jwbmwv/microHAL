@@ -41,6 +41,13 @@ struct controller final
 
   static constexpr peripheral_kind kind{peripheral_kind::flash};
 
+  /**
+   * @brief Erases a range of flash using the configured erase-size alignment.
+   * @param[in] address Starting byte address; must be erase-size aligned.
+   * @param[in] bytes   Number of bytes to erase; must be nonzero and erase-size aligned.
+   * @return @ref microhal::status::invalid_argument for invalid, overflowing, or inconsistent erase geometry;
+   *         otherwise the backend erase status.
+   */
   [[nodiscard]] static inline status erase(const std::uint32_t address, const std::uint32_t bytes) noexcept
   {
     if ((bytes == 0U) || ((address % Config::erase_size_bytes) != 0U) || ((bytes % Config::erase_size_bytes) != 0U) ||
@@ -90,6 +97,10 @@ struct controller final
    * @details Address and payload size must both be multiples of
    *          @c Config::program_alignment_bytes. This writes raw flash and does not provide
    *          erase-before-write emulation or partition protection.
+   * @param[in] address Starting byte address in flash.
+   * @param[in] payload Bytes to program; caller-owned storage is used for the duration of this call.
+   * @return @ref microhal::status::invalid_argument for an empty payload, misalignment, or address overflow;
+   *         otherwise the backend programming status.
    */
   [[nodiscard]] static inline status program(const std::uint32_t address,
                                              const std::span<const std::uint8_t> payload) noexcept
@@ -109,6 +120,11 @@ struct controller final
    * @brief Programs data and verifies it through the backend's read path.
    * @details The caller supplies storage so the operation does not allocate or place an
    *          unbounded temporary buffer on the stack.
+   * @param[in]  address  Starting byte address in flash.
+   * @param[in]  payload  Bytes to program; caller-owned storage is used for the duration of this call.
+   * @param[out] readback Equal-sized, non-overlapping storage for the bytes read back.
+   * @return @ref microhal::status::invalid_argument for unequal buffer sizes, overlapping buffers, or invalid program
+   *         arguments; the program/read error if either operation fails; @ref microhal::status::io_error on mismatch.
    */
   [[nodiscard]] static inline status program_and_verify(const std::uint32_t address,
                                                         const std::span<const std::uint8_t> payload,
@@ -154,6 +170,8 @@ struct controller final
   /**
    * @brief Returns the physical erase block containing @p address, when the backend can query it.
    * @details The returned region is hardware geometry, not an application partition.
+   * @param[in] address Address whose containing erase block is queried.
+   * @return Erase-region geometry, or the backend error (including unsupported when geometry queries are unavailable).
    */
   [[nodiscard]] static inline result<flash_erase_region> erase_region(const std::uint32_t address) noexcept
   {
@@ -161,6 +179,12 @@ struct controller final
         [address] { return flash_api_t<Backend>::template erase_region<Config>(address); });
   }
 
+  /**
+   * @brief Reads flash bytes into caller-provided storage.
+   * @param[in]  address Starting byte address in flash.
+   * @param[out] payload Destination storage; caller-owned storage is used for the duration of this call.
+   * @return Backend read status.
+   */
   [[nodiscard]] static inline status read(const std::uint32_t address, const std::span<std::uint8_t> payload) noexcept
   {
     return detail::as_status([address, payload]

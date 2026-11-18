@@ -23,6 +23,8 @@ namespace board = microhal::examples::zephyr_board;
 
 using zephyr_backend = microhal::zephyr_tag;
 
+static_assert(microhal::backend_registry.size() == 1U);
+
 struct timer_compile_config final
 {
   static constexpr const struct device* device{nullptr};
@@ -72,7 +74,7 @@ ZTEST(microhal_renode, test_status_led_gpio_binding)
 {
   zassert_true(device_is_ready(board::status_led_binding::spec.port), "led0 GPIO device must be ready");
 
-  board::status_led::configure();
+  zassert_equal(board::status_led::configure(), microhal::status::ok, "led0 GPIO configuration must succeed");
   board::status_led::clear();
   zassert_equal(gpio_pin_get_dt(&board::status_led_binding::spec), 0, "led0 should read low after clear");
 

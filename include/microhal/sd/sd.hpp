@@ -16,6 +16,15 @@
 namespace microhal::sd
 {
 
+/**
+ * @brief Compile-time SD host configuration using a numeric instance.
+ * @tparam InstanceIndex Backend-specific host instance index.
+ * @tparam ClockHz Requested host clock in hertz.
+ * @tparam BusWidth Requested SD bus width.
+ * @tparam TimingMode Requested SD timing mode.
+ * @tparam EnableDma Request DMA transfers.
+ * @tparam EnableInterrupts Request interrupt support.
+ */
 template <std::uint8_t InstanceIndex, std::uint32_t ClockHz = 25'000'000U, sd_bus_width BusWidth = sd_bus_width::four,
           sd_timing_mode TimingMode = sd_timing_mode::default_speed, bool EnableDma = true,
           bool EnableInterrupts = true>
@@ -29,6 +38,15 @@ struct host_config final
   static constexpr bool enable_interrupts{EnableInterrupts};
 };
 
+/**
+ * @brief Compile-time SD host configuration using board-owned resources.
+ * @tparam Binding Backend-specific board resource binding.
+ * @tparam ClockHz Requested host clock in hertz.
+ * @tparam BusWidth Requested SD bus width.
+ * @tparam TimingMode Requested SD timing mode.
+ * @tparam EnableDma Request DMA transfers.
+ * @tparam EnableInterrupts Request interrupt support.
+ */
 template <typename Binding, std::uint32_t ClockHz = 25'000'000U, sd_bus_width BusWidth = sd_bus_width::four,
           sd_timing_mode TimingMode = sd_timing_mode::default_speed, bool EnableDma = true,
           bool EnableInterrupts = true>
@@ -43,6 +61,12 @@ struct bound_host_config final
   static constexpr bool enable_interrupts{EnableInterrupts};
 };
 
+/**
+ * @brief Compile-time SD card and host facade.
+ * @tparam Backend Registered backend tag.
+ * @tparam Config Host configuration accepted by @c SdConcept.
+ * @note The application must serialize access to the configured host.
+ */
 template <typename Backend, typename Config>
   requires SdConcept<Backend, Config>
 struct card final
@@ -57,11 +81,22 @@ struct card final
   static constexpr bool has_8bit_bus{backend_traits<Backend>::sd_capability().bus_width_8};
   static constexpr std::uint32_t block_size_bytes{backend_traits<Backend>::sd_capability().block_size_bytes};
 
+  /**
+   * @brief Initializes the configured SD card host.
+   * @return Backend initialization status.
+   */
   [[nodiscard]] static inline status initialize() noexcept
   {
     return detail::as_status([] { return sd_api_t<Backend>::template initialize<Config>(); });
   }
 
+  /**
+   * @brief Reads one or more contiguous SD card blocks.
+   * @param[in]  start_block Index of the first block to read.
+   * @param[out] buffer      Destination storage; its size must be a nonzero multiple of block_size_bytes.
+   * @return @ref microhal::status::invalid_argument for an empty, non-integral, or overflowing block range;
+   *         otherwise the backend read status.
+   */
   [[nodiscard]] static inline status read_blocks(const std::uint32_t start_block,
                                                  const std::span<std::uint8_t> buffer) noexcept
   {
@@ -82,6 +117,14 @@ struct card final
                              { return sd_api_t<Backend>::template read_blocks<Config>(start_block, buffer); });
   }
 
+  /**
+   * @brief Writes one or more contiguous SD card blocks.
+   * @param[in] start_block Index of the first block to write.
+   * @param[in] buffer      Source bytes; its size must be a nonzero multiple of block_size_bytes and storage is used
+   *                        for the duration of this call.
+   * @return @ref microhal::status::invalid_argument for an empty, non-integral, or overflowing block range;
+   *         otherwise the backend write status.
+   */
   [[nodiscard]] static inline status write_blocks(const std::uint32_t start_block,
                                                   const std::span<const std::uint8_t> buffer) noexcept
   {
@@ -102,6 +145,13 @@ struct card final
                              { return sd_api_t<Backend>::template write_blocks<Config>(start_block, buffer); });
   }
 
+  /**
+   * @brief Erases a contiguous range of SD card blocks.
+   * @param[in] start_block Index of the first block to erase.
+   * @param[in] block_count Number of blocks to erase; must be nonzero.
+   * @return @ref microhal::status::invalid_argument for a zero or overflowing range,
+   *         @ref microhal::status::unsupported when the backend does not advertise erase, or the backend status.
+   */
   [[nodiscard]] static inline status erase_blocks(const std::uint32_t start_block,
                                                   const std::uint32_t block_count) noexcept
   {
@@ -118,11 +168,22 @@ struct card final
                              { return sd_api_t<Backend>::template erase_blocks<Config>(start_block, block_count); });
   }
 
+  /**
+   * @brief Queries the card capacity in blocks.
+   * @return Block count on success, or the backend capacity-query error.
+   */
   [[nodiscard]] static inline result<std::uint32_t> capacity_blocks() noexcept
   {
     return detail::as_result<std::uint32_t>([] { return sd_api_t<Backend>::template capacity_blocks<Config>(); });
   }
 
+  /**
+   * @brief Checks whether a nonempty block range fits within the queried card capacity.
+   * @param[in] start_block Index of the first block.
+   * @param[in] block_count Number of blocks in the range.
+   * @return True when the range is nonzero, does not overflow, and is within a successfully queried capacity.
+   * @note Returns false if the backend capacity query fails.
+   */
   [[nodiscard]] static inline bool is_valid_range(const std::uint32_t start_block,
                                                   const std::uint32_t block_count) noexcept
   {
@@ -135,12 +196,24 @@ struct card final
     return capacity && (start_block <= capacity.value()) && (block_count <= (capacity.value() - start_block));
   }
 
+  /**
+   * @brief Reads exactly one SD card block.
+   * @param[in]  block  Index of the block to read.
+   * @param[out] buffer Destination storage; its size must equal block_size_bytes.
+   * @return @ref microhal::status::invalid_argument for a buffer of the wrong size, or the read_blocks result.
+   */
   [[nodiscard]] static inline status read_block(const std::uint32_t block,
                                                 const std::span<std::uint8_t> buffer) noexcept
   {
     return (buffer.size() == block_size_bytes) ? read_blocks(block, buffer) : status::invalid_argument;
   }
 
+  /**
+   * @brief Writes exactly one SD card block.
+   * @param[in] block  Index of the block to write.
+   * @param[in] buffer Source bytes; its size must equal block_size_bytes and storage is used for this call.
+   * @return @ref microhal::status::invalid_argument for a buffer of the wrong size, or the write_blocks result.
+   */
   [[nodiscard]] static inline status write_block(const std::uint32_t block,
                                                  const std::span<const std::uint8_t> buffer) noexcept
   {

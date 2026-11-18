@@ -77,3 +77,5 @@ twister*-out*/
 
 # Local vendor SDK mirrors for dev/test
 /vendor-support/
+
+graphify-out/*

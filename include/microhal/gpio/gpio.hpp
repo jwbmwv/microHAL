@@ -45,35 +45,50 @@ struct pin final
   static constexpr bool is_dma_trigger_capable{capability_for<Backend, peripheral_kind::gpio>().dma};
 
   /**
-   * @brief Configures the pin mode, pull, speed, and alternate-function state.
+   * @brief Applies the mode, pull, speed, alternate function, and interrupt trigger in @p PinConfig.
+   * @return @ref status::ok on success; otherwise the backend configuration status.
+   * @note Configure the pin before using it. In particular, @ref set, @ref clear, and @ref toggle require an output
+   *       or suitable alternate-function configuration.
    */
   [[nodiscard]] static inline status configure() noexcept
   {
     return detail::as_status([] { return gpio_api_t<Backend>::template configure<PinConfig>(); });
   }
 
-  // Driving a port register cannot fail, so these intentionally stay void.
-  /** @brief Drives the pin high. */
+  /**
+   * @brief Drives the configured pin high.
+   * @note The pin must be configured for output. This operation has no status return and is not a substitute for
+   *       configuring the pin.
+   */
   static inline void set() noexcept
   {
     gpio_api_t<Backend>::template write<PinConfig>(true);
   }
 
-  /** @brief Drives the pin low. */
+  /**
+   * @brief Drives the configured pin low.
+   * @note The pin must be configured for output. This operation has no status return and is not a substitute for
+   *       configuring the pin.
+   */
   static inline void clear() noexcept
   {
     gpio_api_t<Backend>::template write<PinConfig>(false);
   }
 
-  /// @return The electrical level of the pin, not an operation status.
+  /**
+   * @brief Reads the current logical level of the configured pin.
+   * @return The pin level; this is not an operation status and cannot report a read error.
+   */
   [[nodiscard]] static inline bool read() noexcept
   {
     return gpio_api_t<Backend>::template read<PinConfig>();
   }
 
   /**
-   * @brief Toggles the output latch using a backend-native operation.
-   * @details Backends without a native toggle primitive report @ref status::unsupported.
+   * @brief Toggles the configured pin's output latch using a backend-native operation.
+   * @return @ref status::ok on success; @ref status::unsupported when the backend has no native toggle operation;
+   *         otherwise the backend status.
+   * @note The pin must be configured for output. No atomicity guarantee is made beyond the backend operation.
    */
   [[nodiscard]] static inline status toggle() noexcept
   {
@@ -81,8 +96,11 @@ struct pin final
   }
 
   /**
-   * @brief Enables the backend interrupt route for this pin.
-   * @tparam Handler ISR callback invoked by the backend when the configured edge/level occurs.
+   * @brief Enables an interrupt for the edge/level configured in @p PinConfig.
+   * @tparam Handler Backend-compatible callback invoked when the configured trigger occurs.
+   * @return @ref status::ok on success; otherwise the backend status.
+   * @note Requires an ISR-capable GPIO backend. The callback executes in interrupt context and must be noexcept,
+   *       bounded, and non-blocking. Board-owned interrupt routing/dispatch may also be required.
    */
   template <auto Handler>
   [[nodiscard]] static inline status enable_interrupt() noexcept

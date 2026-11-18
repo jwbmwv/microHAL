@@ -40,7 +40,7 @@ struct dma_handle_t
 };
 namespace fixture
 {
-inline unsigned starts{}, aborts{}, creates{}, dma_creates{};
+inline unsigned starts{}, aborts{}, creates{}, dma_creates{}, initializations{};
 inline status_t next_status{}, completion_status{};
 inline void (*pending)(void*){};
 inline void* pending_context{};
@@ -175,7 +175,10 @@ inline void LPI2C_MasterClearStatusFlags(LPI2C_Type*, std::uint32_t) {}
     void (*callback)(Base*, Lower##_master_edma_handle_t*, status_t, void*){};                                         \
   };                                                                                                                   \
   inline void Prefix##_MasterGetDefaultConfig(Lower##_master_config_t*) {}                                             \
-  inline void Prefix##_MasterInit(Base*, const Lower##_master_config_t*, std::uint32_t) {}                             \
+  inline void Prefix##_MasterInit(Base*, const Lower##_master_config_t*, std::uint32_t)                                \
+  {                                                                                                                    \
+    ++fixture::initializations;                                                                                        \
+  }                                                                                                                    \
   inline void Prefix##_MasterTransferCreateHandle(Base* b, Lower##_master_handle_t* h,                                 \
                                                   void (*cb)(Base*, Lower##_master_handle_t*, status_t, void*),        \
                                                   void* context)                                                       \
@@ -337,7 +340,10 @@ struct lpspi_master_config_t
     void (*callback)(Base*, Lower##_master_edma_handle_t*, status_t, void*){};                                         \
   };                                                                                                                   \
   inline void Prefix##_MasterGetDefaultConfig(Lower##_master_config_t*) {}                                             \
-  inline void Prefix##_MasterInit(Base*, const Lower##_master_config_t*, std::uint32_t) {}                             \
+  inline void Prefix##_MasterInit(Base*, const Lower##_master_config_t*, std::uint32_t)                                \
+  {                                                                                                                    \
+    ++fixture::initializations;                                                                                        \
+  }                                                                                                                    \
   inline void Prefix##_MasterTransferCreateHandle(Base* b, Lower##_master_handle_t* h,                                 \
                                                   void (*cb)(Base*, Lower##_master_handle_t*, status_t, void*),        \
                                                   void* context)                                                       \

@@ -30,6 +30,14 @@ struct controller_config final
   static constexpr std::uint32_t timeout_ms{TimeoutMs};
 };
 
+/**
+ * @brief Compile-time QSPI controller configuration using board-owned resources.
+ * @tparam Binding Backend-specific board resource binding.
+ * @tparam ClockHz Requested controller clock in hertz.
+ * @tparam EnableDma Request DMA transfers.
+ * @tparam EnableInterrupts Request interrupt support.
+ * @tparam TimeoutMs Timeout policy for blocking transfers in milliseconds.
+ */
 template <typename Binding, std::uint32_t ClockHz, bool EnableDma = false, bool EnableInterrupts = false,
           std::uint32_t TimeoutMs = 1000U>
 struct bound_controller_config final
@@ -57,11 +65,24 @@ struct controller final
 
   static constexpr peripheral_kind kind{peripheral_kind::qspi};
 
+  /**
+   * @brief Initializes the configured QSPI controller.
+   * @return Backend initialization status.
+   */
   [[nodiscard]] static inline status initialize() noexcept
   {
     return detail::as_status([] { return qspi_api_t<Backend>::template initialize<Config>(); });
   }
 
+  /**
+   * @brief Executes a QSPI command and writes its data phase.
+   * @param[in] request Command phases and address; must be valid and use backend-supported IO modes.
+   * @param[in] payload Bytes for the command data phase; caller-owned storage is used for this call.
+   * @return @ref microhal::status::invalid_argument for an invalid command or oversized payload,
+   *         @ref microhal::status::unsupported for unsupported IO modes, or the backend transfer status.
+   * @note Backends that use @c Config::timeout_ms apply it to the command transfer and report any timeout through
+   *       the returned status.
+   */
   [[nodiscard]] static inline status command_write(const command& request,
                                                    const std::span<const std::uint8_t> payload) noexcept
   {
@@ -77,6 +98,15 @@ struct controller final
                              { return qspi_api_t<Backend>::template command_write<Config>(request, payload); });
   }
 
+  /**
+   * @brief Executes a QSPI command and reads its data phase into caller-provided storage.
+   * @param[in]  request Command phases and address; must be valid and use backend-supported IO modes.
+   * @param[out] payload Destination storage; caller-owned storage is used for this call.
+   * @return @ref microhal::status::invalid_argument for an invalid command or oversized buffer,
+   *         @ref microhal::status::unsupported for unsupported IO modes, or the backend transfer status.
+   * @note Backends that use @c Config::timeout_ms apply it to the command transfer and report any timeout through
+   *       the returned status.
+   */
   [[nodiscard]] static inline status command_read(const command& request,
                                                   const std::span<std::uint8_t> payload) noexcept
   {
@@ -92,6 +122,14 @@ struct controller final
                              { return qspi_api_t<Backend>::template command_read<Config>(request, payload); });
   }
 
+  /**
+   * @brief Enters memory-mapped mode using a command that includes a data phase.
+   * @param[in] request Memory-mapped read command; it must be valid and use backend-supported IO modes.
+   * @return @ref microhal::status::invalid_argument for an invalid command,
+   *         @ref microhal::status::unsupported for unsupported IO modes, or the backend status.
+   * @note Timeout enforcement is backend-defined; backends that use @c Config::timeout_ms report a timeout through
+   *       the returned status.
+   */
   [[nodiscard]] static inline status enter_memory_mapped(const command& request) noexcept
   {
     if (!is_valid_command(request, false))
@@ -105,16 +143,31 @@ struct controller final
     return detail::as_status([&request] { return qspi_api_t<Backend>::template enter_memory_mapped<Config>(request); });
   }
 
+  /**
+   * @brief Exits QSPI memory-mapped mode.
+   * @return Backend exit status.
+   */
   [[nodiscard]] static inline status exit_memory_mapped() noexcept
   {
     return detail::as_status([] { return qspi_api_t<Backend>::template exit_memory_mapped<Config>(); });
   }
 
+  /**
+   * @brief Checks whether the command's phase modes, address size, and data-phase declaration are structurally valid.
+   * @param[in] request  QSPI command to check.
+   * @param[in] no_data True when the command has no data phase.
+   * @return True when the command satisfies the facade's command-format constraints.
+   */
   [[nodiscard]] static constexpr bool is_valid_command(const command& request, const bool no_data = false) noexcept
   {
     return valid_command(request, no_data);
   }
 
+  /**
+   * @brief Checks whether the backend supports each IO mode selected by a command.
+   * @param[in] request Command whose instruction, address, and data modes are checked.
+   * @return True when every requested mode is supported by the backend capability declaration.
+   */
   [[nodiscard]] static constexpr bool supports_command_mode(const command& request) noexcept
   {
     return supports_mode(request.instruction_mode) && supports_mode(request.address_mode) &&
@@ -122,6 +175,7 @@ struct controller final
   }
 
 private:
+  /// @brief Checks whether the backend supports the QSPI I/O mode.
   [[nodiscard]] static constexpr bool supports_mode(const io_mode mode) noexcept
   {
     const auto capability = backend_traits<Backend>::qspi_capability();
@@ -140,6 +194,7 @@ private:
     return false;
   }
 
+  /// @brief Checks whether the I/O mode is valid.
   [[nodiscard]] static constexpr bool valid_io_mode(const io_mode mode) noexcept
   {
     switch (mode)
@@ -154,6 +209,7 @@ private:
     return false;
   }
 
+  /// @brief Checks whether the command is valid for the configured controller.
   [[nodiscard]] static constexpr bool valid_command(const command& request, const bool no_data) noexcept
   {
     return valid_io_mode(request.instruction_mode) && valid_io_mode(request.address_mode) &&

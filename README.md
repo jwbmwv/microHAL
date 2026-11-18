@@ -2,15 +2,18 @@
 
 A header-only, zero-overhead hardware abstraction layer for microcontrollers, requiring C++20 or newer.
 
-microHAL lets you write peripheral code once and compile it against STM32Cube HAL, STM32Cube LL,
-NXP MCUXpresso, Zephyr, or NuttX — without virtual dispatch, dynamic allocation, exceptions, RTTI,
-or any runtime backend indirection. Backend selection and capability checking happen entirely in the
-type system, so the generated code is the same as calling the vendor SDK directly.
+microHAL provides typed peripheral facades for STM32Cube HAL, STM32Cube LL, NXP MCUXpresso,
+Zephyr, and NuttX — without virtual dispatch, dynamic allocation, exceptions, RTTI, or runtime
+backend indirection. Backend selection and capability checking happen in the type system. The
+zero-overhead probe verifies instruction equivalence for its tested UART call path; it is not a
+claim that every facade and backend combination has identical generated code.
 
 ```cpp
+#include <array>
+
 #include "microhal/uart/uart.hpp"
 
-using backend = microhal::stm32_hal_tag;
+using backend = microhal::mock_tag;
 using console = microhal::uart::port_config<2U, 115'200U>;
 
 if (microhal::is_ok(microhal::uart::port<backend, console>::initialize()))
@@ -20,7 +23,9 @@ if (microhal::is_ok(microhal::uart::port<backend, console>::initialize()))
 }
 ```
 
-Retarget the same code to Zephyr by changing one line: `using backend = microhal::zephyr_tag;`.
+This example uses the host recording backend. A hardware build selects its backend tag and supplies
+the board-specific configuration or binding required by that backend; changing the tag alone is not
+sufficient for every target (for example, Zephyr requires a device binding).
 
 ## Why
 
@@ -117,6 +122,19 @@ The equivalent preprocessor form:
 #define MICROHAL_BACKENDS_EXPLICIT 1
 #define MICROHAL_ENABLE_STM32_HAL 1
 ```
+
+### STM32 interrupts and DMA
+
+STM32 UART supports independent TX/RX, receive-to-IDLE, and circular DMA reception.
+SPI and I2C provide master and fixed-length slave transfers. ADC supports one-shot
+IRQ acquisition, finite and circular DMA scans, external triggers, and stop/status
+operations. Explicit LL UART/SPI/I2C engines and the shared STM32 ADC engine use
+native registers rather than HAL transfer callbacks.
+
+These features require board-owned clocks, pinmux, IRQ routing, DMA resources,
+and appropriate buffer/cache management. See the
+[STM32 integration contract](docs/backend_sdk_requirements.md#stm32-integration)
+for APIs, bindings, callback lifetimes, and validation limits.
 
 ## Error handling
 
@@ -238,8 +256,9 @@ Worth knowing before you adopt it:
 - **Backend coverage is uneven.** STM32Cube HAL is still the most complete backend. Kinetis now uses
   SDK-discovery-based compilation across broader Kinetis/i.MX RT families, but runtime coverage still
   depends on which MCUXpresso peripheral modules are available for your selected part. Nordic nrfx
-  coverage is also header-driven: UART/RTC/flash/timer/ADC/DAC/DMA/PWM/watchdog support appears
-  when the corresponding `nrfx_*` drivers are present for the selected SoC.
+  coverage is also hardware/SDK-gated across nRF52840, nRF5340-app, nRF54L15-app and
+  nRF54H20-app. See the [Nordic integration contract](docs/backend_sdk_requirements.md#nordic-board-integration)
+  for serial/slave, streaming, storage, clock and security-domain resources.
 - **Backend API signatures are not yet uniform.** Because facades instantiate lazily, a signature
   mismatch in a backend only surfaces when that specific peripheral is instantiated for that
   backend. The multi-backend test does not cover every peripheral on every backend.

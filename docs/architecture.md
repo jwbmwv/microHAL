@@ -5,7 +5,7 @@
 - C++20 minimum, header-first microHAL for deterministic Cortex-M style targets; newer language modes remain supported.
 - No exceptions, RTTI, dynamic allocation, virtual dispatch, or runtime backend selection.
 - Compile-time backend capability validation with clear diagnostics.
-- Backend-facing APIs structured to map directly onto STM32Cube HAL, STM32Cube LL, MCU Espresso, Zephyr, and future vendor layers.
+- Backend-facing APIs structured to map onto STM32Cube HAL/LL, NXP MCUXpresso, Nordic nrfx, Zephyr, NuttX, and the host mock backend.
 
 Optional newer-standard features must provide a material benefit and preserve the C++20 API
 and runtime behavior. Feature-test macros, rather than language-version checks alone, gate
@@ -327,7 +327,7 @@ Blocking transfers previously used a hardcoded 1000 ms. `timeout_for<Config>()` 
 their own deadline without breaking configurations written before the field existed.
 
 ### Branch Prediction Hints
-Success paths are marked `[[likely]]`, error paths `[[unlikely]]` to guide compiler optimization:
+Some backend paths use `[[likely]]` and `[[unlikely]]` to provide compiler branch-probability hints:
 
 ```cpp
 if (HAL_I2C_Master_Transmit(...) == HAL_OK) [[likely]] {
@@ -336,7 +336,8 @@ if (HAL_I2C_Master_Transmit(...) == HAL_OK) [[likely]] {
 return false;
 ```
 
-This provides measurable performance improvements in tight loops and ISR contexts by optimizing instruction cache usage and branch predictor training.
+These hints do not change behavior, and no performance improvement is assumed without measurements for a
+specific compiler, target, and workload.
 
 ### Typed Capability Structs
 Instead of a monolithic capability struct, each peripheral has its own typed capability structure:
@@ -389,8 +390,8 @@ microHAL has no locks, no atomics, and no RTOS awareness. The contract is:
 
 - The public headers model zero-overhead call sites.
 - Backend API structs under `backends/` are the only layer expected to touch vendor SDK symbols.
-- Integrators should replace the placeholder compile-time assertions in backend stubs with direct calls to vendor APIs or register access paths.
-- If RTOS cooperation becomes necessary, follow the micrOSAL `MigrateToCpp20` branch conventions rather than introducing runtime-owned services in the HAL layer.
+- Backend additions should implement the documented contract with direct vendor API or register access calls, and advertise only verified capabilities.
+- If RTOS cooperation is needed, keep it in backend or application integration code; do not introduce runtime-owned services into the public HAL layer.
 
 ## Contractual Examples
 

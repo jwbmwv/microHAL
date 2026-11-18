@@ -13,10 +13,19 @@
 namespace
 {
 void completion(microhal::status) noexcept {}
+void range_completion(microhal::status, std::span<std::uint8_t>) noexcept {}
 template <typename Config, std::uintptr_t Base> struct bound_config
 {
   static constexpr auto instance_index = Config::instance_index;
   static constexpr auto transfer_mode_value = Config::transfer_mode_value;
+  static constexpr bool is_slave = microhal::serial_slave_enabled<Config>();
+  static constexpr std::uint16_t own_address = []
+  {
+    if constexpr (requires { Config::own_address; })
+      return Config::own_address;
+    else
+      return std::uint16_t{};
+  }();
   static constexpr bool enable_dma = Config::enable_dma;
   static constexpr std::uintptr_t base_address = Base;
   static constexpr std::uint32_t timing = 0x00303D5BU;
@@ -54,12 +63,25 @@ template <typename Backend, microhal::transfer_mode Mode> void exercise()
     (void)bus::initialize();
     (void)bus::write_blocking(0x50, tx);
     (void)bus::read_blocking(0x50, rx);
+    (void)bus::probe(0x50);
     (void)bus::write_read_blocking(0x50, tx, rx);
     (void)bus::template write_async<completion>(0x50, tx);
     (void)bus::template read_async<completion>(0x50, rx);
     (void)bus::template write_read_async<completion>(0x50, tx, rx);
     (void)bus::abort();
+    (void)bus::handle_dma_interrupt();
     bus::mode_api::template handle_interrupt<typename bus::config_type>();
+    using target =
+        i2c::slave<Backend,
+                   bound_config<i2c::slave_config<1, 0x32, i2c_address_mode::seven_bit, 100000, false, false, 10, Mode>,
+                                I2C1_BASE>>;
+    (void)target::initialize();
+    (void)target::template receive_async<completion>(rx);
+    (void)target::template transmit_async<completion>(tx);
+    (void)target::transfer_status();
+    (void)target::abort();
+    (void)target::handle_interrupt();
+    (void)target::handle_dma_interrupt();
   }
   if constexpr (backend_traits<Backend>::spi_capability().transfer_modes.supports(Mode))
   {
@@ -76,7 +98,20 @@ template <typename Backend, microhal::transfer_mode Mode> void exercise()
     (void)spi_bus::template write_async<completion>(tx);
     (void)spi_bus::template read_async<completion>(rx);
     (void)spi_bus::abort();
+    (void)spi_bus::handle_dma_interrupt();
     spi_bus::mode_api::template handle_interrupt<typename spi_bus::config_type>();
+    using target = spi::slave<
+        Backend,
+        bound_config<spi::slave_config<1, spi_duplex_mode::full, spi_clock_polarity::idle_low,
+                                       spi_clock_phase::first_edge, spi_bit_order::msb_first, false, false, 10, Mode>,
+                     SPI1_BASE>>;
+    (void)target::initialize();
+    (void)target::template transfer_async<completion>(tx, rx);
+    (void)target::template transmit_async<completion>(tx);
+    (void)target::template receive_async<completion>(rx);
+    (void)target::abort();
+    (void)target::handle_interrupt();
+    (void)target::handle_dma_interrupt();
   }
   if constexpr (backend_traits<Backend>::uart_capability().transfer_modes.supports(Mode))
   {
@@ -88,7 +123,14 @@ template <typename Backend, microhal::transfer_mode Mode> void exercise()
     (void)port::read_blocking(rx);
     (void)port::template start_async_tx<completion>(tx);
     (void)port::template start_async_rx<completion>(rx);
+    (void)port::template start_receive_to_idle<range_completion>(rx);
+    (void)port::template start_circular_rx<range_completion>(rx);
+    (void)port::tx_status();
+    (void)port::rx_status();
+    (void)port::abort_tx();
+    (void)port::abort_rx();
     (void)port::abort();
+    (void)port::handle_dma_interrupt();
     port::mode_api::template handle_interrupt<typename port::config_type>();
   }
 #if defined(SPI_I2SCFGR_I2SMOD) && defined(HAL_I2S_MODULE_ENABLED)
@@ -117,11 +159,15 @@ template <typename Backend, microhal::transfer_mode Mode> void exercise()
 
 void instantiate_stm32_serial_modes()
 {
+#if MICROHAL_ENABLE_STM32_HAL
   exercise<microhal::stm32_hal_tag, microhal::transfer_mode::polled>();
   exercise<microhal::stm32_hal_tag, microhal::transfer_mode::interrupt>();
   exercise<microhal::stm32_hal_tag, microhal::transfer_mode::dma>();
+#endif
+#if MICROHAL_ENABLE_STM32_LL
   exercise<microhal::stm32_ll_tag, microhal::transfer_mode::polled>();
   exercise<microhal::stm32_ll_tag, microhal::transfer_mode::interrupt>();
   exercise<microhal::stm32_ll_tag, microhal::transfer_mode::dma>();
+#endif
 }
 #endif

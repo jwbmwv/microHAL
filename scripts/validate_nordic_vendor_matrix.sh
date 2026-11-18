@@ -5,7 +5,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
-support_root="${MICROHAL_NORDIC_SUPPORT_ROOT:-$repo_root/vendor-support/nrf-bm/v2.0.1}"
+support_root="${MICROHAL_NORDIC_SUPPORT_ROOT:-$repo_root/vendor-support/nrf-bm}"
 build_root="${MICROHAL_NORDIC_MATRIX_BUILD_ROOT:-$repo_root/build/vendor-nordic-matrix}"
 
 validate_soc() {
@@ -33,10 +33,10 @@ validate_soc() {
     -DMICROHAL_VENDOR_VALIDATION=ON \
     -DMICROHAL_VENDOR_VALIDATION_PROVIDER=NORDIC \
     -DMICROHAL_VENDOR_VALIDATION_NORDIC_SUPPORT_ROOT="$support_root" \
-    -DMICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS="$definitions"
+    -DMICROHAL_VENDOR_VALIDATION_NORDIC_DEFINITIONS="$definitions" || return
 
   cmake --build "$build_dir" \
-    --target microhal_backend_selection microhal_backend_api_contract microhal_preset_capability_expectations
+    --target microhal_backend_selection microhal_backend_api_contract microhal_preset_capability_expectations || return
 
   # ARM objects and executables are compile/link checks, not host-runnable tests.
   ctest --test-dir "$build_dir" --output-on-failure -R "^microhal_capability_claim_policy$"
@@ -54,10 +54,15 @@ fi
 
 case "${1:-all}" in
   all)
-    validate_soc nrf52 NRF52840_XXAA
-    validate_soc nrf53 NRF5340_XXAA_APPLICATION
-    validate_soc nrf54 NRF54H20_XXAA NRF_APPLICATION
-    validate_soc nrf54l15 NRF54L15_XXAA NRF_APPLICATION
+    failures=()
+    validate_soc nrf52 NRF52840_XXAA || failures+=(nrf52)
+    validate_soc nrf53 NRF5340_XXAA_APPLICATION || failures+=(nrf53)
+    validate_soc nrf54 NRF54H20_XXAA NRF_APPLICATION || failures+=(nrf54)
+    validate_soc nrf54l15 NRF54L15_XXAA NRF_APPLICATION || failures+=(nrf54l15)
+    if [[ ${#failures[@]} -gt 0 ]]; then
+      printf 'Nordic vendor validation failed: %s\n' "${failures[*]}" >&2
+      exit 1
+    fi
     ;;
   nrf52)
     validate_soc nrf52 NRF52840_XXAA
@@ -65,7 +70,7 @@ case "${1:-all}" in
   nrf53)
     validate_soc nrf53 NRF5340_XXAA_APPLICATION
     ;;
-  nrf54)
+  nrf54|nrf54h20)
     validate_soc nrf54 NRF54H20_XXAA NRF_APPLICATION
     ;;
   nrf54l15)
