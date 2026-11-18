@@ -3,7 +3,7 @@ struct transfer_state
 {
   std::atomic<bool> active{false};
   std::atomic<bool> complete{false};
-  std::atomic<std::uint64_t> generation{};
+  std::atomic<std::uint32_t> generation{};
   status result{status::error};
   void (*completion)(status) noexcept {nullptr};
 
