@@ -33,11 +33,11 @@ jobs:
           - STM32U5
           - STM32WB
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Restore STM32 support cache
         id: vendor-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: vendor-support
           key: stm32-vendor-support-v1
